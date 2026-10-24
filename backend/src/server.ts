@@ -77,11 +77,16 @@ app.patch('/api/evaluations/:id/decision', protect, updateEvaluationDecisionCont
 app.delete('/api/evaluations/:id', protect, deleteEvaluationController);
 
 import { ensureDefaultAdmin } from './controllers/authController';
+import { bulkQueue } from './services/bulkQueueService';
+import { bulkUploadService } from './services/bulkUploadService';
 
 if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`[Backend] Server listening on http://localhost:${PORT}`);
     ensureDefaultAdmin();
+    // Start persistent background queue worker
+    bulkUploadService;
+    bulkQueue.start();
   });
 }
 

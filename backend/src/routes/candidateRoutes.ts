@@ -1,3 +1,11 @@
+import {
+  createBulkBatch,
+  uploadFilesToBatch,
+  getBatchStatus,
+  retryBatchItem,
+  retryAllFailedInBatch
+} from '../controllers/bulkUploadController';
+
 import { Router } from 'express';
 import multer from 'multer';
 import {
@@ -30,6 +38,13 @@ router.get('/', protect, getAllCandidates);
 
 // Bulk upload CVs directly to candidate pool
 router.post('/upload', protect, upload.any(), uploadCandidateCVs);
+// ── Durable Bulk CV Upload & Background Processing Routes (Talent Pool) ───────
+router.post('/batch', protect, createBulkBatch);
+router.post('/batch/:batchId/upload', protect, upload.any(), uploadFilesToBatch);
+router.get('/batch/:batchId', protect, getBatchStatus);
+router.post('/batch/:batchId/items/:itemId/retry', protect, retryBatchItem);
+router.post('/batch/:batchId/retry-failed', protect, retryAllFailedInBatch);
+
 
 // Available jobs in organization for matching against a candidate (filtered by permissions)
 router.get('/:candidateId/available-jobs', protect, getAvailableJobsForCandidateController);

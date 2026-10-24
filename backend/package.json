@@ -10,7 +10,9 @@
     "vercel-build": "prisma generate && tsc",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push"
+    "prisma:push": "prisma db push",
+    "worker": "ts-node src/worker.ts",
+    "start:worker": "node dist/worker.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

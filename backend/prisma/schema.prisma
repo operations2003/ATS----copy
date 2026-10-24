@@ -37,6 +37,7 @@ model User {
   assignedEvaluations Evaluation[] @relation("AssignedEvaluations")
   evaluatedEvaluations Evaluation[] @relation("EvaluatedEvaluations")
   auditLogs           AuditLog[]
+  bulkBatches         BulkUploadBatch[]
 
 
   @@index([role], map: "idx_users_role")
@@ -72,6 +73,7 @@ model Job {
   candidates   Candidate[]
   applications CandidateApplication[]
   evaluations  Evaluation[]
+  bulkBatches  BulkUploadBatch[]
 
   @@index([created_by], map: "idx_jobs_created_by")
   @@index([status], map: "idx_jobs_status")
@@ -141,6 +143,7 @@ model Candidate {
   certifications CandidateCertification[]
   languages      CandidateLanguage[]
   projects       CandidateProject[]
+  bulkItems      BulkCvItem[]
 
   @@index([job_id], map: "idx_candidates_job_id")
   @@index([created_by], map: "idx_candidates_created_by")
@@ -342,3 +345,70 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+
+model BulkUploadBatch {
+  id              String       @id @default(uuid()) @db.Uuid
+  jobId           String?      @map("job_id") @db.Uuid
+  organizationId  String       @default("org-tasknera") @map("organization_id")
+  uploadedBy      String       @map("uploaded_by") @db.Uuid
+  status          String       @default("PENDING")
+  totalFiles      Int          @default(0) @map("total_files")
+  uploadedCount   Int          @default(0) @map("uploaded_count")
+  queuedCount     Int          @default(0) @map("queued_count")
+  processingCount Int          @default(0) @map("processing_count")
+  parsedCount     Int          @default(0) @map("parsed_count")
+  scoredCount     Int          @default(0) @map("scored_count")
+  failedCount     Int          @default(0) @map("failed_count")
+  reviewCount     Int          @default(0) @map("review_count")
+  duplicateCount  Int          @default(0) @map("duplicate_count")
+  errorMessage    String?      @map("error_message")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  job             Job?         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+  items           BulkCvItem[]
+
+  @@index([jobId], map: "idx_bulk_batches_job_id")
+  @@index([organizationId], map: "idx_bulk_batches_org_id")
+  @@index([uploadedBy], map: "idx_bulk_batches_uploaded_by")
+  @@index([status], map: "idx_bulk_batches_status")
+  @@map("bulk_upload_batches")
+}
+
+model BulkCvItem {
+  id                 String          @id @default(uuid()) @db.Uuid
+  batchId            String          @map("batch_id") @db.Uuid
+  candidateId        String?         @map("candidate_id") @db.Uuid
+  fileName           String          @map("file_name")
+  fileSize           Int             @map("file_size")
+  fileMime           String          @map("file_mime")
+  fileHash           String?         @map("file_hash")
+  storagePath        String?         @map("storage_path")
+  status             String          @default("UPLOADED")
+  attemptCount       Int             @default(0) @map("attempt_count")
+  maxAttempts        Int             @default(3) @map("max_attempts")
+  errorCode          String?         @map("error_code")
+  errorMessage       String?         @map("error_message")
+  diagnosticMessage  String?         @map("diagnostic_message")
+  candidateName      String?         @map("candidate_name")
+  candidateEmail     String?         @map("candidate_email")
+  atsScore           Float?          @map("ats_score")
+  validationStatus   String?         @default("PENDING") @map("validation_status")
+  intermediateResult Json?           @map("intermediate_result")
+  fieldWarnings      Json?           @map("field_warnings")
+  lastAttemptAt      DateTime?       @map("last_attempt_at")
+  completedAt        DateTime?       @map("completed_at")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  batch              BulkUploadBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  candidate          Candidate?      @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+
+  @@index([batchId], map: "idx_bulk_cv_items_batch_id")
+  @@index([status], map: "idx_bulk_cv_items_status")
+  @@index([candidateId], map: "idx_bulk_cv_items_candidate_id")
+  @@index([fileHash], map: "idx_bulk_cv_items_file_hash")
+  @@index([batchId, status], map: "idx_bulk_cv_items_batch_status")
+  @@map("bulk_cv_items")
+}
