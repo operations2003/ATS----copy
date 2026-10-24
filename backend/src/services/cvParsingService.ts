@@ -791,6 +791,15 @@ function parseExperienceSection(expText: string, fullText: string): CandidateExp
 
   const jobHeaders: RawJobHeader[] = [];
 
+  // Pre-collect unassigned date intervals across the document (supports 2-column & sidebar layouts)
+  const docDateRegex = /\b((?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Sept|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s*'?\d{2,4})\s*(?:[–—\-~]|to)\s*((?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Sept|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s*'?\d{2,4}|Present|Current|Now)\b/gi;
+  const unassignedDocDates = Array.from(fullText.matchAll(docDateRegex)).map(m => ({
+    duration: m[0].trim(),
+    startDate: m[1].trim(),
+    endDate: m[2].trim()
+  }));
+  let unassignedDateIdx = 0;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const dateInfo = extractDateRange(line);
@@ -907,6 +916,53 @@ function parseExperienceSection(expText: string, fullText: string): CandidateExp
         endDate: dateInfo.endDate || 'Present',
         duration: formattedDur
       });
+    } else {
+      // Check for standalone Job Header in columnar / sidebar CV layouts (e.g. "I.T. Analyst (SAP QM/PP Lead) | TCS Ltd.")
+      const isJobTitle = /\b(analyst|consultant|developer|engineer|lead|architect|manager|specialist|officer|associate|director|technician|administrator|programmer|designer|coordinator)\b/i.test(line);
+      const hasCompanyOrSep = /[|—–]|\bat\b/i.test(line) || /Ltd|Inc|Pvt|Solutions|Services|Technologies|Corp|LLC/i.test(line);
+      const isNotEduOrSummary = !/\b(b\.?tech|m\.?tech|b\.?e\.?|bachelor|master|degree|diploma|result-driven|summary|competencies|certifications|education)\b/i.test(line);
+
+      if (isJobTitle && hasCompanyOrSep && isNotEduOrSummary) {
+        let title = '';
+        let company = '';
+        if (line.includes('|')) {
+          const parts = line.split('|').map(p => p.trim());
+          title = parts[0];
+          company = parts[1] || '';
+        } else if (line.includes('—') || line.includes('–')) {
+          const parts = line.split(/[—–]/).map(p => p.trim());
+          title = parts[0];
+          company = parts[1] || '';
+        } else if (/\s+at\s+/i.test(line)) {
+          const parts = line.split(/\s+at\s+/i).map(p => p.trim());
+          title = parts[0];
+          company = parts[1] || '';
+        } else {
+          title = line;
+        }
+
+        // Pair with unassigned document dates
+        let matchedDate = null;
+        if (unassignedDateIdx < unassignedDocDates.length) {
+          matchedDate = unassignedDocDates[unassignedDateIdx++];
+        }
+
+        const durMonths = matchedDate ? calculateExperienceMonths(matchedDate.startDate, matchedDate.endDate) : 0;
+        const formattedDur = matchedDate
+          ? `${matchedDate.duration}${durMonths > 0 ? ` • ${durMonths < 12 ? `${durMonths} mos` : `${parseFloat((durMonths/12).toFixed(1))} yrs`}` : ''}`
+          : '';
+
+        jobHeaders.push({
+          lineIndex: i,
+          consumedNextLine: false,
+          title: title.trim() || 'Software Engineer',
+          company: company.trim() || 'Company',
+          location: undefined,
+          startDate: matchedDate ? matchedDate.startDate : '',
+          endDate: matchedDate ? matchedDate.endDate : 'Present',
+          duration: formattedDur
+        });
+      }
     }
   }
 
@@ -1470,7 +1526,15 @@ export function extractStructuredCandidateFromText(
   }
 
   // Pass B: Inline career summary statements (e.g. "Over 5 years of experience", "having 5+ years of hands-on experience")
-  const summaryExpMatches = Array.from(cleanText.matchAll(/(?:over|more\s+than|about|around|approx(?:\.|imately)?|with|having)\s+(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)(?:\s*(?:and\s*)?(\d+)\s*(?:months?|mos?))?\s+(?:of\s+)?(?:hands-on\s*|industry\s*|professional\s*|relevant\s*|total\s*|software\s*|work\s*|IT\s*)?experience/gi));
+  const summaryExpMatches = Array.from(cleanText.matchAll(/(?:over|more\s+than|about|around|approx(?:\.|imately)?|with|having)?\s*(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)(?:\s*(?:and\s*)?(\d+)\s*(?:months?|mos?))?\s+(?:of\s+)?(?:[a-zA-Z\s\/\-\+]{0,40})?experience\b/gi));
+  // Additional check for direct tenure statements (e.g. "7.7 years of total IT experience", "5.5+ years of dedicated expertise")
+  const directTenureMatches = Array.from(cleanText.matchAll(/\b(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:[a-zA-Z\s\/\-\+]{0,35})?(?:experience|tenure|background|expertise)\b/gi));
+  for (const dMatch of directTenureMatches) {
+    const dYears = parseFloat(dMatch[1]);
+    if (!isNaN(dYears) && dYears > 0 && dYears <= 55) {
+      summaryExpMatches.push(dMatch);
+    }
+  }
   for (const match of summaryExpMatches) {
     const parsedYears = parseFloat(match[1]);
     const addMonths = match[2] ? parseInt(match[2], 10) : 0;

@@ -206,13 +206,16 @@ export function calculateCentralizedATSScore(input: CentralizedATSScoringInput):
     }
   } else if (isSalesApplyingToTechnical) {
     const hasTechExp = candidate.experience?.some(ex =>
-      /\b(software|developer|engineer|programmer|coder|architect)\b/i.test(ex.title || '')
+      /\b(software|developer|engineer|programmer|coder|architect|consultant|analyst|specialist|sap|erp|crm|devops|cloud|qa|tester|administrator|dba)\b/i.test(ex.title || '')
     );
-    if (!hasTechExp) {
+    const hasTechSkills = (candidate.skills || []).some(s =>
+      /\b(sap|erp|abap|sql|java|python|c\+\+|c\#|javascript|typescript|react|angular|aws|azure|cloud|database|api|linux|git|docker|kubernetes|hana)\b/i.test(s)
+    );
+    if (!hasTechExp && !hasTechSkills) {
       hasDomainMismatch = true;
-      domainMismatchReason = 'CRITICAL ROLE DOMAIN MISMATCH: Requisition requires Software Engineering expertise, but candidate has a Sales/Business Development background without verified coding experience.';
+      domainMismatchReason = 'CRITICAL ROLE DOMAIN MISMATCH: Requisition requires Software/Technical expertise, but candidate has a Sales/Business Development background without verified technical/IT experience or skills.';
       mandatoryFailures.push({
-        requirement: 'Role Domain Alignment: Software Engineering',
+        requirement: 'Role Domain Alignment: Technical/Engineering',
         reason: domainMismatchReason,
         category: 'Domain Mismatch'
       });

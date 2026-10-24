@@ -111,7 +111,7 @@ def extract_years_of_experience(text: str) -> Optional[str]:
             return f"{round(total, 1)} years"
 
     # 2. Inline career summary mentions (e.g. "Over 5 years of experience", "having 5+ years of IT experience")
-    summary_pattern = r'(?:over|more\s+than|about|around|approx(?:\.|imately)?|with|having)\s+(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)(?:\s*(?:and\s*)?(\d+)\s*(?:months?|mos?))?\s+(?:of\s+)?(?:hands-on\s*|industry\s*|professional\s*|relevant\s*|total\s*|software\s*|work\s*|IT\s*)?experience'
+    summary_pattern = r'(?:over|more\s+than|about|around|approx(?:\.|imately)?|with|having)?\s*(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)(?:\s*(?:and\s*)?(\d+)\s*(?:months?|mos?))?\s+(?:of\s+)?(?:[a-zA-Z\s\/\-\+]{0,40})?experience'
     summary_matches = re.findall(summary_pattern, text, re.IGNORECASE)
     if summary_matches:
         max_exp = 0.0

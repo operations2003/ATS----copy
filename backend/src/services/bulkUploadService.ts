@@ -346,11 +346,15 @@ export class BulkUploadService {
           duration: e.duration || '',
         })));
 
+        const nonOverlapYrs = parseFloat((nonOverlap.totalMonths / 12).toFixed(1));
         if (!structuredProfile.totalExperience || structuredProfile.totalExperience === '0 yrs') {
-          const yrs = (nonOverlap.totalMonths / 12).toFixed(1);
-          structuredProfile.totalExperience = `${yrs} yrs`;
+          structuredProfile.totalExperience = `${nonOverlapYrs} yrs`;
           structuredProfile.totalExperienceMonths = nonOverlap.totalMonths;
-          structuredProfile.totalExperienceYears = parseFloat(yrs);
+          structuredProfile.totalExperienceYears = nonOverlapYrs;
+        } else if (typeof structuredProfile.totalExperienceYears === 'number' && nonOverlapYrs > structuredProfile.totalExperienceYears) {
+          structuredProfile.totalExperience = `${nonOverlapYrs} yrs`;
+          structuredProfile.totalExperienceMonths = nonOverlap.totalMonths;
+          structuredProfile.totalExperienceYears = nonOverlapYrs;
         }
       }
 

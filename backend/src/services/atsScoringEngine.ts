@@ -1276,20 +1276,29 @@ export function evaluateEducationRequirement(
 export type FunctionalDomain = 'TECHNICAL' | 'SALES_BUSINESS' | 'MARKETING' | 'HR' | 'FINANCE' | 'GENERAL';
 
 export function classifyJobDomain(jobTitle: string, jdText?: string): FunctionalDomain {
-  const combined = `${jobTitle} ${jdText || ''}`.toLowerCase();
-  if (/\b(sale|sales|business development|bde|bdr|sdr|account executive|inside sales|relationship manager|client acquisition|tele sales)\b/i.test(jobTitle.toLowerCase())) {
+  const titleLower = (jobTitle || '').toLowerCase();
+  const combined = `${titleLower} ${(jdText || '').toLowerCase()}`;
+
+  // Technical roles (check first or when technical keywords are present to prevent misclassifying "Salesforce Developer", "SAP SD Consultant", "Sales Engineer")
+  const isTechnicalRole = /\b(software|developer|engineer|fullstack|frontend|backend|devops|cloud|data engineer|qa|tester|architect|programmer|java|python|react|windchill|sap|cad|solutions architect|solution architect|technical consultant|functional consultant|erp consultant|it analyst|systems analyst|database administrator|dba)\b/i.test(titleLower);
+  if (isTechnicalRole) {
+    return 'TECHNICAL';
+  }
+
+  if (/\b(business development|bde|bdr|sdr|account executive|inside sales|relationship manager|client acquisition|tele sales|telesales|sales executive|sales manager)\b/i.test(titleLower) ||
+      (/\b(sale|sales)\b/i.test(titleLower) && !/\b(engineer|developer|consultant|architect|analyst)\b/i.test(titleLower))) {
     return 'SALES_BUSINESS';
   }
-  if (/\b(marketing|seo|sem|growth|content|social media|copywriter|brand)\b/i.test(jobTitle.toLowerCase())) {
+  if (/\b(marketing|seo|sem|growth|content|social media|copywriter|brand)\b/i.test(titleLower)) {
     return 'MARKETING';
   }
-  if (/\b(hr|human resources|recruiter|talent acquisition|people operations|payroll)\b/i.test(jobTitle.toLowerCase())) {
+  if (/\b(hr|human resources|recruiter|talent acquisition|people operations|payroll)\b/i.test(titleLower)) {
     return 'HR';
   }
-  if (/\b(accountant|accounting|finance|financial analyst|audit|tax|bookkeeper)\b/i.test(jobTitle.toLowerCase())) {
+  if (/\b(accountant|accounting|finance|financial analyst|audit|tax|bookkeeper)\b/i.test(titleLower)) {
     return 'FINANCE';
   }
-  if (/\b(software|developer|engineer|fullstack|frontend|backend|devops|cloud|data engineer|qa|tester|architect|programmer|java|python|react|windchill|sap|cad)\b/i.test(jobTitle.toLowerCase())) {
+  if (/\b(software|developer|engineer|fullstack|frontend|backend|devops|cloud|data engineer|qa|tester|architect|programmer|java|python|react|windchill|sap|cad|database|technical|analyst)\b/i.test(combined)) {
     return 'TECHNICAL';
   }
   return 'GENERAL';
@@ -1301,13 +1310,24 @@ export function classifyCandidateDomain(candidate: CandidateRecord): FunctionalD
     ...(candidate.experience || []).map(e => e.title || '')
   ].join(' ').toLowerCase();
 
-  const isTechTitles = /\b(software|developer|engineer|programmer|coder|frontend|backend|fullstack|devops|qa|data engineer|architect|web developer|app developer|system engineer)\b/i.test(titles);
-  const isSalesTitles = /\b(sale|sales|business development|bde|bdr|sdr|account executive|inside sales|relationship manager)\b/i.test(titles);
+  const skillsText = (candidate.skills || []).join(' ').toLowerCase();
+
+  // Comprehensive technical keywords: covers Software, IT, Cloud, ERP, SAP, Data, QA, Infrastructure, Functional/Technical Consulting
+  const isTechTitles = /\b(software|developer|engineer|programmer|coder|frontend|backend|fullstack|devops|qa|data engineer|architect|web developer|app developer|system engineer|systems engineer|it analyst|analyst|consultant|sap|erp|crm|salesforce|oracle|cloud|aws|azure|gcp|dba|database|administrator|tester|technical|specialist|lead consultant|functional consultant|solutions architect|solution architect)\b/i.test(titles);
+  const hasTechSkills = /\b(sap|erp|abap|sql|java|python|c\+\+|c\#|javascript|typescript|react|angular|aws|azure|cloud|database|api|linux|git|docker|kubernetes|hana|pl\/sql)\b/i.test(skillsText);
+
+  // Pure sales titles (avoid matching false positives like "sales returns", "salesforce", "sales engineer")
+  const isSalesTitles = /\b(bde|bdr|sdr|account executive|inside sales|relationship manager|business development executive|business development manager|sales executive|sales manager|telesales|telemarketing)\b/i.test(titles);
   const isHrTitles = /\b(recruiter|talent acquisition|human resources|hr executive|hr manager|people partner)\b/i.test(titles);
 
-  if (isTechTitles && !isSalesTitles) return 'TECHNICAL';
-  if (isSalesTitles && !isTechTitles) return 'SALES_BUSINESS';
-  if (isHrTitles && !isTechTitles && !isSalesTitles) return 'HR';
+  // If candidate has technical titles or technical skills, classify as TECHNICAL
+  if ((isTechTitles || hasTechSkills) && !isSalesTitles) return 'TECHNICAL';
+  if (isTechTitles && isSalesTitles) {
+    // Technical sales / ERP consultant / Salesforce Developer
+    return 'TECHNICAL';
+  }
+  if (isSalesTitles && !isTechTitles && !hasTechSkills) return 'SALES_BUSINESS';
+  if (isHrTitles && !isTechTitles && !hasTechSkills) return 'HR';
 
   return 'GENERAL';
 }

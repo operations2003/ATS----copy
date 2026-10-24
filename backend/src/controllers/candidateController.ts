@@ -323,7 +323,8 @@ export function mapDbCandidateToRecord(c: any, defaultJobId?: string): Candidate
 
   // Check if raw_text mentions explicit overall experience in summary (e.g. "over 6.5 years of IT experience")
   if (c.raw_text) {
-    const rawExpMatch = c.raw_text.match(/(?:over|with|having)?\s*(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)\s*(?:of\s*)?(?:IT\s*|industry\s*|professional\s*|relevant\s*|total\s*|work\s*)?experience/i);
+    const rawExpMatch = c.raw_text.match(/(?:over|more\s+than|about|around|with|having)?\s*(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)(?:\s*(?:and\s*)?(\d+)\s*(?:months?|mos?))?\s+(?:of\s+)?(?:[a-zA-Z\s\/\-\+]{0,40})?experience/i) ||
+      c.raw_text.match(/\b(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:[a-zA-Z\s\/\-\+]{0,35})?(?:experience|tenure|background|expertise)\b/i);
     if (rawExpMatch) {
       const rawYears = parseFloat(rawExpMatch[1]);
       if (!isNaN(rawYears) && rawYears > 0 && rawYears < 70) {
