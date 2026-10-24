@@ -8,6 +8,8 @@ import candidateRoutes from './routes/candidateRoutes';
 import superAdminRoutes from './routes/superAdminRoutes';
 import publicRoutes from './routes/publicRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
+import clientShareRoutes from './routes/clientShareRoutes';
+import publicClientShareRoutes from './routes/publicClientShareRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -67,6 +69,10 @@ app.use('/candidates', candidateRoutes);
 app.use('/api/super-admin', superAdminRoutes);
 app.use('/super-admin', superAdminRoutes);
 app.use('/api/public', publicRoutes);
+app.use('/api/public/client-shares', publicClientShareRoutes);
+app.use('/public/client-shares', publicClientShareRoutes);
+app.use('/api/jobs', clientShareRoutes);
+app.use('/jobs', clientShareRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
 // Evaluation Endpoints (Secured by database-level ownership)

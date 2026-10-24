@@ -23,6 +23,8 @@ import {
 import CandidateLinkModal from '@/components/CandidateLinkModal';
 import HireIQHiringReality from '@/components/jobs/HireIQHiringReality';
 import HireIQCandidateCompareAndSubmitModal, { CandidateComparisonItem } from '@/components/evaluation/HireIQCandidateCompareAndSubmitModal';
+import ClientShareCreateModal, { SelectedCandidateSummary } from '@/components/ClientShareCreateModal';
+import ClientShareManagerModal from '@/components/ClientShareManagerModal';
 import { RequirementStatus, ConfidenceLevel } from '@/types';
 
 
@@ -619,6 +621,8 @@ export default function JobCandidatesPage() {
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
   const [compareModalTab, setCompareModalTab] = useState<'compare' | 'submit'>('compare');
+  const [isClientShareModalOpen, setIsClientShareModalOpen] = useState(false);
+  const [isClientShareManagerOpen, setIsClientShareManagerOpen] = useState(false);
 
   const handleToggleSelectCandidate = (candId: string) => {
     setSelectedCandidateIds(prev =>
@@ -1720,6 +1724,23 @@ export default function JobCandidatesPage() {
       });
   }, [filteredCandidates, selectedCandidateIds, candidateDecisions]);
 
+  // Selected candidates mapped for Client Share Link creation
+  const selectedCandidateSummaries: SelectedCandidateSummary[] = useMemo(() => {
+    return filteredCandidates
+      .filter(c => selectedCandidateIds.includes(c.id))
+      .map(c => {
+        const score = Math.round(c.matchScore ?? 85);
+        return {
+          id: c.id,
+          name: c.name || (c as any).fileName || 'Candidate',
+          score,
+          currentTitle: c.currentTitle,
+          currentCompany: c.currentCompany,
+          totalExperienceYears: c.totalExperienceYears,
+        };
+      });
+  }, [filteredCandidates, selectedCandidateIds]);
+
 
   const parsedCount = candidates.filter(c => c.parsingStatus === 'PARSED').length;
   const strongMatchCount = candidatesWithMatch.filter(c => (c.matchScore ?? 0) >= 80).length;
@@ -1914,6 +1935,15 @@ export default function JobCandidatesPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                 </svg>
                 <span>Candidate Link</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsClientShareManagerOpen(true)}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600/30 hover:bg-blue-600/50 text-white text-xs font-bold rounded-xl border border-blue-400/40 transition-all cursor-pointer backdrop-blur-sm shadow-xs"
+                title="Manage active client shortlist links and track interview outcomes"
+              >
+                <span>🌐</span>
+                <span>Client Sharing & Tracking</span>
               </button>
               <button
                 onClick={() => setShowUploadZone(prev => !prev)}
@@ -3113,6 +3143,14 @@ export default function JobCandidatesPage() {
               </button>
 
               <button
+                onClick={() => setIsClientShareModalOpen(true)}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                title="Generate secure client sharing portal for selected candidates"
+              >
+                <span>🔗 Create Client Sharing Link</span>
+              </button>
+
+              <button
                 onClick={() => {
                   setCompareModalTab('submit');
                   setIsCompareModalOpen(true);
@@ -3151,6 +3189,34 @@ export default function JobCandidatesPage() {
           }}
           selectedCandidates={comparisonCandidates}
           defaultTab={compareModalTab}
+        />
+
+        {/* Client Candidate Sharing Link Creation Modal */}
+        <ClientShareCreateModal
+          isOpen={isClientShareModalOpen}
+          onClose={() => setIsClientShareModalOpen(false)}
+          job={{
+            id: jobId as string,
+            position: job?.position || 'Job Requisition',
+            client: job?.client || 'Hiring Organization',
+            location: job?.location,
+          }}
+          selectedCandidates={selectedCandidateSummaries}
+        />
+
+        {/* Client Shortlist & Interview Tracking Manager Modal */}
+        <ClientShareManagerModal
+          isOpen={isClientShareManagerOpen}
+          onClose={() => setIsClientShareManagerOpen(false)}
+          jobId={jobId as string}
+          jobPosition={job?.position || 'Job Requisition'}
+          onOpenCreateModal={() => {
+            if (selectedCandidateIds.length > 0) {
+              setIsClientShareModalOpen(true);
+            } else {
+              alert('Please select one or more candidates from the list to create a client sharing link.');
+            }
+          }}
         />
       </main>
 

@@ -1158,6 +1158,46 @@ export async function evaluateAndEnrichCandidateRecord(
   return candidateRecord;
 }
 
+const RESUME_STORAGE_DIR = path.resolve(process.cwd(), 'uploads', 'resumes');
+if (!fs.existsSync(RESUME_STORAGE_DIR)) {
+  try {
+    fs.mkdirSync(RESUME_STORAGE_DIR, { recursive: true });
+  } catch (err) {
+    console.warn('[Resume Storage Init Notice]:', err);
+  }
+}
+
+/**
+ * Persists the exact uploaded file buffer so that downloading always yields
+ * the original document uploaded to the ATS.
+ */
+const persistOriginalResumeFile = (buffer: Buffer, fileName: string, candidateId?: string, fileHash?: string) => {
+  if (!buffer || buffer.length === 0) return;
+  try {
+    if (!fs.existsSync(RESUME_STORAGE_DIR)) {
+      fs.mkdirSync(RESUME_STORAGE_DIR, { recursive: true });
+    }
+    const ext = (path.extname(fileName) || '.pdf').toLowerCase();
+    const baseName = path.basename(fileName);
+
+    // 1. By exact original filename
+    fs.writeFileSync(path.join(RESUME_STORAGE_DIR, baseName), buffer);
+
+    // 2. By file hash
+    if (fileHash) {
+      fs.writeFileSync(path.join(RESUME_STORAGE_DIR, `${fileHash}${ext}`), buffer);
+    }
+
+    // 3. By candidate ID
+    if (candidateId) {
+      fs.writeFileSync(path.join(RESUME_STORAGE_DIR, `${candidateId}${ext}`), buffer);
+      fs.writeFileSync(path.join(RESUME_STORAGE_DIR, `${candidateId}_${baseName}`), buffer);
+    }
+  } catch (err) {
+    console.warn('[Resume Storage Error]: Failed to save uploaded resume file to disk:', err);
+  }
+};
+
 /**
  * Bulk upload CVs for a specific job
  * POST /api/jobs/:jobId/candidates/upload
@@ -1239,6 +1279,11 @@ export const uploadCandidateCVs = async (req: AuthRequest, res: Response): Promi
       const fileMd5 = crypto.createHash('md5').update(file.buffer).digest('hex');
 
       console.log(`\n--- [Processing File] ${fileName} (${fileSize} bytes, Hash: ${fileHash.substring(0, 10)}) ---`);
+      
+      // Persist original file buffer immediately
+      if (file.buffer) {
+        persistOriginalResumeFile(file.buffer, fileName, undefined, fileHash);
+      }
       
       // ── DUPLICATE CANDIDATE CHECK (FILE HASH / FILENAME / CLIENT VALIDATION) ──
       const normalizedFileName = fileName.trim().toLowerCase();
@@ -1540,6 +1585,9 @@ export const uploadCandidateCVs = async (req: AuthRequest, res: Response): Promi
           });
           dbCandidateId = initialDbCand.id;
           console.log(`[Prisma DB] Stored initial candidate record ${dbCandidateId} (job_id: ${dbJobId || 'POOL'}) with status PROCESSING`);
+          if (file.buffer) {
+            persistOriginalResumeFile(file.buffer, fileName, dbCandidateId, fileHash);
+          }
         } catch (dbInitErr) {
           console.warn('[Prisma DB Init Notice] Initial candidate record creation bypassed:', dbInitErr);
         }
@@ -1957,6 +2005,9 @@ export const uploadCandidateCVs = async (req: AuthRequest, res: Response): Promi
               }
             });
             newRecord.id = createdDbCand.id;
+            if (file.buffer) {
+              persistOriginalResumeFile(file.buffer, fileName, createdDbCand.id, fileHash);
+            }
           }
 
           const targetId = dbCandidateId || newRecord.id;

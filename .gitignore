@@ -32,3 +32,10 @@ local_pgdata/
 *.zip
 **/*.zip
 
+# Uploads
+uploads/
+**/uploads/
+*.pdf
+backend/*.pdf
+
+

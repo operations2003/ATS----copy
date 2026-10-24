@@ -495,6 +495,24 @@ export class BulkUploadService {
         },
       });
 
+      // Also ensure file is accessible in central uploads/resumes
+      if (item.storagePath && fs.existsSync(item.storagePath)) {
+        try {
+          const RESUME_STORAGE_DIR = path.resolve(process.cwd(), 'uploads', 'resumes');
+          if (!fs.existsSync(RESUME_STORAGE_DIR)) fs.mkdirSync(RESUME_STORAGE_DIR, { recursive: true });
+          const ext = (path.extname(item.fileName) || '.pdf').toLowerCase();
+          const baseName = path.basename(item.fileName);
+          fs.copyFileSync(item.storagePath, path.join(RESUME_STORAGE_DIR, `${dbCandidate.id}${ext}`));
+          fs.copyFileSync(item.storagePath, path.join(RESUME_STORAGE_DIR, `${dbCandidate.id}_${baseName}`));
+          fs.copyFileSync(item.storagePath, path.join(RESUME_STORAGE_DIR, baseName));
+          if (fileHash) {
+            fs.copyFileSync(item.storagePath, path.join(RESUME_STORAGE_DIR, `${fileHash}${ext}`));
+          }
+        } catch (copyErr) {
+          console.warn('[Bulk Resume Copy Notice]:', copyErr);
+        }
+      }
+
       // Persist relational child records
       if (Array.isArray(structuredProfile.skills) && structuredProfile.skills.length > 0) {
         await prisma.candidateSkill.createMany({

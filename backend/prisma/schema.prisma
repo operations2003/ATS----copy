@@ -38,6 +38,7 @@ model User {
   evaluatedEvaluations Evaluation[] @relation("EvaluatedEvaluations")
   auditLogs           AuditLog[]
   bulkBatches         BulkUploadBatch[]
+  clientShares        ClientCandidateShare[]
 
 
   @@index([role], map: "idx_users_role")
@@ -74,6 +75,7 @@ model Job {
   applications CandidateApplication[]
   evaluations  Evaluation[]
   bulkBatches  BulkUploadBatch[]
+  clientShares ClientCandidateShare[]
 
   @@index([created_by], map: "idx_jobs_created_by")
   @@index([status], map: "idx_jobs_status")
@@ -144,6 +146,8 @@ model Candidate {
   languages      CandidateLanguage[]
   projects       CandidateProject[]
   bulkItems      BulkCvItem[]
+  shareItems     ClientCandidateShareItem[]
+  hiringActivities CandidateHiringActivity[]
 
   @@index([job_id], map: "idx_candidates_job_id")
   @@index([created_by], map: "idx_candidates_created_by")
@@ -411,4 +415,76 @@ model BulkCvItem {
   @@index([fileHash], map: "idx_bulk_cv_items_file_hash")
   @@index([batchId, status], map: "idx_bulk_cv_items_batch_status")
   @@map("bulk_cv_items")
+}
+
+model ClientCandidateShare {
+  id             String                     @id @default(uuid()) @db.Uuid
+  organizationId String                     @default("org-tasknera") @map("organization_id")
+  jobId          String                     @map("job_id") @db.Uuid
+  clientName     String?                    @map("client_name")
+  createdBy      String                     @map("created_by") @db.Uuid
+  tokenHash      String                     @unique @map("token_hash")
+  rawToken       String?                    @map("raw_token")
+  status         String                     @default("active")
+  expiresAt      DateTime?                  @map("expires_at")
+  lastAccessedAt DateTime?                  @map("last_accessed_at")
+  createdAt      DateTime                   @default(now()) @map("created_at")
+  updatedAt      DateTime                   @updatedAt @map("updated_at")
+
+  job            Job                        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user           User                       @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  items          ClientCandidateShareItem[]
+  activities     CandidateHiringActivity[]
+
+  @@index([jobId], map: "idx_client_shares_job_id")
+  @@index([organizationId], map: "idx_client_shares_org_id")
+  @@index([tokenHash], map: "idx_client_shares_token_hash")
+  @@map("client_candidate_shares")
+}
+
+model ClientCandidateShareItem {
+  id          String               @id @default(uuid()) @db.Uuid
+  shareId     String               @map("share_id") @db.Uuid
+  candidateId String               @map("candidate_id") @db.Uuid
+  addedBy     String?              @map("added_by") @db.Uuid
+  isActive    Boolean              @default(true) @map("is_active")
+  addedAt     DateTime             @default(now()) @map("added_at")
+
+  share       ClientCandidateShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  candidate   Candidate            @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([shareId, candidateId], map: "uniq_client_share_candidate")
+  @@index([shareId], map: "idx_client_share_items_share_id")
+  @@index([candidateId], map: "idx_client_share_items_candidate_id")
+  @@map("client_candidate_share_items")
+}
+
+model CandidateHiringActivity {
+  id                  String                @id @default(uuid()) @db.Uuid
+  organizationId      String                @default("org-tasknera") @map("organization_id")
+  jobId               String                @map("job_id") @db.Uuid
+  candidateId         String                @map("candidate_id") @db.Uuid
+  shareId             String?               @map("share_id") @db.Uuid
+  status              String
+  previousStatus      String?               @map("previous_status")
+  interviewDate       DateTime?             @map("interview_date")
+  interviewRound      String?               @map("interview_round")
+  interviewerName     String?               @map("interviewer_name")
+  feedback            String?
+  rejectionReason     String?               @map("rejection_reason")
+  expectedJoiningDate DateTime?             @map("expected_joining_date")
+  nextInterviewDate   DateTime?             @map("next_interview_date")
+  updatedBy           String?               @map("updated_by")
+  updatedByRole       String                @default("CLIENT") @map("updated_by_role")
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+
+  share               ClientCandidateShare? @relation(fields: [shareId], references: [id], onDelete: SetNull)
+  candidate           Candidate             @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([jobId], map: "idx_cand_activity_job_id")
+  @@index([candidateId], map: "idx_cand_activity_cand_id")
+  @@index([shareId], map: "idx_cand_activity_share_id")
+  @@index([organizationId], map: "idx_cand_activity_org_id")
+  @@map("candidate_hiring_activities")
 }
