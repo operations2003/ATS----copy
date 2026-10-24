@@ -24,7 +24,9 @@ import {
 import {
   extractStructuredCandidateFromText,
   validateCvTextQuality,
-  calculateNonOverlappingExperienceMonths,
+  calculateNonOverlappingExperienceMonths
+} from './cvParsingService';
+import {
   CandidateRecord,
   saveCandidateToPersistentPool,
   CANDIDATE_STORE,
@@ -456,8 +458,8 @@ export class BulkUploadService {
             });
 
             finalAtsScore = scoringResult.finalScore;
-            matchLevel = scoringResult.matchTier;
-            mandatoryCompliance = scoringResult.mandatoryFailureDetail.hasFailed ? 'NOT MET' : 'MET';
+            matchLevel = scoringResult.matchLevel;
+            mandatoryCompliance = scoringResult.mandatoryCompliance?.passed ? 'MET' : 'NOT MET';
             decision = scoringResult.recommendation;
             evaluationAudit = scoringResult;
           }
