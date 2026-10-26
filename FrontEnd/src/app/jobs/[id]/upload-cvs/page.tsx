@@ -400,7 +400,7 @@ export default function BatchCVUploadPage() {
   const startBatchUpload = async () => {
     if (isUploading || isProcessing) return;
 
-    const pendingItems = fileQueue.filter(f => f.status === 'Pending' || f.status === 'Failed' || f.status === 'FAILED');
+    const pendingItems = fileQueue.filter(f => f.status === 'Pending' || f.status === 'FAILED' || f.status === 'FAILED_RETRYABLE' || (f.status as string) === 'Failed');
     if (pendingItems.length === 0) {
       setValidationAlert({
         message: 'No pending CV files to process. Add new files to upload.',
@@ -788,7 +788,7 @@ export default function BatchCVUploadPage() {
 
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-2.5">
-                {fileQueue.some(f => f.status === 'Pending' || f.status === 'Failed' || f.status === 'FAILED') && (
+                {fileQueue.some(f => f.status === 'Pending' || f.status === 'FAILED' || f.status === 'FAILED_RETRYABLE' || (f.status as string) === 'Failed') && (
                   <button
                     onClick={startBatchUpload}
                     disabled={isUploading || isProcessing}
