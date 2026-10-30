@@ -123,6 +123,16 @@ const Header: React.FC = () => {
               <>
                 {/* Profile Dropdown */}
                 <div className="flex items-center gap-2">
+                  {user?.subscription?.isTrial && !user?.subscription?.isExpired && (
+                    <div
+                      className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10.5px] font-extrabold uppercase tracking-wider"
+                      title={user.subscription.expiresAt ? `14-day trial ends on ${new Date(user.subscription.expiresAt).toLocaleDateString()}` : '14-Day Free Trial'}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      <span>Trial: {user.subscription.daysLeft}d left</span>
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => setProfileOpen(true)}

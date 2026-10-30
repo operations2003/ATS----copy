@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import prisma from '../config/prisma';
+import { calculateSubscriptionStatus } from '../utils/subscriptionUtils';
 
 export type UserRole = 'SUPER_ADMIN' | 'CLIENT_ADMIN' | 'RECRUITER' | 'ADMIN' | 'MEMBER' | 'TEAM_LEADER';
 
@@ -12,6 +13,7 @@ export interface AuthRequest extends Request {
     role?: UserRole;
     organizationId?: string;
     allowJdUpload?: boolean;
+    createdAt?: Date | string;
   };
 }
 
@@ -58,7 +60,8 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
           role: true,
           isActive: true,
           organizationId: true,
-          allowJdUpload: true
+          allowJdUpload: true,
+          createdAt: true
         }
       });
     } catch (dbErr) {
@@ -89,10 +92,36 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
       decoded.allowJdUpload = true;
     }
 
-    req.user = decoded;
+    req.user = {
+      ...decoded,
+      createdAt: dbUser?.createdAt
+    };
 
-    // Check organization subscription & status if not super admin
+    // Check organization subscription & 14-day free trial status if not super admin
     if (decoded.role !== 'SUPER_ADMIN' && !isSuperAdminEmail) {
+      const isExemptPath =
+        req.path === '/me' ||
+        req.path === '/change-password' ||
+        req.path === '/subscription-inquiry' ||
+        req.path.startsWith('/public');
+
+      if (!isExemptPath) {
+        try {
+          const sub = await calculateSubscriptionStatus(req.user);
+          if (sub.isExpired) {
+            res.status(403).json({
+              error: 'Your 14-day free trial has expired. Please choose a subscription model to continue using HireIQ.',
+              trialExpired: true,
+              subscriptionRequired: true,
+              subscription: sub
+            });
+            return;
+          }
+        } catch (subErr) {
+          console.warn('[AuthMiddleware] Subscription check warning:', subErr);
+        }
+      }
+
       const orgId = decoded.organizationId;
       if (orgId) {
         try {
@@ -110,12 +139,6 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
               if (org.status === 'SUSPENDED') {
                 res.status(403).json({
                   error: 'Your organization account has been suspended. Please contact your platform administrator.'
-                });
-                return;
-              }
-              if (org.status === 'EXPIRED' || (org.subscriptionExpiry && new Date(org.subscriptionExpiry) < new Date())) {
-                res.status(403).json({
-                  error: 'Your organization subscription has expired. Please contact your platform administrator to renew.'
                 });
                 return;
               }
@@ -153,7 +176,7 @@ export const optionalProtect = async (req: AuthRequest, res: Response, next: Nex
               ...(cleanEmail ? [{ email: cleanEmail }] : [])
             ]
           },
-          select: { id: true, email: true, role: true, organizationId: true, isActive: true, allowJdUpload: true }
+          select: { id: true, email: true, role: true, organizationId: true, isActive: true, allowJdUpload: true, createdAt: true }
         });
 
         if (dbUser) {

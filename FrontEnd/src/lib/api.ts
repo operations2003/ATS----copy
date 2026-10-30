@@ -17,6 +17,15 @@ const API_BASE_URL = getApiBaseUrl();
 
 export type UserRole = 'SUPER_ADMIN' | 'CLIENT_ADMIN' | 'RECRUITER' | 'ADMIN' | 'MEMBER' | 'TEAM_LEADER' | 'USER' | 'TEAM_LEAD' | 'RECRUITER_MEMBER';
 
+export interface SubscriptionStatus {
+  isSubscribed: boolean;
+  isTrial: boolean;
+  isExpired: boolean;
+  daysLeft: number;
+  plan: string;
+  expiresAt?: string | null;
+}
+
 export interface User {
   id: string;
   name?: string | null;
@@ -30,6 +39,7 @@ export interface User {
   updatedAt?: string;
   password?: string;
   allowJdUpload?: boolean;
+  subscription?: SubscriptionStatus;
 }
 
 export interface OrganizationQuota {

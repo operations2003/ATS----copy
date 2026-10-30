@@ -1,16 +1,17 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { fetchApi, User, AuthResponse, UserRole } from '../lib/api';
+import { fetchApi, User, AuthResponse, UserRole, SubscriptionStatus } from '../lib/api';
 import { atsStore } from '../lib/atsStore';
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
+  subscription: SubscriptionStatus | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   signin: (email: string, password: string) => Promise<UserRole>;
-  signup: (name: string, email: string, password: string) => Promise<UserRole>;
+  signup: (name: string, email: string, password: string, companyName?: string, role?: string) => Promise<UserRole>;
   googleSignin: () => Promise<void>;
   setRole: (role: UserRole) => void;
   logout: () => void;
@@ -45,7 +46,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }: AuthProv
         localStorage.removeItem('tasknera_name');
         localStorage.removeItem('tasknera_user_id');
         localStorage.removeItem('tasknera_current_password');
-    localStorage.removeItem('tasknera_allow_jd_upload');
+        localStorage.removeItem('tasknera_allow_jd_upload');
       }
     }
 
@@ -139,12 +140,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }: AuthProv
             } catch {}
           }
           localStorage.setItem('tasknera_allow_jd_upload', String(allowJd));
-          const fullUser = { 
+          const fullUser: User = { 
             ...data.user, 
             name: isSuperAdmin ? 'Super Admin' : (data.user.name || data.user.email.split('@')[0]),
             role: userRole,
             allowJdUpload: allowJd,
-            password: resolvedPassword
+            password: resolvedPassword,
+            subscription: data.user.subscription
           };
           setUser(fullUser);
           atsStore.ensureMember(fullUser);
@@ -208,7 +210,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }: AuthProv
             name: 'Super Admin',
             email: DESIGNATED_ADMIN_EMAIL,
             role: 'SUPER_ADMIN',
-            organizationId: 'org-tasknera'
+            organizationId: 'org-tasknera',
+            subscription: {
+              isSubscribed: true,
+              isTrial: false,
+              isExpired: false,
+              daysLeft: 9999,
+              plan: 'SUPER_ADMIN',
+              expiresAt: null
+            }
           } as any
         };
       } else if (cleanEmail === TASKNERA_CLIENT_ADMIN_EMAIL && password === TASKNERA_CLIENT_ADMIN_PASSWORD) {
@@ -220,7 +230,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }: AuthProv
             name: 'Sheetal Bedi',
             email: TASKNERA_CLIENT_ADMIN_EMAIL,
             role: 'CLIENT_ADMIN',
-            organizationId: 'org-tasknera'
+            organizationId: 'org-tasknera',
+            subscription: {
+              isSubscribed: true,
+              isTrial: false,
+              isExpired: false,
+              daysLeft: 9999,
+              plan: 'ENTERPRISE',
+              expiresAt: null
+            }
           } as any
         };
       } else {
@@ -270,13 +288,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }: AuthProv
       } catch {}
     }
     localStorage.setItem('tasknera_allow_jd_upload', String(allowJd));
-    const signedUser = {
+    const signedUser: User = {
       ...data.user,
       id: resolvedUserId,
       name: resolvedName,
       role: userRole,
       allowJdUpload: allowJd,
-      password: password
+      password: password,
+      subscription: data.user?.subscription
     };
     atsStore.clearAll();
     setUser(signedUser);
@@ -284,10 +303,59 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }: AuthProv
     return userRole;
   };
 
-  const signup = async (_name: string, _email: string, _password: string): Promise<UserRole> => {
-    // Public self-registration is strictly forbidden by policy
+  const signup = async (
+    name: string,
+    email: string,
+    password: string,
+    companyName?: string,
+    roleChoice?: string
+  ): Promise<UserRole> => {
+    const cleanEmail = email.trim().toLowerCase();
 
-    throw new Error('Account creation is restricted to administrators. Public self-registration is disabled.');
+    const data = await fetchApi<AuthResponse>('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: name.trim(),
+        email: cleanEmail,
+        password,
+        companyName: companyName?.trim(),
+        role: roleChoice
+      }),
+    });
+
+    const resolvedUserId = data.user?.id;
+    const userRole = (data.user?.role || 'CLIENT_ADMIN') as UserRole;
+    const resolvedName = data.user?.name || cleanEmail.split('@')[0];
+
+    localStorage.setItem('tasknera_token', data.token);
+    localStorage.setItem('tasknera_role', userRole);
+    localStorage.setItem('tasknera_email', data.user?.email || cleanEmail);
+    localStorage.setItem('tasknera_name', resolvedName);
+    localStorage.setItem('tasknera_user_pwd_' + cleanEmail, password);
+    localStorage.setItem('tasknera_current_password', password);
+    try {
+      const reg = JSON.parse(localStorage.getItem('tasknera_credential_registry') || '{}');
+      reg[cleanEmail] = password;
+      localStorage.setItem('tasknera_credential_registry', JSON.stringify(reg));
+    } catch {}
+
+    if (resolvedUserId) localStorage.setItem('tasknera_user_id', resolvedUserId);
+
+    setToken(data.token);
+    localStorage.setItem('tasknera_allow_jd_upload', 'true');
+    const signedUser: User = {
+      ...data.user,
+      id: resolvedUserId,
+      name: resolvedName,
+      role: userRole,
+      allowJdUpload: true,
+      password: password,
+      subscription: data.user?.subscription
+    };
+    atsStore.clearAll();
+    setUser(signedUser);
+    atsStore.ensureMember(signedUser);
+    return userRole;
   };
 
   const googleSignin = async (): Promise<void> => {
@@ -334,7 +402,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }: AuthProv
                 body: JSON.stringify({ idToken }),
               });
 
-              const userRole: UserRole = data.user?.role === 'ADMIN' ? 'ADMIN' : 'RECRUITER_MEMBER';
+              const userRole: UserRole = data.user?.role === 'ADMIN' ? 'ADMIN' : (data.user?.role || 'CLIENT_ADMIN');
               const resolvedUserId = data.user?.id || `usr-google-${Date.now()}`;
 
               localStorage.setItem('tasknera_token', data.token);
@@ -347,7 +415,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }: AuthProv
               }
 
               setToken(data.token);
-              setUser({ ...data.user, id: resolvedUserId, role: userRole });
+              const fullUser: User = { ...data.user, id: resolvedUserId, role: userRole, subscription: data.user?.subscription };
+              setUser(fullUser);
 
               google.accounts.id.cancel();
               resolve();
@@ -483,6 +552,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }: AuthProv
       value={{
         user,
         token,
+        subscription: user?.subscription || null,
         isAuthenticated: !!user,
         isLoading,
         signin,
@@ -498,7 +568,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }: AuthProv
     </AuthContext.Provider>
   );
 };
-
 
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);

@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
 import prisma from '../config/prisma';
 import { AuthRequest, UserRole } from '../middleware/authMiddleware';
+import { calculateSubscriptionStatus, SubscriptionStatusInfo } from '../utils/subscriptionUtils';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -14,11 +15,12 @@ const generateToken = (userId: string, email: string, role: UserRole, organizati
   return jwt.sign({ userId, email, role, organizationId }, secret, { expiresIn: expiresIn as any });
 };
 
-
 const DESIGNATED_ADMIN_EMAIL = 'operations@tasknera.com';
 const DESIGNATED_ADMIN_PASSWORD = 'Asad@9312506515';
 const TASKNERA_CLIENT_ADMIN_EMAIL = 'sheetalbedi@tasknera.com';
 const TASKNERA_CLIENT_ADMIN_PASSWORD = 'Tasknera@9312506515';
+
+export { SubscriptionStatusInfo, calculateSubscriptionStatus };
 
 /**
  * Ensure default admin account exists in PostgreSQL
@@ -111,7 +113,7 @@ export const ensureDefaultAdmin = async (): Promise<void> => {
       }
     });
 
-    // 3. Permanently purge any user accounts matching Harsh or Aditya
+    // 4. Permanently purge any user accounts matching Harsh or Aditya
     try {
       const purgedUsers = await prisma.user.findMany({
         where: {
@@ -149,14 +151,113 @@ export const ensureDefaultAdmin = async (): Promise<void> => {
   }
 };
 
-// @desc    Register a new user (Disabled for public self-registration)
+// @desc    Register a new user with 14-day free trial
 // @route   POST /api/auth/signup
-// @access  Public (Disabled - Admin only)
-export const signup = async (_req: Request, res: Response): Promise<void> => {
-  // Public self-registration is strictly forbidden by policy
-  res.status(403).json({
-    error: 'Account creation is restricted to administrators. Self-registration is disabled.'
-  });
+// @access  Public
+export const signup = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { name, email, password, companyName, role } = req.body;
+
+    if (!email || !password) {
+      res.status(400).json({ error: 'Please provide email and password' });
+      return;
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      res.status(400).json({ error: 'Please provide a valid email address' });
+      return;
+    }
+
+    if (String(password).length < 6) {
+      res.status(400).json({ error: 'Password must be at least 6 characters long' });
+      return;
+    }
+
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email: cleanEmail }
+    });
+
+    if (existingUser) {
+      res.status(400).json({ error: 'An account with this email already exists. Please sign in.' });
+      return;
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(String(password), salt);
+
+    const displayName = (name || cleanEmail.split('@')[0]).trim();
+    const orgName = (companyName || `${displayName}'s Workspace`).trim();
+
+    // 14 days free trial expiry
+    const trialStart = new Date();
+    const trialExpiry = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+
+    // Create organization for this new user with 14-day free trial
+    const newOrg = await prisma.organization.create({
+      data: {
+        name: orgName,
+        companyEmail: cleanEmail,
+        status: 'ACTIVE',
+        subscriptionPlan: 'FREE_TRIAL',
+        billingCycle: 'monthly',
+        subscriptionStart: trialStart,
+        subscriptionExpiry: trialExpiry,
+        maxUsers: 5,
+        maxRecruiters: 5,
+        maxActiveJobs: 20,
+        maxResumesPerMonth: 500,
+        allowJdUpload: true
+      }
+    });
+
+    // Default self-signup role to CLIENT_ADMIN so they can manage their workspace
+    const assignedRole: UserRole = (role === 'RECRUITER' || role === 'MEMBER') ? (role as UserRole) : 'CLIENT_ADMIN';
+
+    // Create user in database
+    const newUser = await prisma.user.create({
+      data: {
+        name: displayName,
+        email: cleanEmail,
+        password: hashedPassword,
+        role: assignedRole,
+        organizationId: newOrg.id,
+        allowJdUpload: true,
+        isActive: true
+      }
+    });
+
+    const token = generateToken(newUser.id, newUser.email, newUser.role as UserRole, newOrg.id);
+
+    const subscription: SubscriptionStatusInfo = {
+      isSubscribed: false,
+      isTrial: true,
+      isExpired: false,
+      daysLeft: 14,
+      plan: 'FREE_TRIAL',
+      expiresAt: trialExpiry.toISOString()
+    };
+
+    res.status(201).json({
+      message: 'Account created successfully with a 14-day free trial',
+      token,
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        organizationId: newOrg.id,
+        allowJdUpload: true,
+        createdAt: newUser.createdAt,
+        subscription
+      }
+    });
+  } catch (error: any) {
+    console.error('[Auth] Signup Error:', error);
+    res.status(500).json({ error: error.message || 'Server error during signup' });
+  }
 };
 
 // @desc    Authenticate user & get token
@@ -198,7 +299,15 @@ export const signin = async (req: Request, res: Response): Promise<void> => {
           email: DESIGNATED_ADMIN_EMAIL,
           role: userRole,
           organizationId: orgId,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          subscription: {
+            isSubscribed: true,
+            isTrial: false,
+            isExpired: false,
+            daysLeft: 9999,
+            plan: 'SUPER_ADMIN',
+            expiresAt: null
+          }
         }
       });
       return;
@@ -248,7 +357,15 @@ export const signin = async (req: Request, res: Response): Promise<void> => {
           role: userRole,
           organizationId: orgId,
           allowJdUpload: sheetalAllowJd,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          subscription: {
+            isSubscribed: true,
+            isTrial: false,
+            isExpired: false,
+            daysLeft: 9999,
+            plan: 'ENTERPRISE',
+            expiresAt: null
+          }
         }
       });
       return;
@@ -296,6 +413,9 @@ export const signin = async (req: Request, res: Response): Promise<void> => {
       } catch {}
     }
 
+    // Calculate subscription status
+    const subscription = await calculateSubscriptionStatus(user);
+
     res.status(200).json({
       message: 'Signed in successfully',
       token,
@@ -307,7 +427,8 @@ export const signin = async (req: Request, res: Response): Promise<void> => {
         teamId: user.teamId,
         organizationId: orgId,
         allowJdUpload: userAllowJdUpload,
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
+        subscription
       }
     });
   } catch (error) {
@@ -335,7 +456,15 @@ export const signin = async (req: Request, res: Response): Promise<void> => {
           email: DESIGNATED_ADMIN_EMAIL,
           role: userRole,
           organizationId: orgId,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          subscription: {
+            isSubscribed: true,
+            isTrial: false,
+            isExpired: false,
+            daysLeft: 9999,
+            plan: 'SUPER_ADMIN',
+            expiresAt: null
+          }
         }
       });
       return;
@@ -425,7 +554,9 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
       user.allowJdUpload = isAllowed;
     }
 
-    res.status(200).json({ user });
+    const subscription = await calculateSubscriptionStatus(user);
+
+    res.status(200).json({ user: { ...user, subscription } });
   } catch (error) {
     console.error('GetMe Error:', error);
     if (req.user?.email?.toLowerCase().trim() === DESIGNATED_ADMIN_EMAIL) {
@@ -436,7 +567,15 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
           email: DESIGNATED_ADMIN_EMAIL,
           role: 'SUPER_ADMIN',
           organizationId: 'org-tasknera',
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          subscription: {
+            isSubscribed: true,
+            isTrial: false,
+            isExpired: false,
+            daysLeft: 9999,
+            plan: 'SUPER_ADMIN',
+            expiresAt: null
+          }
         }
       });
       return;
@@ -445,7 +584,7 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
   }
 };
 
-// @desc    Authenticate with Google OAuth (Only permitted for existing database accounts)
+// @desc    Authenticate with Google OAuth
 // @route   POST /api/auth/google
 export const googleSignin = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -477,17 +616,48 @@ export const googleSignin = async (req: Request, res: Response): Promise<void> =
 
     const cleanEmail = payload.email.toLowerCase().trim();
 
-    // Verify user exists in database
-    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
+    // Verify user exists in database or create new user with 14-day free trial
+    let user = await prisma.user.findUnique({ where: { email: cleanEmail } });
 
     if (!user) {
-      res.status(403).json({
-        error: 'Account not found. Self-registration is disabled. Please contact an administrator to provision your account.'
+      const trialStart = new Date();
+      const trialExpiry = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      const displayName = payload.name || cleanEmail.split('@')[0];
+      const orgName = `${displayName}'s Workspace`;
+
+      const newOrg = await prisma.organization.create({
+        data: {
+          name: orgName,
+          companyEmail: cleanEmail,
+          status: 'ACTIVE',
+          subscriptionPlan: 'FREE_TRIAL',
+          billingCycle: 'monthly',
+          subscriptionStart: trialStart,
+          subscriptionExpiry: trialExpiry,
+          maxUsers: 5,
+          maxRecruiters: 5,
+          maxActiveJobs: 20,
+          maxResumesPerMonth: 500,
+          allowJdUpload: true
+        }
       });
-      return;
+
+      const randomPassword = await bcrypt.hash(`google_${Date.now()}_${Math.random()}`, 10);
+      user = await prisma.user.create({
+        data: {
+          name: displayName,
+          email: cleanEmail,
+          password: randomPassword,
+          role: 'CLIENT_ADMIN',
+          organizationId: newOrg.id,
+          allowJdUpload: true,
+          isActive: true
+        }
+      });
     }
 
     const token = generateToken(user.id, user.email, user.role as UserRole, user.organizationId || 'org-tasknera');
+    const subscription = await calculateSubscriptionStatus(user);
 
     res.status(200).json({
       message: 'Google authentication successful',
@@ -500,7 +670,8 @@ export const googleSignin = async (req: Request, res: Response): Promise<void> =
         avatarUrl: payload.picture || null,
         teamId: user.teamId,
         organizationId: user.organizationId || 'org-tasknera',
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
+        subscription
       }
     });
   } catch (error) {
@@ -566,6 +737,43 @@ export const changePassword = async (req: AuthRequest, res: Response): Promise<v
   }
 };
 
+// @desc    Submit subscription plan inquiry or upgrade request
+// @route   POST /api/auth/subscription-inquiry
+// @access  Private
+export const subscriptionInquiry = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
 
+    const { plan, phone, notes } = req.body;
 
+    // Log subscription inquiry in AuditLog
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: 'SUBSCRIPTION_UPGRADE_INQUIRY',
+          organizationId: req.user.organizationId !== 'org-tasknera' ? req.user.organizationId : null,
+          details: {
+            userEmail: req.user.email,
+            selectedPlan: plan || 'PROFESSIONAL',
+            phone: phone || null,
+            notes: notes || null,
+            requestedAt: new Date().toISOString()
+          }
+        }
+      });
+    } catch (auditErr) {
+      console.warn('[Auth] Audit log creation failed for subscription inquiry:', auditErr);
+    }
 
+    res.status(200).json({
+      success: true,
+      message: 'Your subscription upgrade request has been submitted! Our team will contact you shortly.'
+    });
+  } catch (error: any) {
+    console.error('[Auth] Error submitting subscription inquiry:', error);
+    res.status(500).json({ error: error.message || 'Failed to submit inquiry' });
+  }
+};
