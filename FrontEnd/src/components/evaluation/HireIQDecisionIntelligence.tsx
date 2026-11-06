@@ -146,7 +146,7 @@ export default function HireIQDecisionIntelligence({
   fallbackCandidateName,
   fallbackJobTitle,
   fallbackScore,
-  fallbackRecommendation
+  fallbackRecommendation,
 }: HireIQDecisionIntelligenceProps) {
   const { token } = useAuth();
   const [data, setData] = useState<DecisionIntelligenceData | null>(null);
@@ -170,7 +170,7 @@ export default function HireIQDecisionIntelligence({
           : null);
 
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       };
       if (activeToken) {
         headers['Authorization'] = `Bearer ${activeToken}`;
@@ -185,7 +185,10 @@ export default function HireIQDecisionIntelligence({
       if (!res.ok) {
         // Attempt candidate fallback route if job-specific failed
         if (jobId) {
-          const fallbackRes = await fetch(`${backendUrl}/candidates/${candidateId}/decision-intelligence?jobId=${jobId}`, { headers });
+          const fallbackRes = await fetch(
+            `${backendUrl}/candidates/${candidateId}/decision-intelligence?jobId=${jobId}`,
+            { headers }
+          );
           if (fallbackRes.ok) {
             const fallbackJson = await fallbackRes.json();
             setData(fallbackJson);
@@ -222,7 +225,7 @@ export default function HireIQDecisionIntelligence({
           <div className="h-10 w-28 bg-slate-200 rounded-xl" />
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => (
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-24 bg-slate-100 rounded-2xl p-4" />
           ))}
         </div>
@@ -260,16 +263,16 @@ export default function HireIQDecisionIntelligence({
 
         <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-center space-y-2">
           <div className="text-2xl">💡</div>
-          <h4 className="text-sm font-bold text-slate-800">
-            Decision Intelligence Pending
-          </h4>
+          <h4 className="text-sm font-bold text-slate-800">Decision Intelligence Pending</h4>
           <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-            {error || 'This candidate has not yet been processed through a confirmed job requisition evaluation.'}
+            {error ||
+              'This candidate has not yet been processed through a confirmed job requisition evaluation.'}
           </p>
           {fallbackScore !== undefined && (
             <div className="pt-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-white border border-slate-200 text-slate-800">
-                Existing Recorded ATS Score: <span className="text-brand-orange font-mono">{fallbackScore}%</span>
+                Existing Recorded ATS Score:{' '}
+                <span className="text-brand-orange font-mono">{fallbackScore}%</span>
               </span>
             </div>
           )}
@@ -279,7 +282,7 @@ export default function HireIQDecisionIntelligence({
   }
 
   // Filter requirements by status and search text
-  const filteredRequirements = (data.requirements || []).filter(r => {
+  const filteredRequirements = (data.requirements || []).filter((r) => {
     const matchesStatus = statusFilter === 'ALL' || r.status === statusFilter;
     const matchesSearch =
       searchQuery.trim() === '' ||
@@ -341,84 +344,132 @@ export default function HireIQDecisionIntelligence({
   };
 
   // Derive exact deterministic score breakdown if not pre-populated by backend
-  const atsBreakdown: AtsScoreBreakdown = (data && data.atsScoreBreakdown) || (() => {
-    const existingAtsScore = (data && data.evaluation && data.evaluation.atsScore) || 0;
-    const coreSkillsPct = data && data.breakdown && data.breakdown.coreSkills && data.breakdown.coreSkills.total > 0
-      ? Math.round((data.breakdown.coreSkills.proven / data.breakdown.coreSkills.total) * 100)
-      : Math.min(100, Math.round(existingAtsScore * 1.05));
-    const experiencePct = data && data.breakdown && data.breakdown.experience && data.breakdown.experience.requiredYears > 0
-      ? Math.min(100, Math.round((data.breakdown.experience.candidateYears / data.breakdown.experience.requiredYears) * 100))
-      : (data && data.breakdown && data.breakdown.experience && data.breakdown.experience.candidateYears >= 3 ? 100 : Math.round(((data?.breakdown?.experience?.candidateYears || 0) / 3) * 100));
-    const educationPct = data?.breakdown?.education?.status === 'MEETS' ? 100 : (data?.breakdown?.education?.status === 'PARTIAL' ? 70 : 50);
-    const mandatoryPct = data && data.breakdown && data.breakdown.mandatoryRequirements && data.breakdown.mandatoryRequirements.total > 0
-      ? Math.round((data.breakdown.mandatoryRequirements.satisfied / data.breakdown.mandatoryRequirements.total) * 100)
-      : 100;
-    const semanticPct = Math.min(100, Math.max(30, Math.round(existingAtsScore * 0.85)));
-    const preferredBonus = data && data.breakdown && data.breakdown.preferredRequirements && data.breakdown.preferredRequirements.total > 0 && (data.breakdown.preferredRequirements.proven / data.breakdown.preferredRequirements.total) >= 0.75 ? 5 : 0;
+  const atsBreakdown: AtsScoreBreakdown =
+    (data && data.atsScoreBreakdown) ||
+    (() => {
+      const existingAtsScore = (data && data.evaluation && data.evaluation.atsScore) || 0;
+      const coreSkillsPct =
+        data && data.breakdown && data.breakdown.coreSkills && data.breakdown.coreSkills.total > 0
+          ? Math.round((data.breakdown.coreSkills.proven / data.breakdown.coreSkills.total) * 100)
+          : Math.min(100, Math.round(existingAtsScore * 1.05));
+      const experiencePct =
+        data &&
+        data.breakdown &&
+        data.breakdown.experience &&
+        data.breakdown.experience.requiredYears > 0
+          ? Math.min(
+              100,
+              Math.round(
+                (data.breakdown.experience.candidateYears /
+                  data.breakdown.experience.requiredYears) *
+                  100
+              )
+            )
+          : data &&
+              data.breakdown &&
+              data.breakdown.experience &&
+              data.breakdown.experience.candidateYears >= 3
+            ? 100
+            : Math.round(((data?.breakdown?.experience?.candidateYears || 0) / 3) * 100);
+      const educationPct =
+        data?.breakdown?.education?.status === 'MEETS'
+          ? 100
+          : data?.breakdown?.education?.status === 'PARTIAL'
+            ? 70
+            : 50;
+      const mandatoryPct =
+        data &&
+        data.breakdown &&
+        data.breakdown.mandatoryRequirements &&
+        data.breakdown.mandatoryRequirements.total > 0
+          ? Math.round(
+              (data.breakdown.mandatoryRequirements.satisfied /
+                data.breakdown.mandatoryRequirements.total) *
+                100
+            )
+          : 100;
+      const semanticPct = Math.min(100, Math.max(30, Math.round(existingAtsScore * 0.85)));
+      const preferredBonus =
+        data &&
+        data.breakdown &&
+        data.breakdown.preferredRequirements &&
+        data.breakdown.preferredRequirements.total > 0 &&
+        data.breakdown.preferredRequirements.proven / data.breakdown.preferredRequirements.total >=
+          0.75
+          ? 5
+          : 0;
 
-    const corePoints = parseFloat(((coreSkillsPct * 0.35)).toFixed(1));
-    const expPoints = parseFloat(((experiencePct * 0.25)).toFixed(1));
-    const eduPoints = parseFloat(((educationPct * 0.15)).toFixed(1));
-    const mandPoints = parseFloat(((mandatoryPct * 0.15)).toFixed(1));
-    const semPoints = parseFloat(((semanticPct * 0.10)).toFixed(1));
+      const corePoints = parseFloat((coreSkillsPct * 0.35).toFixed(1));
+      const expPoints = parseFloat((experiencePct * 0.25).toFixed(1));
+      const eduPoints = parseFloat((educationPct * 0.15).toFixed(1));
+      const mandPoints = parseFloat((mandatoryPct * 0.15).toFixed(1));
+      const semPoints = parseFloat((semanticPct * 0.1).toFixed(1));
 
-    let matchTier = 'MODERATE MATCH';
-    if (existingAtsScore >= 90) matchTier = 'EXCELLENT MATCH';
-    else if (existingAtsScore >= 75) matchTier = 'STRONG MATCH';
-    else if (existingAtsScore >= 50) matchTier = 'MODERATE MATCH';
-    else if (existingAtsScore >= 35) matchTier = 'LOW MATCH';
-    else matchTier = 'MINIMAL MATCH';
+      let matchTier = 'MODERATE MATCH';
+      if (existingAtsScore >= 90) matchTier = 'EXCELLENT MATCH';
+      else if (existingAtsScore >= 75) matchTier = 'STRONG MATCH';
+      else if (existingAtsScore >= 50) matchTier = 'MODERATE MATCH';
+      else if (existingAtsScore >= 35) matchTier = 'LOW MATCH';
+      else matchTier = 'MINIMAL MATCH';
 
-    return {
-      finalScore: existingAtsScore,
-      matchTier,
-      formula: 'ATS Score = (Core Skills × 35%) + (Experience × 25%) + (Education × 15%) + (Mandatory × 15%) + (Semantic × 10%) + Preferred Bonus',
-      pillars: {
-        coreSkills: {
-          name: 'Core Technical & Functional Skills',
-          weightPct: 35,
-          scorePct: coreSkillsPct,
-          pointsEarned: corePoints,
-          maxPoints: 35,
-          evidence: data?.breakdown?.coreSkills?.label || 'Technical capabilities & tool competencies evaluated'
+      return {
+        finalScore: existingAtsScore,
+        matchTier,
+        formula:
+          'ATS Score = (Core Skills × 35%) + (Experience × 25%) + (Education × 15%) + (Mandatory × 15%) + (Semantic × 10%) + Preferred Bonus',
+        pillars: {
+          coreSkills: {
+            name: 'Core Technical & Functional Skills',
+            weightPct: 35,
+            scorePct: coreSkillsPct,
+            pointsEarned: corePoints,
+            maxPoints: 35,
+            evidence:
+              data?.breakdown?.coreSkills?.label ||
+              'Technical capabilities & tool competencies evaluated',
+          },
+          experience: {
+            name: 'Professional Experience & Career Tenure',
+            weightPct: 25,
+            scorePct: experiencePct,
+            pointsEarned: expPoints,
+            maxPoints: 25,
+            evidence: `${data?.breakdown?.experience?.candidateYears || 0} yrs verified tenure vs ${data?.breakdown?.experience?.requiredYears || 0} yrs required`,
+          },
+          education: {
+            name: 'Education & Qualifications',
+            weightPct: 15,
+            scorePct: educationPct,
+            pointsEarned: eduPoints,
+            maxPoints: 15,
+            evidence:
+              data?.breakdown?.education?.candidateDegree ||
+              'Degree & relevant academic background evaluated',
+          },
+          mandatory: {
+            name: 'Mandatory Compliance & Knockout Gatekeeper',
+            weightPct: 15,
+            scorePct: mandatoryPct,
+            pointsEarned: mandPoints,
+            maxPoints: 15,
+            evidence:
+              data?.breakdown?.mandatoryRequirements?.label ||
+              'Critical must-have criteria verified',
+          },
+          semantic: {
+            name: 'Semantic Relevance & Domain Alignment',
+            weightPct: 10,
+            scorePct: semanticPct,
+            pointsEarned: semPoints,
+            maxPoints: 10,
+            evidence:
+              'Job description keyword density, industry domain context, and methodology alignment',
+          },
         },
-        experience: {
-          name: 'Professional Experience & Career Tenure',
-          weightPct: 25,
-          scorePct: experiencePct,
-          pointsEarned: expPoints,
-          maxPoints: 25,
-          evidence: `${data?.breakdown?.experience?.candidateYears || 0} yrs verified tenure vs ${data?.breakdown?.experience?.requiredYears || 0} yrs required`
-        },
-        education: {
-          name: 'Education & Qualifications',
-          weightPct: 15,
-          scorePct: educationPct,
-          pointsEarned: eduPoints,
-          maxPoints: 15,
-          evidence: data?.breakdown?.education?.candidateDegree || 'Degree & relevant academic background evaluated'
-        },
-        mandatory: {
-          name: 'Mandatory Compliance & Knockout Gatekeeper',
-          weightPct: 15,
-          scorePct: mandatoryPct,
-          pointsEarned: mandPoints,
-          maxPoints: 15,
-          evidence: data?.breakdown?.mandatoryRequirements?.label || 'Critical must-have criteria verified'
-        },
-        semantic: {
-          name: 'Semantic Relevance & Domain Alignment',
-          weightPct: 10,
-          scorePct: semanticPct,
-          pointsEarned: semPoints,
-          maxPoints: 10,
-          evidence: 'Job description keyword density, industry domain context, and methodology alignment'
-        }
-      },
-      preferredBonus,
-      explanation: `Candidate achieved an overall ATS score of ${existingAtsScore}% calculated through deterministic weights across 5 verified evidence pillars.`
-    };
-  })();
+        preferredBonus,
+        explanation: `Candidate achieved an overall ATS score of ${existingAtsScore}% calculated through deterministic weights across 5 verified evidence pillars.`,
+      };
+    })();
 
   return (
     <div className="space-y-6">
@@ -441,8 +492,8 @@ export default function HireIQDecisionIntelligence({
             </h2>
             <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
               <strong>Existing ATS Score</strong> represents the official matching engine result.{' '}
-              <strong>Decision Intelligence</strong> provides the verifiable evidence trail explaining{' '}
-              <em>why</em> the candidate received this outcome.
+              <strong>Decision Intelligence</strong> provides the verifiable evidence trail
+              explaining <em>why</em> the candidate received this outcome.
             </p>
           </div>
 
@@ -465,18 +516,19 @@ export default function HireIQDecisionIntelligence({
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
               Candidate & Position
             </span>
-            <h3 className="text-lg font-extrabold text-slate-900 mt-0.5">
-              {data.candidate.name}
-            </h3>
+            <h3 className="text-lg font-extrabold text-slate-900 mt-0.5">{data.candidate.name}</h3>
             <p className="text-xs text-slate-600 font-semibold mt-0.5">
-              {data.evaluation.jobTitle} • <span className="text-brand-orange">{data.evaluation.jobClient}</span>
+              {data.evaluation.jobTitle} •{' '}
+              <span className="text-brand-orange">{data.evaluation.jobClient}</span>
             </p>
             <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-500 font-medium">
               <span>📍 {data.candidate.location}</span>
               <span>•</span>
               <span>💼 {data.candidate.totalExperienceYears} Years Experience</span>
               <span>•</span>
-              <span>🗓️ Evaluated: {new Date(data.evaluation.evaluatedAt).toLocaleDateString()}</span>
+              <span>
+                🗓️ Evaluated: {new Date(data.evaluation.evaluatedAt).toLocaleDateString()}
+              </span>
             </div>
           </div>
 
@@ -487,7 +539,8 @@ export default function HireIQDecisionIntelligence({
                 Existing ATS Score
               </span>
               <div className="text-2xl font-black font-mono text-slate-900 mt-0.5">
-                {data.evaluation.atsScore} <span className="text-xs font-bold text-slate-400">/ 100</span>
+                {data.evaluation.atsScore}{' '}
+                <span className="text-xs font-bold text-slate-400">/ 100</span>
               </div>
             </div>
 
@@ -499,9 +552,12 @@ export default function HireIQDecisionIntelligence({
               </span>
               <div className="mt-1">
                 {(() => {
-                  const effectiveRec = data.evaluation.atsScore >= 90 ? 'RECOMMENDED' : data.evaluation.recommendation;
+                  const effectiveRec =
+                    data.evaluation.atsScore >= 90 ? 'RECOMMENDED' : data.evaluation.recommendation;
                   return (
-                    <span className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border shadow-2xs ${getRecommendationBadge(effectiveRec)}`}>
+                    <span
+                      className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border shadow-2xs ${getRecommendationBadge(effectiveRec)}`}
+                    >
                       {effectiveRec}
                     </span>
                   );
@@ -588,9 +644,11 @@ export default function HireIQDecisionIntelligence({
           <span className="text-blue-600 font-bold text-sm mt-0.5">ℹ️</span>
           <p className="leading-relaxed">
             <strong>Evidence Integrity Standard:</strong> "Not Found" indicates{' '}
-            <span className="underline decoration-blue-400">insufficient documentation in the submitted CV</span>. It
-            does not definitively mean the candidate lacks the skill. Only explicit contradictions are marked as
-            contradicted.
+            <span className="underline decoration-blue-400">
+              insufficient documentation in the submitted CV
+            </span>
+            . It does not definitively mean the candidate lacks the skill. Only explicit
+            contradictions are marked as contradicted.
           </p>
         </div>
       </div>
@@ -623,9 +681,11 @@ export default function HireIQDecisionIntelligence({
                 style={{
                   width: `${
                     data.breakdown.coreSkills.total > 0
-                      ? Math.round((data.breakdown.coreSkills.proven / data.breakdown.coreSkills.total) * 100)
+                      ? Math.round(
+                          (data.breakdown.coreSkills.proven / data.breakdown.coreSkills.total) * 100
+                        )
                       : 0
-                  }%`
+                  }%`,
                 }}
               />
             </div>
@@ -689,7 +749,10 @@ export default function HireIQDecisionIntelligence({
                 {data.breakdown.location.text}
               </div>
             </div>
-            <p className="text-[11px] text-slate-500 mt-2 font-medium truncate" title={data.breakdown.location.candidateLocation}>
+            <p
+              className="text-[11px] text-slate-500 mt-2 font-medium truncate"
+              title={data.breakdown.location.candidateLocation}
+            >
               Candidate: {data.breakdown.location.candidateLocation}
             </p>
           </div>
@@ -704,7 +767,10 @@ export default function HireIQDecisionIntelligence({
                 {data.breakdown.education.text}
               </div>
             </div>
-            <p className="text-[11px] text-slate-500 mt-2 font-medium truncate" title={data.breakdown.education.candidateDegree}>
+            <p
+              className="text-[11px] text-slate-500 mt-2 font-medium truncate"
+              title={data.breakdown.education.candidateDegree}
+            >
               {data.breakdown.education.candidateDegree}
             </p>
           </div>
@@ -743,32 +809,34 @@ export default function HireIQDecisionIntelligence({
             <input
               type="text"
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search evidence..."
               className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand-orange w-40"
             />
             <div className="inline-flex p-0.5 bg-slate-100 rounded-xl border border-slate-200 text-xs">
-              {(['ALL', 'PROVEN', 'PARTIALLY_PROVEN', 'NOT_FOUND', 'CONTRADICTED'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setStatusFilter(f)}
-                  className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
-                    statusFilter === f
-                      ? 'bg-white text-slate-900 shadow-2xs'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  {f === 'ALL'
-                    ? 'All'
-                    : f === 'PROVEN'
-                    ? 'Proven'
-                    : f === 'PARTIALLY_PROVEN'
-                    ? 'Partial'
-                    : f === 'NOT_FOUND'
-                    ? 'Not Found'
-                    : 'Contradicted'}
-                </button>
-              ))}
+              {(['ALL', 'PROVEN', 'PARTIALLY_PROVEN', 'NOT_FOUND', 'CONTRADICTED'] as const).map(
+                (f) => (
+                  <button
+                    key={f}
+                    onClick={() => setStatusFilter(f)}
+                    className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                      statusFilter === f
+                        ? 'bg-white text-slate-900 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {f === 'ALL'
+                      ? 'All'
+                      : f === 'PROVEN'
+                        ? 'Proven'
+                        : f === 'PARTIALLY_PROVEN'
+                          ? 'Partial'
+                          : f === 'NOT_FOUND'
+                            ? 'Not Found'
+                            : 'Contradicted'}
+                  </button>
+                )
+              )}
             </div>
           </div>
         </div>
@@ -792,12 +860,10 @@ export default function HireIQDecisionIntelligence({
                   </td>
                 </tr>
               ) : (
-                filteredRequirements.map(req => (
+                filteredRequirements.map((req) => (
                   <tr key={req.id} className="hover:bg-slate-50/60 transition-colors">
                     <td className="px-4 py-3.5 max-w-xs">
-                      <div className="font-bold text-slate-900 leading-snug">
-                        {req.requirement}
-                      </div>
+                      <div className="font-bold text-slate-900 leading-snug">{req.requirement}</div>
                       {req.isMandatory && (
                         <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200">
                           Mandatory
@@ -867,7 +933,8 @@ export default function HireIQDecisionIntelligence({
             </h3>
           </div>
           <p className="text-xs text-slate-500">
-            Identified gaps or missing documentation in submitted CV (without automatic skill rejection):
+            Identified gaps or missing documentation in submitted CV (without automatic skill
+            rejection):
           </p>
           {data.whyNotThisCandidate && data.whyNotThisCandidate.length > 0 ? (
             <div className="space-y-2.5">
@@ -877,7 +944,7 @@ export default function HireIQDecisionIntelligence({
                   className="p-3 bg-amber-50/50 border border-amber-100 rounded-2xl flex items-start gap-2.5 text-xs text-amber-950 font-medium leading-relaxed"
                 >
                   <span className="text-amber-600 font-bold mt-0.5">⚠</span>
-                  <span>{concern}</span>
+                  <span className="whitespace-pre-line">{concern}</span>
                 </div>
               ))}
             </div>
@@ -896,7 +963,8 @@ export default function HireIQDecisionIntelligence({
             What Would Change the Decision?
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Key evidence that, if verified during a screening call or portfolio review, could elevate the recommendation.
+            Key evidence that, if verified during a screening call or portfolio review, could
+            elevate the recommendation.
           </p>
         </div>
 
@@ -926,7 +994,8 @@ export default function HireIQDecisionIntelligence({
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-amber-200/60 text-[11px] text-slate-500 italic">
-              * Note: This projection is purely informational. The stored ATS score is never modified without a formal re-evaluation.
+              * Note: This projection is purely informational. The stored ATS score is never
+              modified without a formal re-evaluation.
             </div>
           </div>
         </div>
@@ -968,14 +1037,19 @@ export default function HireIQDecisionIntelligence({
               </h3>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Deterministic mathematical attribution across verified CV evidence pillars grounded in requisition criteria.
+              Deterministic mathematical attribution across verified CV evidence pillars grounded in
+              requisition criteria.
             </p>
           </div>
 
           <div className="flex items-center gap-3 self-start sm:self-auto">
             <div className="px-3 py-1.5 rounded-xl bg-slate-900 text-white flex items-center gap-2 shadow-xs">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total ATS Score:</span>
-              <span className="text-base font-black text-emerald-400">{atsBreakdown.finalScore}%</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Total ATS Score:
+              </span>
+              <span className="text-base font-black text-emerald-400">
+                {atsBreakdown.finalScore}%
+              </span>
             </div>
             <span className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
               {atsBreakdown.matchTier}
@@ -986,9 +1060,12 @@ export default function HireIQDecisionIntelligence({
         {/* Formula Bar Banner */}
         <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-50 via-indigo-50/30 to-slate-50 border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2">
-            <span className="font-extrabold text-slate-700 uppercase tracking-wider text-[11px]">Evaluation Formula:</span>
+            <span className="font-extrabold text-slate-700 uppercase tracking-wider text-[11px]">
+              Evaluation Formula:
+            </span>
             <span className="font-mono text-slate-600 font-semibold bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
-              (Core Skills × 35%) + (Experience × 25%) + (Education × 15%) + (Mandatory × 15%) + (Semantic × 10%) + Bonus
+              (Core Skills × 35%) + (Experience × 25%) + (Education × 15%) + (Mandatory × 15%) +
+              (Semantic × 10%) + Bonus
             </span>
           </div>
           <span className="text-[11px] font-semibold text-indigo-900 bg-indigo-100/70 px-2.5 py-1 rounded-lg self-start md:self-auto">
@@ -1019,12 +1096,16 @@ export default function HireIQDecisionIntelligence({
               <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                 <div
                   className="bg-indigo-600 h-2 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, (atsBreakdown.pillars.coreSkills.pointsEarned / 35) * 100)}%` }}
+                  style={{
+                    width: `${Math.min(100, (atsBreakdown.pillars.coreSkills.pointsEarned / 35) * 100)}%`,
+                  }}
                 />
               </div>
               <div className="flex justify-between items-center text-[10px] text-slate-500 mt-1.5">
                 <span>Pillar Score: {atsBreakdown.pillars.coreSkills.scorePct}%</span>
-                <span className="truncate max-w-[150px] font-medium text-slate-600">{atsBreakdown.pillars.coreSkills.evidence}</span>
+                <span className="truncate max-w-[150px] font-medium text-slate-600">
+                  {atsBreakdown.pillars.coreSkills.evidence}
+                </span>
               </div>
             </div>
           </div>
@@ -1050,12 +1131,16 @@ export default function HireIQDecisionIntelligence({
               <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                 <div
                   className="bg-blue-600 h-2 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, (atsBreakdown.pillars.experience.pointsEarned / 25) * 100)}%` }}
+                  style={{
+                    width: `${Math.min(100, (atsBreakdown.pillars.experience.pointsEarned / 25) * 100)}%`,
+                  }}
                 />
               </div>
               <div className="flex justify-between items-center text-[10px] text-slate-500 mt-1.5">
                 <span>Pillar Score: {atsBreakdown.pillars.experience.scorePct}%</span>
-                <span className="truncate max-w-[150px] font-medium text-slate-600">{atsBreakdown.pillars.experience.evidence}</span>
+                <span className="truncate max-w-[150px] font-medium text-slate-600">
+                  {atsBreakdown.pillars.experience.evidence}
+                </span>
               </div>
             </div>
           </div>
@@ -1081,12 +1166,16 @@ export default function HireIQDecisionIntelligence({
               <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                 <div
                   className="bg-purple-600 h-2 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, (atsBreakdown.pillars.education.pointsEarned / 15) * 100)}%` }}
+                  style={{
+                    width: `${Math.min(100, (atsBreakdown.pillars.education.pointsEarned / 15) * 100)}%`,
+                  }}
                 />
               </div>
               <div className="flex justify-between items-center text-[10px] text-slate-500 mt-1.5">
                 <span>Pillar Score: {atsBreakdown.pillars.education.scorePct}%</span>
-                <span className="truncate max-w-[150px] font-medium text-slate-600">{atsBreakdown.pillars.education.evidence}</span>
+                <span className="truncate max-w-[150px] font-medium text-slate-600">
+                  {atsBreakdown.pillars.education.evidence}
+                </span>
               </div>
             </div>
           </div>
@@ -1112,12 +1201,16 @@ export default function HireIQDecisionIntelligence({
               <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                 <div
                   className="bg-rose-600 h-2 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, (atsBreakdown.pillars.mandatory.pointsEarned / 15) * 100)}%` }}
+                  style={{
+                    width: `${Math.min(100, (atsBreakdown.pillars.mandatory.pointsEarned / 15) * 100)}%`,
+                  }}
                 />
               </div>
               <div className="flex justify-between items-center text-[10px] text-slate-500 mt-1.5">
                 <span>Pillar Score: {atsBreakdown.pillars.mandatory.scorePct}%</span>
-                <span className="truncate max-w-[150px] font-medium text-slate-600">{atsBreakdown.pillars.mandatory.evidence}</span>
+                <span className="truncate max-w-[150px] font-medium text-slate-600">
+                  {atsBreakdown.pillars.mandatory.evidence}
+                </span>
               </div>
             </div>
           </div>
@@ -1143,12 +1236,16 @@ export default function HireIQDecisionIntelligence({
               <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                 <div
                   className="bg-amber-600 h-2 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, (atsBreakdown.pillars.semantic.pointsEarned / 10) * 100)}%` }}
+                  style={{
+                    width: `${Math.min(100, (atsBreakdown.pillars.semantic.pointsEarned / 10) * 100)}%`,
+                  }}
                 />
               </div>
               <div className="flex justify-between items-center text-[10px] text-slate-500 mt-1.5">
                 <span>Pillar Score: {atsBreakdown.pillars.semantic.scorePct}%</span>
-                <span className="truncate max-w-[150px] font-medium text-slate-600">{atsBreakdown.pillars.semantic.evidence}</span>
+                <span className="truncate max-w-[150px] font-medium text-slate-600">
+                  {atsBreakdown.pillars.semantic.evidence}
+                </span>
               </div>
             </div>
           </div>
@@ -1183,24 +1280,40 @@ export default function HireIQDecisionIntelligence({
         {/* Calculation Proof Footer */}
         <div className="p-4 bg-slate-900 text-white rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
           <div className="flex flex-wrap items-center gap-1.5 text-slate-300">
-            <span className="font-bold text-white uppercase tracking-wider text-[11px]">Points Sum:</span>
-            <span className="font-mono text-indigo-300 font-bold">{atsBreakdown.pillars.coreSkills.pointsEarned} (Skills)</span>
+            <span className="font-bold text-white uppercase tracking-wider text-[11px]">
+              Points Sum:
+            </span>
+            <span className="font-mono text-indigo-300 font-bold">
+              {atsBreakdown.pillars.coreSkills.pointsEarned} (Skills)
+            </span>
             <span>+</span>
-            <span className="font-mono text-blue-300 font-bold">{atsBreakdown.pillars.experience.pointsEarned} (Exp)</span>
+            <span className="font-mono text-blue-300 font-bold">
+              {atsBreakdown.pillars.experience.pointsEarned} (Exp)
+            </span>
             <span>+</span>
-            <span className="font-mono text-purple-300 font-bold">{atsBreakdown.pillars.education.pointsEarned} (Edu)</span>
+            <span className="font-mono text-purple-300 font-bold">
+              {atsBreakdown.pillars.education.pointsEarned} (Edu)
+            </span>
             <span>+</span>
-            <span className="font-mono text-rose-300 font-bold">{atsBreakdown.pillars.mandatory.pointsEarned} (Mandatory)</span>
+            <span className="font-mono text-rose-300 font-bold">
+              {atsBreakdown.pillars.mandatory.pointsEarned} (Mandatory)
+            </span>
             <span>+</span>
-            <span className="font-mono text-amber-300 font-bold">{atsBreakdown.pillars.semantic.pointsEarned} (Semantic)</span>
+            <span className="font-mono text-amber-300 font-bold">
+              {atsBreakdown.pillars.semantic.pointsEarned} (Semantic)
+            </span>
             {atsBreakdown.preferredBonus > 0 && (
               <>
                 <span>+</span>
-                <span className="font-mono text-emerald-400 font-bold">{atsBreakdown.preferredBonus} (Bonus)</span>
+                <span className="font-mono text-emerald-400 font-bold">
+                  {atsBreakdown.preferredBonus} (Bonus)
+                </span>
               </>
             )}
             <span>=</span>
-            <span className="font-black text-emerald-400 text-sm font-mono">{atsBreakdown.finalScore}% Total ATS Score</span>
+            <span className="font-black text-emerald-400 text-sm font-mono">
+              {atsBreakdown.finalScore}% Total ATS Score
+            </span>
           </div>
           <span className="text-[11px] text-slate-400 italic">
             * 100% grounded in verified CV evidence
@@ -1232,11 +1345,12 @@ export default function HireIQDecisionIntelligence({
           </div>
           <div>
             <strong className="text-slate-700">Job Requisition ID:</strong>{' '}
-            <span className="font-mono">{data.audit.jobId ? `${data.audit.jobId.substring(0, 13)}...` : 'Pool'}</span>
+            <span className="font-mono">
+              {data.audit.jobId ? `${data.audit.jobId.substring(0, 13)}...` : 'Pool'}
+            </span>
           </div>
         </div>
       </div>
     </div>
   );
 }
-

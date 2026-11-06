@@ -14,7 +14,18 @@
 
 export interface NormalizedRequirement {
   name: string;
-  category: 'Technical Skill' | 'Experience' | 'Education' | 'Tool' | 'Framework' | 'Database' | 'Cloud' | 'Architecture' | 'Soft Skill' | 'Certification' | 'Other';
+  category:
+    | "Technical Skill"
+    | "Experience"
+    | "Education"
+    | "Tool"
+    | "Framework"
+    | "Database"
+    | "Cloud"
+    | "Architecture"
+    | "Soft Skill"
+    | "Certification"
+    | "Other";
   description: string;
   aliases: string[];
   related_terms: string[];
@@ -40,8 +51,8 @@ export interface NormalizedJdSchema {
   soft_skills: string[];
 }
 
-export const PRIMARY_GEMINI_MODEL = 'gemini-2.5-flash-lite';
-export const FALLBACK_GEMINI_MODEL = 'gemini-3.5-flash-lite';
+export const PRIMARY_GEMINI_MODEL = "gemini-2.5-flash-lite";
+export const FALLBACK_GEMINI_MODEL = "gemini-3.5-flash-lite";
 const GEMINI_TIMEOUT_MS = 45000; // 45-second timeout for large documents (e.g. 7k+ char JDs)
 
 // HTTP Status code classifications
@@ -58,18 +69,27 @@ const MODEL_CACHE_TTL_MS = 1000 * 60 * 60; // 1 hour
  * Checks if a candidate Gemini model is supported by the user's API account.
  * Caches results to prevent repeated API calls.
  */
-export async function isGeminiModelSupported(modelName: string, apiKey: string): Promise<boolean> {
+export async function isGeminiModelSupported(
+  modelName: string,
+  apiKey: string,
+): Promise<boolean> {
   const now = Date.now();
   if (cachedSupportedModels && now - lastModelCheckTime < MODEL_CACHE_TTL_MS) {
-    return cachedSupportedModels.has(modelName) || cachedSupportedModels.has(`models/${modelName}`);
+    return (
+      cachedSupportedModels.has(modelName) ||
+      cachedSupportedModels.has(`models/${modelName}`)
+    );
   }
 
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`, {
-      signal: controller.signal
-    });
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
+      {
+        signal: controller.signal,
+      },
+    );
     clearTimeout(timeout);
 
     if (res.ok) {
@@ -77,9 +97,11 @@ export async function isGeminiModelSupported(modelName: string, apiKey: string):
       if (Array.isArray(data.models)) {
         const supported = new Set<string>();
         for (const m of data.models) {
-          const rawName = String(m.name || '').replace(/^models\//, '');
-          const methods = Array.isArray(m.supportedGenerationMethods) ? m.supportedGenerationMethods : [];
-          if (methods.includes('generateContent')) {
+          const rawName = String(m.name || "").replace(/^models\//, "");
+          const methods = Array.isArray(m.supportedGenerationMethods)
+            ? m.supportedGenerationMethods
+            : [];
+          if (methods.includes("generateContent")) {
             supported.add(rawName);
             supported.add(`models/${rawName}`);
           }
@@ -90,11 +112,17 @@ export async function isGeminiModelSupported(modelName: string, apiKey: string):
       }
     }
   } catch (err: any) {
-    console.warn(`[Gemini] Model capability check warning: ${err?.message || err}`);
+    console.warn(
+      `[Gemini] Model capability check warning: ${err?.message || err}`,
+    );
   }
 
   // Safe heuristic fallback for confirmed supported models if query fails
-  const knownSupported = new Set(['gemini-2.5-flash-lite', 'gemini-3.5-flash-lite', 'gemini-2.5-flash']);
+  const knownSupported = new Set([
+    "gemini-2.5-flash-lite",
+    "gemini-3.5-flash-lite",
+    "gemini-2.5-flash",
+  ]);
   return knownSupported.has(modelName);
 }
 
@@ -146,8 +174,27 @@ CRITICAL EXTRACTION RULES:
      * name: "AWS", aliases: ["Amazon Web Services", "Amazon cloud", "AWS cloud"]
 
 5. EXPERIENCE:
-   - Extract minimum_years as a clean number if specified (e.g. "3+ years" -> 3), otherwise null.
-   - Summarize the experience expectation in the description.
+   - Extract overall professional experience separately from technology-specific experience.
+
+- Prioritize explicit fields such as:
+  "Experience", "Experience Required",
+  "Overall Experience", and "Total Experience".
+
+- If the JD states "4-6 years", extract:
+  minimum_years = 4
+  maximum_years = 6
+
+- If the JD states "9+ years", extract:
+  minimum_years = 9
+  maximum_years = null
+
+- NEVER calculate the average of an experience range.
+
+- NEVER default to 3 years or any other fixed number.
+
+- A requirement such as "1+ year of hands-on experience in GenAI/LLM projects" is a separate technology-specific requirement. DO NOT use it to overwrite overall professional experience.
+
+- If overall experience is not explicitly specified, return null for both minimum_years and maximum_years. Do not invent an experience threshold.
 
 6. RESPONSIBILITIES:
    - Extract complete duty statements (e.g. "Design, build, and maintain scalable RESTful microservices").
@@ -157,9 +204,9 @@ EXPECTED JSON SCHEMA FORMAT:
   "job_title": "String",
   "summary": "String",
   "experience": {
-    "minimum_years": 3,
+    "minimum_years": null,
     "maximum_years": null,
-    "description": "String"
+    "description": ""
   },
   "education": ["String"],
   "mandatory_requirements": [
@@ -195,51 +242,69 @@ RETURN ONLY VALID JSON conforming to this schema. No conversational text.`;
  * Calls Gemini to analyze and normalize a Job Description.
  * Returns null if the API is unavailable, times out, or returns malformed data.
  */
-export async function understandJobDescriptionWithGemini(jdText: string): Promise<NormalizedJdSchema | null> {
-  const apiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
+export async function understandJobDescriptionWithGemini(
+  jdText: string,
+): Promise<NormalizedJdSchema | null> {
+  const apiKey = (
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    ""
+  ).trim();
 
   if (!apiKey) {
-    console.warn('[Gemini] GEMINI_API_KEY is not configured in environment variables.');
+    console.warn(
+      "[Gemini] GEMINI_API_KEY is not configured in environment variables.",
+    );
     return null;
   }
 
   if (!jdText || jdText.trim().length < 25) {
-    console.warn('[Gemini] Provided JD text is too short for semantic analysis.');
+    console.warn(
+      "[Gemini] Provided JD text is too short for semantic analysis.",
+    );
     return null;
   }
 
-  console.log('[Gemini] Request started');
+  console.log("[Gemini] Request started");
 
   const prompt = `Analyze this Job Description and return a complete, normalized semantic representation:\n\n--- JOB DESCRIPTION ---\n${jdText}\n--- END JOB DESCRIPTION ---`;
 
   const requestBody = {
     contents: [
       {
-        parts: [{ text: prompt }]
-      }
+        parts: [{ text: prompt }],
+      },
     ],
     systemInstruction: {
-      parts: [{ text: JD_UNDERSTANDING_SYSTEM_PROMPT }]
+      parts: [{ text: JD_UNDERSTANDING_SYSTEM_PROMPT }],
     },
     generationConfig: {
-      responseMimeType: 'application/json',
+      responseMimeType: "application/json",
       temperature: 0.1,
-      topP: 0.8
-    }
+      topP: 0.8,
+    },
   };
 
   // Build model execution sequence: Primary model first, verified Fallback second
   const candidateModels: string[] = [PRIMARY_GEMINI_MODEL];
 
   // Verify that the fallback model is supported by the user's API account before scheduling it
-  const isFallbackSupported = await isGeminiModelSupported(FALLBACK_GEMINI_MODEL, apiKey);
+  const isFallbackSupported = await isGeminiModelSupported(
+    FALLBACK_GEMINI_MODEL,
+    apiKey,
+  );
   if (isFallbackSupported) {
     candidateModels.push(FALLBACK_GEMINI_MODEL);
   } else {
-    console.warn(`[Gemini] Fallback model ${FALLBACK_GEMINI_MODEL} is unavailable in this API account. Checking alternative fallback...`);
-    const isAltSupported = await isGeminiModelSupported('gemini-2.5-flash', apiKey);
+    console.warn(
+      `[Gemini] Fallback model ${FALLBACK_GEMINI_MODEL} is unavailable in this API account. Checking alternative fallback...`,
+    );
+    const isAltSupported = await isGeminiModelSupported(
+      "gemini-2.5-flash",
+      apiKey,
+    );
     if (isAltSupported) {
-      candidateModels.push('gemini-2.5-flash');
+      candidateModels.push("gemini-2.5-flash");
     }
   }
 
@@ -248,7 +313,7 @@ export async function understandJobDescriptionWithGemini(jdText: string): Promis
     const isFallback = mIdx > 0;
 
     if (isFallback) {
-      console.log('[Gemini] Fallback model activated');
+      console.log("[Gemini] Fallback model activated");
     }
 
     console.log(`[Gemini] Model: ${modelName}`);
@@ -265,20 +330,23 @@ export async function understandJobDescriptionWithGemini(jdText: string): Promis
 
       try {
         const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(requestBody),
-          signal: controller.signal
+          signal: controller.signal,
         });
 
         clearTimeout(timeoutId);
 
         if (response.ok) {
           const jsonRes: any = await response.json();
-          const rawContent = jsonRes?.candidates?.[0]?.content?.parts?.[0]?.text;
+          const rawContent =
+            jsonRes?.candidates?.[0]?.content?.parts?.[0]?.text;
 
           if (!rawContent) {
-            console.warn(`[Gemini] Empty candidate content returned from ${modelName}.`);
+            console.warn(
+              `[Gemini] Empty candidate content returned from ${modelName}.`,
+            );
             shouldTryNextModel = true;
             break;
           }
@@ -295,17 +363,21 @@ export async function understandJobDescriptionWithGemini(jdText: string): Promis
             }
           }
 
-          console.log(`[Gemini] Successfully received response from ${modelName}`);
+          console.log(
+            `[Gemini] Successfully received response from ${modelName}`,
+          );
           // Sanitize & Validate output structure
           return sanitizeNormalizedJd(parsed, jdText);
         }
 
         const statusCode = response.status;
-        const errText = await response.text().catch(() => '');
+        const errText = await response.text().catch(() => "");
 
         // Non-retryable client errors (HTTP 400, 401, 403, 404): Stop immediately
         if (NON_RETRYABLE_STATUS_CODES.has(statusCode)) {
-          console.error(`[Gemini] Non-retryable error received (${statusCode}). Halting request.`);
+          console.error(
+            `[Gemini] Non-retryable error received (${statusCode}). Halting request.`,
+          );
           return null;
         }
 
@@ -320,23 +392,32 @@ export async function understandJobDescriptionWithGemini(jdText: string): Promis
             await new Promise((res) => setTimeout(res, delayMs));
             continue; // retry next attempt
           } else {
-            console.warn(`[Gemini] Max attempts (${MAX_ATTEMPTS_PER_MODEL}) reached for model ${modelName}.`);
+            console.warn(
+              `[Gemini] Max attempts (${MAX_ATTEMPTS_PER_MODEL}) reached for model ${modelName}.`,
+            );
             shouldTryNextModel = true;
             break; // switch to fallback model
           }
         }
 
         // Other unexpected HTTP status: log and switch model if available
-        console.warn(`[Gemini] Unexpected status ${statusCode} from ${modelName}`);
+        console.warn(
+          `[Gemini] Unexpected status ${statusCode} from ${modelName}`,
+        );
         shouldTryNextModel = true;
         break;
       } catch (err: any) {
         clearTimeout(timeoutId);
 
-        if (err.name === 'AbortError') {
-          console.warn(`[Gemini] Model ${modelName} timed out after ${GEMINI_TIMEOUT_MS}ms.`);
+        if (err.name === "AbortError") {
+          console.warn(
+            `[Gemini] Model ${modelName} timed out after ${GEMINI_TIMEOUT_MS}ms.`,
+          );
         } else {
-          console.warn(`[Gemini] Network error on model ${modelName}:`, err?.message || err);
+          console.warn(
+            `[Gemini] Network error on model ${modelName}:`,
+            err?.message || err,
+          );
         }
 
         if (attempt < MAX_ATTEMPTS_PER_MODEL) {
@@ -357,20 +438,28 @@ export async function understandJobDescriptionWithGemini(jdText: string): Promis
     }
   }
 
-  console.error('[Gemini] All retry and fallback attempts exhausted. Returning graceful fallback.');
+  console.error(
+    "[Gemini] All retry and fallback attempts exhausted. Returning graceful fallback.",
+  );
   return null;
 }
 
 /**
  * Validates and normalizes the output returned by Gemini to guarantee strict types and safety.
  */
-function sanitizeNormalizedJd(data: any, originalText: string): NormalizedJdSchema {
+function sanitizeNormalizedJd(
+  data: any,
+  originalText: string,
+): NormalizedJdSchema {
   const sanitizeReqList = (list: any[]): NormalizedRequirement[] => {
     if (!Array.isArray(list)) return [];
     return list
-      .filter((item) => item && typeof item === 'object' && (item.name || item.requirement))
+      .filter(
+        (item) =>
+          item && typeof item === "object" && (item.name || item.requirement),
+      )
       .map((item) => {
-        const name = String(item.name || item.requirement || '').trim();
+        const name = String(item.name || item.requirement || "").trim();
         const aliases = Array.isArray(item.aliases)
           ? item.aliases.map((a: any) => String(a).trim()).filter(Boolean)
           : [];
@@ -379,40 +468,61 @@ function sanitizeNormalizedJd(data: any, originalText: string): NormalizedJdSche
           : [];
 
         // Always ensure self-name is included in aliases for consistent lookup
-        const aliasSet = new Set([name.toLowerCase(), ...aliases.map((a: string) => a.toLowerCase())]);
+        const aliasSet = new Set([
+          name.toLowerCase(),
+          ...aliases.map((a: string) => a.toLowerCase()),
+        ]);
         const cleanAliases = Array.from(aliasSet);
 
         return {
           name,
-          category: item.category || 'Technical Skill',
+          category: item.category || "Technical Skill",
           description: String(item.description || name).trim(),
           aliases: cleanAliases,
           related_terms: related,
-          context: String(item.context || '').trim(),
-          weight: typeof item.weight === 'number' ? item.weight : 1.5
+          context: String(item.context || "").trim(),
+          weight: typeof item.weight === "number" ? item.weight : 1.5,
         };
       })
       .filter((item) => item.name.length > 1);
   };
 
-  const minExp = typeof data?.experience?.minimum_years === 'number' ? data.experience.minimum_years : null;
-  const maxExp = typeof data?.experience?.maximum_years === 'number' ? data.experience.maximum_years : null;
+  const minExp =
+    typeof data?.experience?.minimum_years === "number"
+      ? data.experience.minimum_years
+      : null;
+  const maxExp =
+    typeof data?.experience?.maximum_years === "number"
+      ? data.experience.maximum_years
+      : null;
 
   return {
-    job_title: String(data?.job_title || '').trim(),
-    summary: String(data?.summary || '').trim(),
+    job_title: String(data?.job_title || "").trim(),
+    summary: String(data?.summary || "").trim(),
     experience: {
       minimum_years: minExp,
       maximum_years: maxExp,
-      description: String(data?.experience?.description || '').trim()
+      description: String(data?.experience?.description || "").trim(),
     },
-    education: Array.isArray(data?.education) ? data.education.map(String).filter(Boolean) : [],
+    education: Array.isArray(data?.education)
+      ? data.education.map(String).filter(Boolean)
+      : [],
     mandatory_requirements: sanitizeReqList(data?.mandatory_requirements || []),
     preferred_requirements: sanitizeReqList(data?.preferred_requirements || []),
-    responsibilities: Array.isArray(data?.responsibilities) ? data.responsibilities.map(String).filter(Boolean) : [],
-    technologies: Array.isArray(data?.technologies) ? data.technologies.map(String).filter(Boolean) : [],
-    certifications: Array.isArray(data?.certifications) ? data.certifications.map(String).filter(Boolean) : [],
-    domain_knowledge: Array.isArray(data?.domain_knowledge) ? data.domain_knowledge.map(String).filter(Boolean) : [],
-    soft_skills: Array.isArray(data?.soft_skills) ? data.soft_skills.map(String).filter(Boolean) : []
+    responsibilities: Array.isArray(data?.responsibilities)
+      ? data.responsibilities.map(String).filter(Boolean)
+      : [],
+    technologies: Array.isArray(data?.technologies)
+      ? data.technologies.map(String).filter(Boolean)
+      : [],
+    certifications: Array.isArray(data?.certifications)
+      ? data.certifications.map(String).filter(Boolean)
+      : [],
+    domain_knowledge: Array.isArray(data?.domain_knowledge)
+      ? data.domain_knowledge.map(String).filter(Boolean)
+      : [],
+    soft_skills: Array.isArray(data?.soft_skills)
+      ? data.soft_skills.map(String).filter(Boolean)
+      : [],
   };
 }
