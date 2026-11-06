@@ -141,24 +141,31 @@ def extract_jd_requirements_ai(jd_text: str) -> List[AiJdRequirement]:
 
     jd_lower = jd_text.lower()
 
-    def is_junk_jd_line(text_line: str) -> bool:
-        if not text_line or len(text_line) < 5:
-            return True
-        l = text_line.lower()
-        if re.search(r'(?:fixed\s+ctc|freelance\s+recruiter|total\s+billing|billing\s+payables?|replacement\s+guarantee|placement\s+fee|incentive\s*[-:]|recruiter\s+margin|commercials)', l):
-            return True
-        if re.search(r'(?:bootstrapped\s+company|customers?\s+in\s+\d+\s+countries|chance\s+to\s+build\s+the\s+sales\s+motion|we(?:\'re|\s+are)\s+looking\s+for\s+someone\s+climbing|about\s+(?:the\s+)?company|why\s+join\s+us)', l):
-            return True
-        if re.search(r'(?:what\s+we(?:\'re|\s+are)\s+not\s+asking|not\s+asking\s+for|what\s+you\s+don\'t\s+need|who\s+this\s+is\s+not\s+for|an\s+mba\.?\s+five-plus\s+years|big-logo\s+cv)', l):
-            return True
-        if re.search(r'(?:what\s+you\s+get|what\s+we\s+offer|perks\s+and\s+benefits|health\s+insurance|unlimited\s+pto)', l):
-            return True
-        return False
+        
+def is_junk_jd_line(text_line: str) -> bool:
+    if not text_line or not text_line.strip():
+        return True
+
+    line = re.sub(r"\s+", " ", text_line).strip().lower()
+
+    junk_patterns = [
+        # Recruitment and commercial information
+        r"\b(?:fixed\s+ctc|freelance\s+recruiter|total\s+billing|billing\s+payables?|replacement\s+guarantee|placement\s+fee|recruiter\s+margin|commercials)\b",
+
+        # Incentive-related commercial information
+        r"\bincentive\s*[-:]\s*",
+
+        # Standalone non-requirement headings only
+        r"^\s*(?:what\s+you\s+get|what\s+we\s+offer|perks\s+and\s+benefits|why\s+join\s+us)\s*:?\s*$",
+    ]
+
+    return any(re.search(pattern, line) for pattern in junk_patterns)
+
 
     # 1. Look for explicit requirements in bullet points or short lines
     for line in lines:
         line_clean = line.strip("*-• \t")
-        if len(line_clean) < 3 or len(line_clean) > 200 or is_junk_jd_line(line_clean):
+        if not line_clean or len(line_clean) > 200 or is_junk_jd_line(line_clean):
             continue
         line_lower = line_clean.lower()
 
@@ -225,6 +232,56 @@ def extract_jd_requirements_ai(jd_text: str) -> List[AiJdRequirement]:
                     ))
 
     return extracted
+
+
+def extract_company_name(jd_text: str) -> Optional[str]:
+    """
+    Extract company name from explicitly labelled JD metadata.
+    Returns None when a reliable company name cannot be identified.
+    """
+
+    if not jd_text or not jd_text.strip():
+        return None
+
+    patterns = [
+        r"^\s*(?:company(?:\s+name)?|employer|hiring\s+company|organization|organisation)\s*[:\-]\s*(?P<name>.+?)\s*$",
+
+        r"^\s*about\s+(?:the\s+)?company\s*[:\-]\s*(?P<name>.+?)\s*$",
+    ]
+
+    for line in jd_text.splitlines()[:50]:
+        line = re.sub(r"\s+", " ", line).strip()
+
+        for pattern in patterns:
+            match = re.search(pattern, line, re.IGNORECASE)
+
+            if match:
+                company = match.group("name").strip()
+
+                # Remove additional metadata following the name
+                company = re.split(
+                    r"\s+[|]\s+|\s+[—–]\s+",
+                    company,
+                    maxsplit=1
+                )[0]
+
+                # Remove descriptive text after the company name
+                company = re.split(
+                    r"\s+(?:is hiring|is looking for|is seeking|is a|was founded)\b",
+                    company,
+                    maxsplit=1,
+                    flags=re.IGNORECASE
+                )[0]
+
+                company = company.strip(" -–—:|,.;")
+
+                if company and company.lower() not in {
+                    "not provided", "unknown", "n/a", "none"
+                }:
+                    return company
+
+    return None
+
 
 def match_cv_requirement_ai(
     requirement: str,
