@@ -187,8 +187,19 @@ export const parseJobDescriptionController = async (
             result.data.job.positionTitle = semRes.normalizedJd.job_title;
         }
 
-        // Direct requirement synchronization from Gemini:
-        // Use Gemini's clean, semantic requirements as the canonical candidate evaluation criteria
+        // =====================================================
+        // REQUIREMENT SOURCE SELECTION
+        // Preserve deterministic extraction whenever explicit
+        // Mandatory / Preferred sections exist in the JD.
+        // Use Gemini as the classification source for unstructured JDs.
+        // =====================================================
+
+        const hasExplicitRequirementSections = result.data.requirements.some(
+          (req: any) =>
+            req.sourceSection === "Mandatory Skills" ||
+            req.sourceSection === "Preferred Skills",
+        );
+
         const geminiMandatoryList = semRes.requirements
           .filter((r) => r.is_mandatory)
           .map((r) => r.requirement);
@@ -197,12 +208,80 @@ export const parseJobDescriptionController = async (
           .filter((r) => !r.is_mandatory)
           .map((r) => r.requirement);
 
-        result.data.mandatoryRequirements = geminiMandatoryList;
-        result.data.preferredRequirements = geminiPreferredList;
-        result.data.hiringCriteria = [];
+        if (hasExplicitRequirementSections) {
+          // The deterministic parser has already identified the
+          // explicitly labelled sections. Do not allow a partial
+          // Gemini response to overwrite those results.
+
+          console.log(
+            "[JD Parsing Pipeline] Explicit requirement sections detected. Preserving deterministic extraction.",
+            {
+              deterministicMandatory: result.data.mandatoryRequirements.length,
+              deterministicPreferred: result.data.preferredRequirements.length,
+              geminiMandatory: geminiMandatoryList.length,
+              geminiPreferred: geminiPreferredList.length,
+            },
+          );
+        } else {
+          // No explicit section headings were found.
+          // Use Gemini's semantic classification.
+
+          result.data.mandatoryRequirements = geminiMandatoryList;
+          result.data.preferredRequirements = geminiPreferredList;
+
+          // Map Gemini requirements only for unstructured JDs.
+          result.data.requirements = semRes.requirements.map((inf, idx) => ({
+            id: inf.id || `req-ai-${idx + 1}`,
+            requirement: inf.requirement,
+            category: inf.category || "Technical Skill",
+
+            type:
+              inf.category === "Experience"
+                ? "EXPERIENCE"
+                : inf.category === "Education"
+                  ? "EDUCATION"
+                  : inf.category === "Certification"
+                    ? "CERTIFICATION"
+                    : "SKILL",
+
+            weight:
+              typeof inf.weight === "number"
+                ? inf.weight
+                : inf.is_mandatory
+                  ? 2.0
+                  : 1.0,
+
+            isMandatory: inf.is_mandatory,
+            mandatory: inf.is_mandatory,
+            evidenceRequired: true,
+            recruiterConfirmed: false,
+            needsVerification: false,
+            sourceEvidence: inf.source_evidence || inf.requirement,
+
+            sourceSection: inf.is_mandatory
+              ? "Mandatory Requirements"
+              : "Preferred Requirements",
+
+            confidence: (inf.confidence as "HIGH" | "MEDIUM" | "LOW") || "HIGH",
+
+            aliases: inf.aliases || [],
+            context: inf.context || "",
+          }));
+        }
+
+        // Preserve existing hiring criteria.
+        // Never clear the deterministic hiring criteria just
+        // because Gemini successfully returned requirements.
+
+        result.data.hiringCriteria = result.data.hiringCriteria || [];
+
         if (result.data.job) {
-          result.data.job.mandatoryRequirements = geminiMandatoryList;
-          result.data.job.preferredRequirements = geminiPreferredList;
+          result.data.job.mandatoryRequirements =
+            result.data.mandatoryRequirements;
+
+          result.data.job.preferredRequirements =
+            result.data.preferredRequirements;
+
           if (
             Array.isArray(semRes.normalizedJd.responsibilities) &&
             semRes.normalizedJd.responsibilities.length > 0
@@ -210,6 +289,7 @@ export const parseJobDescriptionController = async (
             result.data.job.responsibilities =
               semRes.normalizedJd.responsibilities;
           }
+
           if (
             Array.isArray(semRes.normalizedJd.technologies) &&
             semRes.normalizedJd.technologies.length > 0
@@ -261,7 +341,8 @@ export const parseJobDescriptionController = async (
           result.data.mandatoryRequirements.length;
         result.data.validation.counts.preferredCount =
           result.data.preferredRequirements.length;
-        result.data.validation.counts.hiringCriteriaCount = 0;
+        result.data.validation.counts.hiringCriteriaCount =
+          result.data.hiringCriteria?.length || 0;
         result.data.validation.counts.responsibilitiesCount =
           result.data.responsibilities?.length || 0;
         result.data.validation.counts.totalRequirementsCount =
@@ -487,7 +568,29 @@ export const parseJobDescriptionController = async (
         "[JD EXPERIENCE] No explicit numeric overall experience found.",
       );
     }
+    console.log("\n========== JD REQUIREMENT AUDIT ==========");
 
+    console.log({
+      company: result.data.companyName,
+      position: result.data.positionTitle,
+
+      mandatoryCount: result.data.mandatoryRequirements.length,
+
+      preferredCount: result.data.preferredRequirements.length,
+
+      hiringCriteriaCount: result.data.hiringCriteria.length,
+
+      requirements: result.data.requirements.map((req: any) => ({
+        requirement: req.requirement,
+        category: req.category,
+        mandatory: req.isMandatory,
+        sourceSection: req.sourceSection,
+        confidence: req.confidence,
+        needsVerification: req.needsVerification,
+      })),
+    });
+
+    console.log("===========================================\n");
     console.log("\n========================================");
     console.log("[JD PARSING PIPELINE DEBUG]");
     console.log(

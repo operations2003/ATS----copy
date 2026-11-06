@@ -923,7 +923,7 @@ export const detectHeading = (
 
   // Mandatory Skills Headings
   if (
-    /^(key\s+requirements|requirements|core\s+requirements|qualifications|eligibility\s+criteria|candidate\s+profile|what\s+you\s+need|what\s+we\s+are\s+looking\s+for|skills\s*(?:and|&)\s*experience|basic\s+qualifications|mandatory\s+skills|mandatory\s+requirements|non\s*negotiable\s+mandatory\s+requirements|non\s*negotiable\s+requirements|mandatory\s+qualifications|must\s+have|must\s+haves|required\s+skills|required\s+qualifications|required\s+experience|minimum\s+requirements|minimum\s+qualifications|essential\s+skills|core\s+skills|must\s*have\s+skills|mandatory|knock\s*out\s+rules|knockout\s+criteria|dealbreakers)$/i.test(
+    /^(key\s+requirements|requirements|core\s+requirements|qualifications|eligibility\s+criteria|candidate\s+profile|what\s+you\s+need|what\s+we\s+are\s+looking\s+for|skills\s*(?:and|&)\s*experience|basic\s+qualifications|mandatory\s+skills|mandatory\s+requirements|non\s*negotiable\s+mandatory\s+requirements|non\s*negotiable\s+requirements|mandatory\s+qualifications|must\s+have|must\s+haves|required\s+skills|required\s+qualifications|required\s+experience|minimum\s+requirements|minimum\s+qualifications|essential\s+skills|core\s+skills|must\s*have\s+skills|mandatory|knock\s*out\s+rules|knockout\s+criteria|dealbreakers|candidate\s+requirements|candidate\s+qualifications|job\s+requirements|required\s+criteria|essential\s+criteria|what\s+you\s+bring|what\s+you(?:'ll|\s+will)\s+bring|who\s+you\s+are|what\s+we(?:'re|\s+are)\s+looking\s+for)$/i.test(
       norm,
     )
   ) {
@@ -932,7 +932,7 @@ export const detectHeading = (
 
   // Preferred Skills Headings
   if (
-    /^(preferred\s+skills|preferred\s+requirements|preferred\s+qualifications|preferred\s+experience|nice\s+to\s+have|nice\s+to\s+haves|good\s+to\s+have|good\s+to\s+haves|desired\s+skills|desired\s+qualifications|desired\s+requirements|bonus\s+points|bonus\s+skills|bonus\s+qualifications|additional\s+skills|additional\s+qualifications|desirable\s+skills|secondary\s+skills|plus\s+points|great\s+to\s+have|optional\s+requirements|optional\s+skills|preferred)$/i.test(
+    /^(preferred\s+skills|preferred\s+requirements|preferred\s+qualifications|preferred\s+experience|nice\s+to\s+have|nice\s+to\s+haves|good\s+to\s+have|good\s+to\s+haves|desired\s+skills|desired\s+qualifications|desired\s+requirements|bonus\s+points|bonus\s+skills|bonus\s+qualifications|additional\s+skills|additional\s+qualifications|desirable\s+skills|secondary\s+skills|plus\s+points|great\s+to\s+have|optional\s+requirements|optional\s+skills|preferred\s+criteria|desirable\s+criteria|bonus\s+requirements|additional\s+requirements|additional\s+criteria|it\s+would\s+be\s+a\s+plus)$/i.test(
       norm,
     )
   ) {
@@ -1136,13 +1136,15 @@ export const isValidRequirement = (text: string): boolean => {
     )
   )
     return false;
-  // Reject work mode, location, commercials, and compensation metadata
+  // Reject commercial and recruiter billing metadata.
+  // Location and work-mode criteria must remain valid requirements
+  // when they occur inside explicit Mandatory / Preferred sections.
+
   if (
-    /^(?:work\s+mode|location|commercials|total\s+incentives?|payable\s+period)/i.test(
-      text.trim(),
-    )
-  )
+    /^(?:commercials|total\s+incentives?|payable\s+period)/i.test(text.trim())
+  ) {
     return false;
+  }
   // Reject Recruiter Billing, Commercials, CTC, and Agency terms
   if (
     /(?:fixed\s+ctc|freelance\s+recruiter|total\s+billing|billing\s+payables?|replacement\s+guarantee|placement\s+fee|incentive\s*[-:]|recruiter\s+margin|invoice\s+submission)/i.test(
@@ -1205,7 +1207,32 @@ export const isValidRequirement = (text: string): boolean => {
  */
 export const categorizeRequirement = (req: string): string => {
   const lower = req.toLowerCase();
+  // Availability and joining criteria
+  if (
+    /\b(notice period|immediate joiner|joining date|availability|joining timeline)\b/i.test(
+      lower,
+    )
+  ) {
+    return "Availability";
+  }
 
+  // Location, shift and work arrangement criteria
+  if (
+    /\b(location|outstation|relocation|onsite|on-site|in-office|remote|hybrid|shift|timezone|time zone|office)\b/i.test(
+      lower,
+    )
+  ) {
+    return "Work Arrangement";
+  }
+
+  // Professional and domain experience
+  if (
+    /\b(experience|tenure|years of experience|professional background)\b/i.test(
+      lower,
+    )
+  ) {
+    return "Experience";
+  }
   if (/\b(certification|certified|salesforce certified)\b/i.test(lower)) {
     return "Certification";
   }
@@ -2071,11 +2098,6 @@ export const parseJobDescription = (
     const clean = cleanBulletText(bullet);
     if (!isValidRequirement(clean)) continue;
 
-    if (isObviousDutyOrResponsibility(clean)) {
-      reclassifiedResponsibilities.push(clean);
-      continue;
-    }
-
     const isPref =
       /\b(is\s+preferred|preferred|nice\s+to\s+have|good\s+to\s+have|plus|optional)\b/i.test(
         clean,
@@ -2112,10 +2134,7 @@ export const parseJobDescription = (
   for (const bullet of rawPreferredBullets) {
     const clean = cleanBulletText(bullet);
     if (!isValidRequirement(clean)) continue;
-    if (isObviousDutyOrResponsibility(clean)) {
-      reclassifiedResponsibilities.push(clean);
-      continue;
-    }
+
     preferredRequirementsList.push({
       requirement: clean,
       category: categorizeRequirement(clean),

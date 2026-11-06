@@ -25,6 +25,13 @@ export interface NormalizedRequirement {
     | "Architecture"
     | "Soft Skill"
     | "Certification"
+    | "Location"
+    | "Work Arrangement"
+    | "Availability"
+    | "Domain Experience"
+    | "Language"
+    | "Work Authorization"
+    | "Travel"
     | "Other";
   description: string;
   aliases: string[];
@@ -144,23 +151,94 @@ const JD_UNDERSTANDING_SYSTEM_PROMPT = `You are a specialized Job Description (J
 Your mission is to analyze the provided Job Description text and produce a comprehensive, structured semantic interpretation.
 
 CRITICAL EXTRACTION RULES:
-1. STRICT MANDATORY FIELD FILTERING (CRITICAL FOR ACCURATE MATCHING):
-   - In "mandatory_requirements", extract ONLY criteria that are truly CRUCIAL and DECISIVE for candidate qualification / knockout.
-   - What BELONGS in "mandatory_requirements":
-     * Core Technologies: Primary programming languages (e.g. Python, Java, TypeScript), primary frameworks (e.g. React, Spring Boot, FastAPI), primary databases (e.g. PostgreSQL, MongoDB), or primary cloud platforms (e.g. AWS, Azure, GCP).
-     * Hard Technical Architecture: Core paradigms explicitly demanded (e.g. REST API design, Microservices, Distributed Systems).
-     * Mandatory Domain/Experience: Concrete required years of experience (e.g. "4+ years software engineering").
-   - What MUST NEVER be in "mandatory_requirements":
-     * DO NOT put Soft Skills (e.g., "strong communication", "team player", "proactive", "fast learner", "problem-solving", "passionate", "attention to detail") in mandatory requirements. Place them in "soft_skills".
-     * DO NOT put generic company/process boilerplate (e.g., "work in an agile team", "participate in standups", "write clean code", "cross-functional collaboration", "follow best practices") in mandatory requirements. Place them in "responsibilities".
-     * DO NOT put secondary/auxiliary utility tools (e.g., Git, Jira, Slack, Postman, Trello, Confluence) in mandatory requirements unless explicitly stated as a non-negotiable dealbreaker. Place them in "preferred_requirements".
-   - Keep "mandatory_requirements" focused on the high-signal, core 3 to 7 decisive criteria that determine candidate fit.
 
-2. NEVER CHOP WORDS: Do NOT extract random generic words like "work", "closely", "team", "develop", "maintain", "scalable" as standalone requirements or skills. Complete duty statements belong in "responsibilities".
+1. COMPLETE REQUIREMENT EXTRACTION - HIGHEST PRIORITY
 
-3. PREFERRED VS MANDATORY DISTINCTION:
-   - Mandatory: Non-negotiable core technical prerequisites, foundational skills, and experience minimums.
-   - Preferred: "Nice to have", "plus", secondary tools, auxiliary libraries, and optional domain knowledge.
+   - Extract ALL distinct candidate qualification and eligibility requirements explicitly mentioned in the JD.
+   - NEVER impose an arbitrary maximum number of mandatory or preferred requirements.
+   - Do not restrict mandatory requirements to 3-7 items.
+   - Do not omit valid requirements merely because the JD contains many criteria.
+
+   EXPLICIT SECTION PRECEDENCE:
+
+   - If the JD contains a heading such as:
+     "Mandatory Requirements", "Required Qualifications", "Must Have", "Essential Skills" or "Mandatory Skills", treat every substantive bullet under that heading as MANDATORY by default.
+
+   - If the JD contains a heading such as:
+     "Preferred Qualifications", "Nice to Have", "Desired Skills" or "Preferred Requirements", treat every substantive bullet under that heading as PREFERRED by default.
+
+   - Preserve the original meaning of every bullet.
+   - Do not move requirements from an explicitly mandatory section into responsibilities or soft_skills merely because they are written as sentences or use action verbs.
+   - Likewise, do not promote responsibilities into mandatory requirements when they appear under a separate Responsibilities heading.
+
+   - Only remove truly duplicate requirements.
+     Distinct constraints must remain separate.
+2. COMPLETE ELIGIBILITY CRITERIA
+
+   Do not limit extraction to programming languages,
+   frameworks or technical tools.
+
+   Include all explicitly stated candidate criteria, including:
+
+   - Overall and domain-specific experience.
+   - Technical and functional skills.
+   - Industry and domain experience.
+   - Education and certifications.
+   - Location and relocation requirements.
+   - Onsite, hybrid or remote work requirements.
+   - Work shifts and timezone compatibility.
+   - Availability and joining requirements.
+   - Notice period restrictions.
+   - Travel requirements.
+   - Language and work authorization requirements.
+   - Explicitly required soft skills and leadership abilities.
+   - Other non-negotiable employment conditions.
+
+   These conditions must retain the mandatory or preferred
+   classification indicated by the source JD.
+
+3. MANDATORY VS PREFERRED FOR UNSTRUCTURED JDs
+
+   When no explicit Mandatory / Preferred headings are present:
+
+   MANDATORY:
+   - Explicitly required, essential, minimum, must-have,
+     non-negotiable or compulsory criteria.
+   - Clearly stated eligibility conditions.
+   - Minimum professional experience.
+   - Core domain or technical experience explicitly required.
+
+   PREFERRED:
+   - Explicitly labelled preferred, desirable, optional,
+     nice-to-have, bonus or additional qualifications.
+   - Criteria explicitly described as advantageous but
+     not essential.
+
+   - Do not automatically classify every unlabelled sentence
+     as preferred.
+   - Use the complete JD context to determine its purpose.
+   - When classification is genuinely ambiguous, preserve the
+     requirement and indicate that recruiter verification
+     is needed.
+
+4. RESPONSIBILITIES VS REQUIREMENTS
+
+   - Responsibilities describe what the employee will do
+     after joining.
+   - Requirements describe what a candidate must or should
+     already demonstrate to qualify.
+   - Do not mix these two categories.
+   - A mandatory requirement written using an action verb
+     remains mandatory when its section or context establishes
+     that classification.
+
+5. SOFT SKILLS
+
+   - Do not automatically discard communication, leadership,
+     collaboration or management requirements.
+   - Preserve them as mandatory or preferred according to
+     the source section and explicit wording.
+   - Do not invent soft skills that are absent from the JD.
 
 4. NORMALIZATION & ALIASES (Essential for semantic matching):
    - Group naming variants under ONE normalized concept name with clean aliases.
