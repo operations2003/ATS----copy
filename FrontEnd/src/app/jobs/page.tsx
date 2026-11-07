@@ -529,13 +529,27 @@ export default function JobsPage() {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16">
         {/* Top Header Banner */}
-        <div className="mb-8">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-orange-pale text-brand-orange text-xs font-bold uppercase tracking-wider mb-2 border border-brand-orange/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-orange animate-pulse" />
-            Jobs Directory
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-orange-pale text-brand-orange text-xs font-bold uppercase tracking-wider mb-2 border border-brand-orange/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-orange animate-pulse" />
+              Jobs Directory
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Active Jobs & JDs</h1>
+            <p className="text-sm text-slate-500 mt-1">Manage positions, monitor assigned TA teams, review job criteria, and run automated candidate matching</p>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Active Jobs & JDs</h1>
-          <p className="text-sm text-slate-500 mt-1">Manage positions, monitor assigned TA teams, review job criteria, and run automated candidate matching</p>
+
+          {canUploadJd && (
+            <Link
+              href="/jobs/create"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#FF5A36] hover:bg-[#E04826] text-white text-xs font-bold shadow-xs transition-all duration-200 whitespace-nowrap active:scale-95"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>+ New Job</span>
+            </Link>
+          )}
         </div>
 
         {/* Stats Summary Cards */}

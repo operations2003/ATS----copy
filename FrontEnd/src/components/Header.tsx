@@ -329,28 +329,16 @@ export const Header: React.FC = () => {
           </form>
         </div>
 
-        {/* Right: Single Global Action */}
+        {/* Right: Status / Trial Badge */}
         <div className="flex items-center gap-2 sm:gap-3">
           {user?.subscription?.isTrial && !user?.subscription?.isExpired && (
             <div
-              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10.5px] font-bold uppercase tracking-wider"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10.5px] font-bold uppercase tracking-wider"
               title={`14-Day Free Trial: ${user.subscription.daysLeft} days left`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
               <span>Trial: {user.subscription.daysLeft}d left</span>
             </div>
-          )}
-
-          {!pathname?.startsWith('/jobs/create') && (
-            <Link
-              href="/jobs/create"
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#FF5A36] hover:bg-[#E04826] text-white text-xs font-bold rounded-xl transition-all shadow-xs whitespace-nowrap"
-            >
-              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-              </svg>
-              <span>New Job</span>
-            </Link>
           )}
         </div>
       </header>
