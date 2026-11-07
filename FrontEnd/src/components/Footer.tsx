@@ -19,8 +19,8 @@ const FOOTER_NAV: {
     { label: 'Evaluations', href: '/evaluations' },
   ],
   resources: [
-    { label: 'Reports', href: '/reports' },
-    { label: 'Analytics', href: '/analytics' },
+    { label: 'Documentation', href: '/home' },
+    { label: 'Admin Hub', href: '/admin' },
   ],
   company: [
     { label: 'Settings', href: '/settings' },
