@@ -2,22 +2,23 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
 import { AuthModal } from './AuthModal';
 import { MyProfileModal } from './MyProfileModal';
 import BookDemoModal from './BookDemoModal';
 import Logo from './Logo';
 
-const Header: React.FC = () => {
-  const [scrolled, setScrolled]         = useState(false);
+export const Header: React.FC = () => {
   const [mobileOpen, setMobileOpen]     = useState(false);
   const [authOpen, setAuthOpen]         = useState(false);
   const [demoOpen, setDemoOpen]         = useState(false);
   const [authMode, setAuthMode]         = useState<'signin' | 'signup'>('signin');
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [profileOpen, setProfileOpen]   = useState(false);
-  const pathname   = usePathname();
+  const [searchQuery, setSearchQuery]   = useState('');
+
+  const pathname = usePathname();
+  const router   = useRouter();
   const { user, isAuthenticated, logout } = useAuth();
 
   const cachedRole = typeof window !== 'undefined' ? (localStorage.getItem('tasknera_role') as any) : null;
@@ -28,255 +29,420 @@ const Header: React.FC = () => {
   const isClientAdmin = currentRole === 'CLIENT_ADMIN' || currentRole === 'ADMIN';
   const isAdmin = isSuperAdmin || isClientAdmin;
 
-  const canUploadJd = isSuperAdmin || user?.allowJdUpload !== false;
+  // Determine if this is a workspace route where the left sidebar should render
+  const isPublicLanding = pathname === '/home' || (!isAuthenticated && pathname === '/');
+  const isWorkspaceRoute = !isPublicLanding && 
+    !pathname?.startsWith('/apply') && 
+    !pathname?.startsWith('/share') && 
+    !pathname?.startsWith('/signin') && 
+    !pathname?.startsWith('/signup');
 
-  // Clean navigation labels with dedicated SVG icons
-  const nav = isSuperAdmin
-    ? [
-        { label: 'Super Admin', href: '/super-admin', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
-      ]
-    : isClientAdmin
-    ? [
-        { label: 'Admin Hub', href: '/admin', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
-        { label: 'All Jobs', href: '/jobs', icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
-        ...(canUploadJd ? [{ label: 'Upload JD', href: '/jobs/create', icon: 'M12 4v16m8-8H4' }] : []),
-        { label: 'Candidate Pool', href: '/candidates', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
-      ]
-    : [
-        { label: 'My Workspace', href: '/dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
-        { label: 'My Jobs', href: '/jobs', icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
-        ...(canUploadJd ? [{ label: 'Upload JD', href: '/jobs/create', icon: 'M12 4v16m8-8H4' }] : []),
-        { label: 'Candidate Pool', href: '/candidates', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
-      ];
+  // Inject global layout offset for workspace pages so main and footer align perfectly next to the left navbar
+  useEffect(() => {
+    if (isWorkspaceRoute) {
+      document.body.classList.add('has-left-sidebar');
+    } else {
+      document.body.classList.remove('has-left-sidebar');
+    }
+    return () => {
+      document.body.classList.remove('has-left-sidebar');
+    };
+  }, [isWorkspaceRoute]);
 
+  // Compute initials for avatar (e.g. "Ashutosh Shrivastava" -> "AS")
+  const getInitials = (name?: string | null, email?: string | null) => {
+    if (name && name.trim()) {
+      const parts = name.trim().split(/\s+/);
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      }
+      return parts[0].slice(0, 2).toUpperCase();
+    }
+    if (email && email.trim()) {
+      const username = email.split('@')[0];
+      return username.slice(0, 2).toUpperCase();
+    }
+    return 'AS';
+  };
 
   const active = (href: string) => {
     if (!pathname) return false;
     if (pathname === href) return true;
-    if (href !== '/' && pathname.startsWith(href + '/')) {
-      const hasMoreSpecificMatch = nav.some(
-        other =>
-          other.href !== href &&
-          other.href.length > href.length &&
-          (pathname === other.href || pathname.startsWith(other.href + '/'))
-      );
-      return !hasMoreSpecificMatch;
+    if (href !== '/' && href !== '/dashboard' && pathname.startsWith(href + '/')) {
+      return true;
     }
     return false;
   };
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClick = () => {
-      setDropdownOpen(false);
-    };
-    if (typeof window !== 'undefined') {
-      window.addEventListener('click', handleClick);
-      return () => window.removeEventListener('click', handleClick);
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    const term = encodeURIComponent(searchQuery.trim());
+    if (pathname?.startsWith('/jobs')) {
+      router.push(`/jobs?search=${term}`);
+    } else {
+      router.push(`/candidates?search=${term}`);
     }
-  }, []);
+  };
 
-  const isAuth = isAuthenticated && user;
-  const navBg = 'bg-white/95 backdrop-blur-xl';
-  const navBorder = 'border-slate-200/80';
-  const shadow = scrolled ? 'shadow-[0_4px_20px_rgba(30,41,59,0.06)]' : '';
+  // ───────────────────────────────────────────────────────────────────────────
+  // Navigation Items matching the user reference screenshot
+  // ───────────────────────────────────────────────────────────────────────────
+  const workspaceNav = [
+    {
+      label: 'Dashboard',
+      href: '/dashboard',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          <rect x="14" y="3" width="7" height="7" rx="1.5" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          <rect x="3" y="14" width="7" height="7" rx="1.5" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Job Requisitions',
+      href: '/jobs',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <rect x="2" y="7" width="20" height="14" rx="2" strokeWidth={2} />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Candidates',
+      href: '/candidates',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Pipeline',
+      href: '/jobs',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m4 10V7m4 10V7M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Resume Screening',
+      href: '/jobs/create',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+        </svg>
+      ),
+    },
+  ];
 
-  return (
-    <>
-      <nav className={`fixed top-0 w-full z-[150] transition-all duration-300 ${navBg} border-b ${navBorder} ${shadow}`}>
-        <div className="max-w-screen-xl mx-auto px-6 h-[64px] flex items-center justify-between gap-3">
+  const intelligenceNav = [
+    {
+      label: 'Analytics',
+      href: '/analytics',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Reports',
+      href: '/reports',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Team Performance',
+      href: isSuperAdmin ? '/super-admin' : isAdmin ? '/admin' : '/reports',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      ),
+    },
+  ];
 
-          {/* Logo */}
-          <div className="flex-shrink-0">
-            <Logo
-              href={isAuth ? (isSuperAdmin ? '/super-admin' : isClientAdmin ? '/admin' : '/dashboard') : '/home'}
-              size="sm"
-              variant="dark"
-            />
-          </div>
+  // ───────────────────────────────────────────────────────────────────────────
+  // Sidebar Content Component (Reusable for Desktop & Mobile Drawer)
+  // ───────────────────────────────────────────────────────────────────────────
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full bg-[#0F172A] text-slate-300 font-sans select-none overflow-y-auto">
+      {/* Brand Header */}
+      <div className="px-5 pt-6 pb-4 flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-[#FF5722] text-white font-black text-lg flex items-center justify-center shadow-md flex-shrink-0">
+          H
+        </div>
+        <div className="min-w-0">
+          <span className="text-white font-bold text-base tracking-tight block leading-tight">HireIQ</span>
+          <span className="text-[8px] uppercase tracking-[0.2em] font-bold text-slate-400 block mt-0.5">
+            RECRUITMENT INTELLIGENCE
+          </span>
+        </div>
+      </div>
 
-          {/* Nav links - Clean alignment without overflow bar */}
-          {isAuth && (
-            <div className="hidden lg:flex items-center justify-center gap-1.5 flex-1 px-2">
-              {nav.map(item => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                    active(item.href)
-                      ? (isAdmin ? 'bg-violet-600 text-white shadow-sm' : 'bg-brand-orange text-white shadow-orange')
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
-                  }`}
-                >
-                  <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-                  </svg>
-                  <span>{item.label}</span>
-                </Link>
-              ))}
-            </div>
-          )}
+      {/* Workspace Box */}
+      <div className="mx-3.5 mb-4 p-3 rounded-xl bg-[#182238] border border-slate-700/60 shadow-xs">
+        <div className="text-xs font-semibold text-white truncate">
+          {(user as any)?.organizationName || 'TaskNera Demo Workspace'}
+        </div>
+        <div className="text-[9.5px] uppercase font-bold text-slate-400 tracking-wider mt-0.5">
+          {isSuperAdmin ? 'SUPER ADMIN' : isClientAdmin ? 'ORG ADMIN' : 'RECRUITER'}
+        </div>
+      </div>
 
-          {/* Right actions */}
-          <div className="hidden md:flex items-center gap-2.5 flex-shrink-0">
-            {isAuth ? (
-              <>
-                {/* Profile Dropdown */}
-                <div className="flex items-center gap-2">
-                  {user?.subscription?.isTrial && !user?.subscription?.isExpired && (
-                    <div
-                      className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10.5px] font-extrabold uppercase tracking-wider"
-                      title={user.subscription.expiresAt ? `14-day trial ends on ${new Date(user.subscription.expiresAt).toLocaleDateString()}` : '14-Day Free Trial'}
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                      <span>Trial: {user.subscription.daysLeft}d left</span>
-                    </div>
-                  )}
+      {/* Workspace Nav Section */}
+      <div className="px-3.5 mb-2">
+        <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 mb-1.5 px-3">
+          WORKSPACE
+        </div>
+        <nav className="space-y-1">
+          {workspaceNav.map((item) => {
+            const isItemActive = active(item.href);
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs transition-all ${
+                  isItemActive
+                    ? 'border border-[#FF5A36] bg-[#1E293B]/70 text-white font-medium shadow-xs'
+                    : 'border border-transparent text-slate-300 hover:text-white hover:bg-slate-800/50'
+                }`}
+              >
+                <div className={isItemActive ? 'text-white' : 'text-slate-400'}>{item.icon}</div>
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setProfileOpen(true)}
-                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer group"
-                    title="View My Profile, Username & Password"
-                  >
-                    <div className={`w-7 h-7 rounded-lg text-white text-xs font-bold flex items-center justify-center flex-shrink-0 shadow-2xs ${
-                      isAdmin ? 'bg-violet-600' : 'bg-brand-orange'
-                    }`}>
-                      {(user.name || user.email)[0].toUpperCase()}
-                    </div>
-                    <div className="text-left leading-none">
-                      <span className="text-xs font-bold text-slate-800 block max-w-[110px] truncate">
-                        {user.name || user.email.split('@')[0]}
-                      </span>
-                      <span className={`text-[9px] font-bold uppercase tracking-wider block mt-0.5 ${
-                        isAdmin ? 'text-violet-600' : 'text-brand-orange'
-                      }`}>
-                        My Profile
-                      </span>
-                    </div>
-                  </button>
+      {/* Intelligence Nav Section */}
+      <div className="px-3.5 mb-6">
+        <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 mb-1.5 px-3 mt-4">
+          INTELLIGENCE
+        </div>
+        <nav className="space-y-1">
+          {intelligenceNav.map((item) => {
+            const isItemActive = active(item.href);
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs transition-all ${
+                  isItemActive
+                    ? 'border border-[#FF5A36] bg-[#1E293B]/70 text-white font-medium shadow-xs'
+                    : 'border border-transparent text-slate-300 hover:text-white hover:bg-slate-800/50'
+                }`}
+              >
+                <div className={isItemActive ? 'text-white' : 'text-slate-400'}>{item.icon}</div>
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
 
-                  <button
-                    type="button"
-                    onClick={logout}
-                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer border border-slate-200"
-                    title="Sign Out / Switch Account"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setDemoOpen(true)}
-                  className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-all hover:border-brand-orange hover:text-brand-orange cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                >
-                  <svg className="w-3.5 h-3.5 text-brand-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                  <span>Book a Demo</span>
-                </button>
-                <Link
-                  href="/signin"
-                  className="px-5 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-black rounded-xl transition-all shadow-orange hover:shadow-orange-lg cursor-pointer flex items-center gap-1.5"
-                >
-                  <span>Sign In</span>
-                  <span>→</span>
-                </Link>
-              </>
-            )}
-          </div>
-
-          {/* Mobile toggle */}
+      {/* Administration / User Profile pinned to Bottom */}
+      <div className="mt-auto p-3.5 border-t border-slate-800/90 bg-[#0B132B]">
+        <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 mb-2 px-1">
+          ADMINISTRATION
+        </div>
+        <div className="flex items-center justify-between gap-2 p-1.5 rounded-xl hover:bg-slate-800/60 transition-colors">
           <button
-            className="lg:hidden p-2 rounded-lg transition-colors text-slate-700 hover:bg-slate-100"
-            onClick={() => setMobileOpen(v => !v)}
+            type="button"
+            onClick={() => {
+              setMobileOpen(false);
+              setProfileOpen(true);
+            }}
+            className="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer group"
+            title="View Profile & Credentials"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {mobileOpen
-                ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />}
+            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 text-white font-bold text-xs flex items-center justify-center flex-shrink-0 group-hover:border-[#FF5A36] transition-colors">
+              {getInitials(user?.name, user?.email)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-semibold text-white block truncate leading-tight group-hover:text-[#FF5A36] transition-colors">
+                {user?.name || user?.email?.split('@')[0] || 'Ashutosh Shrivastava'}
+              </span>
+              <span className="text-[10.5px] text-slate-400 block truncate mt-0.5">
+                {user?.email || 'ashutosh@tasknera.com'}
+              </span>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={logout}
+            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer flex-shrink-0"
+            title="Sign Out"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
           </button>
         </div>
+      </div>
+    </div>
+  );
 
-        {/* Mobile menu */}
-        {mobileOpen && (
-          <div className="lg:hidden border-t px-4 py-3 space-y-1 bg-white/95 backdrop-blur-md border-slate-200/90 shadow-xl">
-            {isAuth && nav.map(item => (
-              <Link key={item.href} href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                  active(item.href)
-                    ? (isAdmin ? 'bg-violet-600 text-white' : 'bg-brand-orange text-white shadow-orange')
-                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/80'
-                }`}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+  // ───────────────────────────────────────────────────────────────────────────
+  // Public Marketing Header (for /home landing page)
+  // ───────────────────────────────────────────────────────────────────────────
+  if (isPublicLanding) {
+    return (
+      <>
+        <nav className="fixed top-0 w-full z-[150] bg-white/95 backdrop-blur-xl border-b border-slate-200/80 shadow-xs">
+          <div className="max-w-screen-xl mx-auto px-6 h-[64px] flex items-center justify-between gap-3">
+            <div className="flex-shrink-0">
+              <Logo href="/home" size="sm" variant="dark" />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setDemoOpen(true)}
+                className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-all hover:border-brand-orange hover:text-brand-orange cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <svg className="w-3.5 h-3.5 text-brand-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 002 2v8a2 2 0 002 2z" />
                 </svg>
-                {item.label}
+                <span>Book a Demo</span>
+              </button>
+              <Link
+                href="/signin"
+                className="px-5 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-black rounded-xl transition-all shadow-orange hover:shadow-orange-lg cursor-pointer flex items-center gap-1.5"
+              >
+                <span>Sign In</span>
+                <span>→</span>
               </Link>
-            ))}
-
-            <div className="border-t border-slate-100 pt-3 mt-2 space-y-2">
-              {isAuth ? (
-                <>
-                  <button
-                    onClick={() => { setMobileOpen(false); setProfileOpen(true); }}
-                    className="w-full text-left px-3.5 py-2.5 text-xs font-bold text-slate-800 hover:bg-orange-50 rounded-xl transition-colors cursor-pointer flex items-center justify-between border border-slate-200 bg-slate-50/50"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-orange-100 text-brand-orange flex items-center justify-center">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <span className="block font-bold">My Profile</span>
-                        <span className="block text-[10px] text-slate-500 font-normal">View username and password</span>
-                      </div>
-                    </div>
-                    <span className="text-slate-400 text-xs">→</span>
-                  </button>
-
-                  <button onClick={() => { setMobileOpen(false); logout(); }}
-                    className="w-full text-left px-3.5 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer flex items-center gap-2">
-                    <svg className="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    <span>Sign Out / Switch Account</span>
-                  </button>
-                </>
-              ) : (
-                <div className="space-y-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => { setMobileOpen(false); setDemoOpen(true); }}
-                    className="w-full text-center px-4 py-2.5 bg-white border border-slate-300 hover:border-brand-orange text-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-4 h-4 text-brand-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    <span>Book a Demo Session</span>
-                  </button>
-                  <Link
-                    href="/signin"
-                    onClick={() => setMobileOpen(false)}
-                    className="block w-full text-center px-4 py-2.5 bg-brand-orange hover:bg-brand-orange-hover text-white rounded-xl text-xs font-black shadow-orange transition-all cursor-pointer"
-                  >
-                    Sign In to Account →
-                  </Link>
-                </div>
-              )}
             </div>
           </div>
-        )}
-      </nav>
+        </nav>
+        <BookDemoModal isOpen={demoOpen} onClose={() => setDemoOpen(false)} />
+      </>
+    );
+  }
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // Authenticated Workspace Layout: Left Sidebar + Top Search Header
+  // ───────────────────────────────────────────────────────────────────────────
+  return (
+    <>
+      {/* Global CSS to push page <main> and <footer> right of the fixed sidebar */}
+      <style jsx global>{`
+        @media (min-width: 1024px) {
+          body.has-left-sidebar main {
+            margin-left: 16rem !important;
+            width: calc(100% - 16rem) !important;
+            max-width: calc(100% - 16rem) !important;
+            padding-top: 5rem !important;
+          }
+          body.has-left-sidebar footer {
+            margin-left: 16rem !important;
+            width: calc(100% - 16rem) !important;
+          }
+        }
+      `}</style>
+
+      {/* 1. Desktop Left Sidebar */}
+      <aside className="hidden lg:block fixed top-0 bottom-0 left-0 w-64 z-[110] border-r border-slate-800/80 shadow-sm">
+        <SidebarContent />
+      </aside>
+
+      {/* 2. Top Header Bar (spans right of sidebar on desktop) */}
+      <header className="fixed top-0 left-0 lg:left-64 right-0 h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/90 z-[100] flex items-center justify-between px-4 sm:px-6 lg:px-8 shadow-xs">
+        {/* Left: Mobile Drawer Trigger & Search Input */}
+        <div className="flex items-center gap-3 flex-1 max-w-xl">
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className="lg:hidden p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+            aria-label="Open sidebar"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+
+          {/* Search Bar matching screenshot */}
+          <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-md">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search candidates, jobs, evidence..."
+              className="w-full pl-10 pr-4 py-2 bg-[#F8FAFC] hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FF5A36]/30 focus:border-[#FF5A36] transition-all"
+            />
+          </form>
+        </div>
+
+        {/* Right: Actions matching screenshot */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          {/* Trial indicator if active */}
+          {user?.subscription?.isTrial && !user?.subscription?.isExpired && (
+            <div
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10.5px] font-extrabold uppercase tracking-wider"
+              title={`14-Day Free Trial: ${user.subscription.daysLeft} days left`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              <span>Trial: {user.subscription.daysLeft}d left</span>
+            </div>
+          )}
+
+          {/* Upload Resumes Button */}
+          <Link
+            href="/jobs"
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold rounded-xl transition-all shadow-2xs hover:border-slate-400 active:scale-95 whitespace-nowrap"
+          >
+            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            <span className="hidden sm:inline">Upload resumes</span>
+            <span className="sm:hidden">Upload</span>
+          </Link>
+
+          {/* New Requisition Button */}
+          <Link
+            href="/jobs/create"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#FF5A36] hover:bg-[#E04826] text-white text-xs font-bold rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95 whitespace-nowrap"
+          >
+            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+            </svg>
+            <span className="hidden sm:inline">New requisition</span>
+            <span className="sm:hidden">New</span>
+          </Link>
+        </div>
+      </header>
+
+      {/* 3. Mobile Off-Canvas Drawer */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-[200]">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setMobileOpen(false)}
+          />
+          <div className="fixed inset-y-0 left-0 w-72 bg-[#0F172A] flex flex-col z-[210] shadow-2xl animate-in slide-in-from-left duration-200">
+            <SidebarContent />
+          </div>
+        </div>
+      )}
+
+      {/* Global Modals */}
       <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} initialMode={authMode} />
       <MyProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
       <BookDemoModal isOpen={demoOpen} onClose={() => setDemoOpen(false)} />
