@@ -650,7 +650,17 @@ export async function getAllOrganizationsWithStats() {
         where: { organizationId: org.id }
       });
 
-      // 5. Initial / primary Client Admin
+      // 5. Current month resume volume (Starter: 500, Pro: 2500)
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const currentMonthResumes = await prisma.candidate.count({
+        where: {
+          organizationId: org.id,
+          created_at: { gte: startOfMonth }
+        }
+      });
+
+      // 6. Initial / primary Client Admin
       const clientAdmin = await prisma.user.findFirst({
         where: {
           organizationId: org.id,
@@ -669,6 +679,9 @@ export async function getAllOrganizationsWithStats() {
       return {
         ...org,
         allowJdUpload: (org as any).allowJdUpload ?? true,
+        maxResumesPerMonth: org.maxResumesPerMonth || (PLAN_LIMITS[org.subscriptionPlan?.toUpperCase()]?.maxResumesPerMonth ?? 500),
+        currentMonthResumes,
+        availableResumes: Math.max(0, (org.maxResumesPerMonth || 500) - currentMonthResumes),
         currentUsers: totalUsers,
         availableUserSlots: Math.max(0, org.maxUsers - totalUsers),
         currentRecruiters: recruiterCount,

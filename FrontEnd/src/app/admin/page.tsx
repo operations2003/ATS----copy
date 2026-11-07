@@ -65,6 +65,7 @@ export default function AdminPage() {
   // Subscription Plan Modal State
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [planUpdating, setPlanUpdating] = useState(false);
+  const [inquiryLoading, setInquiryLoading] = useState(false);
   const [planSuccess, setPlanSuccess] = useState('');
   const [planError, setPlanError] = useState('');
 
@@ -191,6 +192,38 @@ export default function AdminPage() {
       setPlanError(err?.message || 'Failed to switch subscription plan');
     } finally {
       setPlanUpdating(false);
+    }
+  };
+
+  const handleRequestUpgrade = async (plan: string) => {
+    setInquiryLoading(true);
+    setPlanError('');
+    setPlanSuccess('');
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+      const res = await fetch(`${backendUrl}/auth/subscription-inquiry`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          plan,
+          notes: `Client admin requested upgrade to ${plan} pack (2,500 resumes/month) for ${quota?.organizationName || 'organization'}`
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit upgrade inquiry');
+      }
+
+      setPlanSuccess('Upgrade inquiry submitted! TaskNera Super Admin has been notified and will upgrade your account shortly.');
+    } catch (err: any) {
+      setPlanError(err?.message || 'Failed to submit upgrade inquiry. Please contact operations@tasknera.com directly.');
+    } finally {
+      setInquiryLoading(false);
     }
   };
 
@@ -707,6 +740,11 @@ export default function AdminPage() {
     currentEmail === 'sheetalbedi@tasknera.com' ||
     currentEmail === 'demo@gmail.com';
 
+  const isSuperAdmin =
+    currentRole === 'SUPER_ADMIN' ||
+    currentEmail === 'operations@tasknera.com' ||
+    currentEmail === 'admin@gmail.com';
+
   // Smooth redirection for recruiters or unauthenticated visitors without showing any unauthorized login card
   useEffect(() => {
     if (mounted && !authLoading) {
@@ -884,7 +922,13 @@ export default function AdminPage() {
                   className="px-3.5 py-2 text-xs font-bold rounded-xl bg-violet-600 hover:bg-violet-700 text-white transition-all cursor-pointer shadow-sm hover:-translate-y-0.5 flex items-center gap-1.5"
                 >
                   <span>⭐</span>
-                  <span>{quota.subscriptionPlan === 'STARTER' ? 'Upgrade to Pro (2,500)' : 'Change Plan'}</span>
+                  <span>
+                    {isSuperAdmin
+                      ? 'Switch Plan (Super Admin)'
+                      : quota.subscriptionPlan === 'STARTER'
+                      ? 'Upgrade to Pro (2,500)'
+                      : 'View Plan Quota'}
+                  </span>
                 </button>
               </div>
             </div>
@@ -1890,14 +1934,32 @@ export default function AdminPage() {
               </button>
 
               <div className="mb-6">
-                <span className="px-3 py-1 rounded-full bg-violet-100 text-violet-700 text-xs font-black uppercase tracking-wider">
-                  Subscription Plans
+                <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                  isSuperAdmin ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {isSuperAdmin ? 'Super Admin Plan Manager' : 'Subscription & Quota Details'}
                 </span>
-                <h3 className="text-xl font-black text-slate-900 mt-2">Choose Your Hiring Quota</h3>
+                <h3 className="text-xl font-black text-slate-900 mt-2">
+                  {isSuperAdmin ? 'Manage Company Subscription Plan' : 'Hiring Quota & Resume Allowance'}
+                </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Select the plan that matches your monthly resume evaluation and candidate screening volume.
+                  {isSuperAdmin
+                    ? 'Switch company between Starter (500 resumes/month) and Professional (2,500 resumes/month) tiers.'
+                    : 'Review your monthly resume screening allocation and request plan upgrades.'}
                 </p>
               </div>
+
+              {!isSuperAdmin && (
+                <div className="mb-5 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-xs text-amber-900">
+                  <span className="text-base leading-none mt-0.5">🔒</span>
+                  <div>
+                    <div className="font-bold text-amber-950">Subscription changes are restricted to Super Administrators</div>
+                    <p className="mt-0.5 text-amber-800 leading-relaxed">
+                      Company subscription plans can only be switched by TaskNera Super Administrators. You can submit an upgrade inquiry below or contact <a href="mailto:operations@tasknera.com" className="font-bold underline text-amber-950">operations@tasknera.com</a>.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {planSuccess && (
                 <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold">
@@ -1935,17 +1997,26 @@ export default function AdminPage() {
                     <li className="flex items-center gap-1.5">✓ Up to <strong>20</strong> active job requisitions</li>
                     <li className="flex items-center gap-1.5">✓ Deterministic ATS scoring engine</li>
                   </ul>
-                  <button
-                    disabled={quota?.subscriptionPlan === 'STARTER' || planUpdating}
-                    onClick={() => handleSwitchPlan('STARTER')}
-                    className={`w-full mt-5 py-2.5 text-xs font-bold rounded-xl transition-all ${
-                      quota?.subscriptionPlan === 'STARTER'
-                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                        : 'bg-slate-900 hover:bg-slate-800 text-white cursor-pointer'
-                    }`}
-                  >
-                    {quota?.subscriptionPlan === 'STARTER' ? 'Active Plan' : planUpdating ? 'Switching...' : 'Switch to Starter'}
-                  </button>
+                  {isSuperAdmin ? (
+                    <button
+                      disabled={quota?.subscriptionPlan === 'STARTER' || planUpdating}
+                      onClick={() => handleSwitchPlan('STARTER')}
+                      className={`w-full mt-5 py-2.5 text-xs font-bold rounded-xl transition-all ${
+                        quota?.subscriptionPlan === 'STARTER'
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                          : 'bg-slate-900 hover:bg-slate-800 text-white cursor-pointer'
+                      }`}
+                    >
+                      {quota?.subscriptionPlan === 'STARTER' ? 'Active Plan' : planUpdating ? 'Switching...' : 'Switch to Starter'}
+                    </button>
+                  ) : (
+                    <button
+                      disabled
+                      className="w-full mt-5 py-2.5 text-xs font-bold rounded-xl bg-slate-100 text-slate-400 cursor-not-allowed"
+                    >
+                      {quota?.subscriptionPlan === 'STARTER' ? 'Active Plan' : 'Managed by Super Admin'}
+                    </button>
+                  )}
                 </div>
 
                 {/* Professional Pack */}
@@ -1971,22 +2042,40 @@ export default function AdminPage() {
                     <li className="flex items-center gap-1.5">✓ Priority ATS evaluation queue</li>
                     <li className="flex items-center gap-1.5">✓ Client Candidate Share Portals</li>
                   </ul>
-                  <button
-                    disabled={quota?.subscriptionPlan === 'PROFESSIONAL' || planUpdating}
-                    onClick={() => handleSwitchPlan('PROFESSIONAL')}
-                    className={`w-full mt-5 py-2.5 text-xs font-bold rounded-xl transition-all ${
-                      quota?.subscriptionPlan === 'PROFESSIONAL'
-                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                        : 'bg-violet-600 hover:bg-violet-700 text-white cursor-pointer shadow-md'
-                    }`}
-                  >
-                    {quota?.subscriptionPlan === 'PROFESSIONAL' ? 'Active Plan' : planUpdating ? 'Switching...' : 'Switch to Professional'}
-                  </button>
+                  {isSuperAdmin ? (
+                    <button
+                      disabled={quota?.subscriptionPlan === 'PROFESSIONAL' || planUpdating}
+                      onClick={() => handleSwitchPlan('PROFESSIONAL')}
+                      className={`w-full mt-5 py-2.5 text-xs font-bold rounded-xl transition-all ${
+                        quota?.subscriptionPlan === 'PROFESSIONAL'
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                          : 'bg-violet-600 hover:bg-violet-700 text-white cursor-pointer shadow-md'
+                      }`}
+                    >
+                      {quota?.subscriptionPlan === 'PROFESSIONAL' ? 'Active Plan' : planUpdating ? 'Switching...' : 'Switch to Professional'}
+                    </button>
+                  ) : (
+                    <button
+                      disabled={quota?.subscriptionPlan === 'PROFESSIONAL' || inquiryLoading}
+                      onClick={() => handleRequestUpgrade('PROFESSIONAL')}
+                      className={`w-full mt-5 py-2.5 text-xs font-bold rounded-xl transition-all ${
+                        quota?.subscriptionPlan === 'PROFESSIONAL'
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                          : 'bg-violet-600 hover:bg-violet-700 text-white cursor-pointer shadow-md'
+                      }`}
+                    >
+                      {quota?.subscriptionPlan === 'PROFESSIONAL'
+                        ? 'Active Plan'
+                        : inquiryLoading
+                        ? 'Submitting Request...'
+                        : 'Request Upgrade to Professional (2,500 CVs)'}
+                    </button>
+                  )}
                 </div>
               </div>
 
               <div className="p-3 bg-slate-50 rounded-xl text-center text-xs text-slate-500">
-                Need more than 2,500 resumes or custom enterprise architecture? Contact <a href="mailto:operations@tasknera.com" className="text-brand-orange font-bold hover:underline">operations@tasknera.com</a>
+                Need more than 2,500 resumes or custom enterprise architecture? Contact Super Admin at <a href="mailto:operations@tasknera.com" className="text-brand-orange font-bold hover:underline">operations@tasknera.com</a>
               </div>
             </div>
           </div>

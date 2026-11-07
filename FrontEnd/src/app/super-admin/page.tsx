@@ -715,7 +715,7 @@ export default function SuperAdminPage() {
                             <div className="font-bold text-slate-900 text-sm">{org.name}</div>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="inline-block px-2 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold text-[10px] tracking-wide">
-                                {org.subscriptionPlan}
+                                {org.subscriptionPlan === 'STARTER' ? 'Starter (500/mo)' : org.subscriptionPlan === 'PROFESSIONAL' ? 'Pro (2,500/mo)' : org.subscriptionPlan}
                               </span>
                               <span className="text-[11px] text-slate-400">ID: {org.id}</span>
                             </div>
@@ -787,10 +787,10 @@ export default function SuperAdminPage() {
 
                           <td className="px-5 py-4">
                             <div className="font-semibold text-slate-800">
-                              {org.currentActiveJobs} / {org.maxActiveJobs}
+                              {org.currentActiveJobs} / {org.maxActiveJobs} Jobs
                             </div>
-                            <div className="text-[11px] text-slate-400">
-                              {org.totalCandidates} candidates
+                            <div className="text-[11px] text-slate-500 font-medium">
+                              {(org.currentMonthResumes ?? 0).toLocaleString()} / {(org.maxResumesPerMonth ?? 500).toLocaleString()} CVs/mo
                             </div>
                           </td>
 
@@ -1213,9 +1213,9 @@ export default function SuperAdminPage() {
                       onChange={(e) => setNewSubPlan(e.target.value)}
                       className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-violet-500 font-medium"
                     >
-                      <option value="STARTER">Starter Tier</option>
-                      <option value="PROFESSIONAL">Professional Tier</option>
-                      <option value="ENTERPRISE">Enterprise Tier</option>
+                      <option value="STARTER">Starter Pack (500 resumes/month)</option>
+                      <option value="PROFESSIONAL">Professional Pack (2,500 resumes/month)</option>
+                      <option value="ENTERPRISE">Enterprise Pack (Unlimited resumes)</option>
                     </select>
                   </div>
                   <div>
@@ -1391,9 +1391,9 @@ export default function SuperAdminPage() {
                   onChange={(e) => setSubPlan(e.target.value)}
                   className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
                 >
-                  <option value="STARTER">Starter Tier</option>
-                  <option value="PROFESSIONAL">Professional Tier</option>
-                  <option value="ENTERPRISE">Enterprise Tier</option>
+                  <option value="STARTER">Starter Pack (500 resumes/month)</option>
+                  <option value="PROFESSIONAL">Professional Pack (2,500 resumes/month)</option>
+                  <option value="ENTERPRISE">Enterprise Pack (Unlimited resumes)</option>
                 </select>
               </div>
 

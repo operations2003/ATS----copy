@@ -1042,21 +1042,24 @@ export const getUserQuotaController = async (req: AuthRequest, res: Response): P
   }
 };
 
-// @desc    Update subscription plan (Starter: 500, Professional: 2500)
+// @desc    Update subscription plan (Starter: 500, Professional: 2500) - RESTRICTED TO SUPER ADMIN ONLY
 // @route   POST /api/users/subscription
-// @access  Private (ADMIN, CLIENT_ADMIN, SUPER_ADMIN)
+// @access  Private (SUPER_ADMIN ONLY)
 export const updateSubscriptionPlanController = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const callerRole = req.user?.role || 'MEMBER';
-    const isSuperAdmin = callerRole === 'SUPER_ADMIN' || req.user?.email?.toLowerCase().trim() === 'operations@tasknera.com';
-    const isClientAdmin = callerRole === 'CLIENT_ADMIN' || callerRole === 'ADMIN';
+    const isSuperAdmin = callerRole === 'SUPER_ADMIN' ||
+      req.user?.email?.toLowerCase().trim() === 'operations@tasknera.com' ||
+      req.user?.email?.toLowerCase().trim() === 'admin@gmail.com';
 
-    if (!isSuperAdmin && !isClientAdmin) {
-      res.status(403).json({ error: 'Forbidden: Only administrators can modify subscription plans.' });
+    if (!isSuperAdmin) {
+      res.status(403).json({
+        error: 'Forbidden: Only Super Administrators can modify company subscription plans. Please contact TaskNera Super Admin at operations@tasknera.com.'
+      });
       return;
     }
 
-    const orgId = req.user?.organizationId || 'org-tasknera';
+    const orgId = req.body?.organizationId || req.user?.organizationId || 'org-tasknera';
     const { plan } = req.body;
 
     if (!plan || !['STARTER', 'PROFESSIONAL', 'ENTERPRISE'].includes(String(plan).toUpperCase())) {

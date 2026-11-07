@@ -90,6 +90,8 @@ export interface ClientOrganization {
   availableJobSlots: number;
   totalCandidates: number;
   totalEvaluations: number;
+  currentMonthResumes?: number;
+  availableResumes?: number;
   allowJdUpload?: boolean;
   clientAdmin?: {
     id: string;
