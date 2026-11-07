@@ -86,9 +86,9 @@ export const Header: React.FC = () => {
   };
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Navigation Items matching the user reference screenshot
+  // Clean, Simple Navigation Items (No clutter)
   // ───────────────────────────────────────────────────────────────────────────
-  const workspaceNav = [
+  const navItems = [
     {
       label: 'Dashboard',
       href: '/dashboard',
@@ -102,7 +102,7 @@ export const Header: React.FC = () => {
       ),
     },
     {
-      label: 'Job Requisitions',
+      label: 'Jobs & JDs',
       href: '/jobs',
       icon: (
         <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -121,75 +121,48 @@ export const Header: React.FC = () => {
       ),
     },
     {
-      label: 'Pipeline',
-      href: '/jobs',
-      icon: (
-        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m4 10V7m4 10V7M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" />
-        </svg>
-      ),
-    },
-    {
-      label: 'Resume Screening',
-      href: '/jobs/create',
-      icon: (
-        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-        </svg>
-      ),
-    },
-  ];
-
-  const intelligenceNav = [
-    {
-      label: 'Analytics',
-      href: '/analytics',
+      label: 'Reports & Analytics',
+      href: '/reports',
       icon: (
         <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
         </svg>
       ),
     },
-    {
-      label: 'Reports',
-      href: '/reports',
-      icon: (
-        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      ),
-    },
-    {
-      label: 'Team Performance',
-      href: isSuperAdmin ? '/super-admin' : isAdmin ? '/admin' : '/reports',
-      icon: (
-        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
-      ),
-    },
+    ...(isAdmin ? [
+      {
+        label: isSuperAdmin ? 'Super Admin' : 'Admin Hub',
+        href: isSuperAdmin ? '/super-admin' : '/admin',
+        icon: (
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        ),
+      }
+    ] : []),
   ];
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Sidebar Content Component (Reusable for Desktop & Mobile Drawer)
+  // Clean Sidebar Component
   // ───────────────────────────────────────────────────────────────────────────
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-[#0F172A] text-slate-300 font-sans select-none overflow-y-auto">
       {/* Brand Header */}
       <div className="px-5 pt-6 pb-4 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-[#FF5722] text-white font-black text-lg flex items-center justify-center shadow-md flex-shrink-0">
+        <div className="w-8 h-8 rounded-xl bg-[#FF5722] text-white font-black text-base flex items-center justify-center shadow-md flex-shrink-0">
           H
         </div>
         <div className="min-w-0">
           <span className="text-white font-bold text-base tracking-tight block leading-tight">HireIQ</span>
-          <span className="text-[8px] uppercase tracking-[0.2em] font-bold text-slate-400 block mt-0.5">
+          <span className="text-[8px] uppercase tracking-[0.2em] font-semibold text-slate-400 block mt-0.5">
             RECRUITMENT INTELLIGENCE
           </span>
         </div>
       </div>
 
-      {/* Workspace Box */}
-      <div className="mx-3.5 mb-4 p-3 rounded-xl bg-[#182238] border border-slate-700/60 shadow-xs">
+      {/* Workspace Indicator */}
+      <div className="mx-3.5 mb-5 px-3 py-2.5 rounded-xl bg-[#182238] border border-slate-700/60">
         <div className="text-xs font-semibold text-white truncate">
           {(user as any)?.organizationName || 'TaskNera Demo Workspace'}
         </div>
@@ -198,65 +171,33 @@ export const Header: React.FC = () => {
         </div>
       </div>
 
-      {/* Workspace Nav Section */}
-      <div className="px-3.5 mb-2">
-        <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 mb-1.5 px-3">
-          WORKSPACE
+      {/* Primary Navigation */}
+      <div className="px-3 space-y-1 flex-1">
+        <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 mb-2 px-3">
+          MENU
         </div>
-        <nav className="space-y-1">
-          {workspaceNav.map((item) => {
-            const isItemActive = active(item.href);
-            return (
-              <Link
-                key={item.label}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs transition-all ${
-                  isItemActive
-                    ? 'border border-[#FF5A36] bg-[#1E293B]/70 text-white font-medium shadow-xs'
-                    : 'border border-transparent text-slate-300 hover:text-white hover:bg-slate-800/50'
-                }`}
-              >
-                <div className={isItemActive ? 'text-white' : 'text-slate-400'}>{item.icon}</div>
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
+        {navItems.map((item) => {
+          const isItemActive = active(item.href);
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              onClick={() => setMobileOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                isItemActive
+                  ? 'border border-[#FF5A36] bg-[#1E293B] text-white shadow-xs'
+                  : 'border border-transparent text-slate-300 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <div className={isItemActive ? 'text-[#FF5A36]' : 'text-slate-400'}>{item.icon}</div>
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
       </div>
 
-      {/* Intelligence Nav Section */}
-      <div className="px-3.5 mb-6">
-        <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 mb-1.5 px-3 mt-4">
-          INTELLIGENCE
-        </div>
-        <nav className="space-y-1">
-          {intelligenceNav.map((item) => {
-            const isItemActive = active(item.href);
-            return (
-              <Link
-                key={item.label}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs transition-all ${
-                  isItemActive
-                    ? 'border border-[#FF5A36] bg-[#1E293B]/70 text-white font-medium shadow-xs'
-                    : 'border border-transparent text-slate-300 hover:text-white hover:bg-slate-800/50'
-                }`}
-              >
-                <div className={isItemActive ? 'text-white' : 'text-slate-400'}>{item.icon}</div>
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Administration / User Profile pinned to Bottom */}
+      {/* Profile & Logout Pinned to Bottom */}
       <div className="mt-auto p-3.5 border-t border-slate-800/90 bg-[#0B132B]">
-        <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 mb-2 px-1">
-          ADMINISTRATION
-        </div>
         <div className="flex items-center justify-between gap-2 p-1.5 rounded-xl hover:bg-slate-800/60 transition-colors">
           <button
             type="button"
@@ -272,10 +213,10 @@ export const Header: React.FC = () => {
             </div>
             <div className="min-w-0 flex-1">
               <span className="text-xs font-semibold text-white block truncate leading-tight group-hover:text-[#FF5A36] transition-colors">
-                {user?.name || user?.email?.split('@')[0] || 'Ashutosh Shrivastava'}
+                {user?.name || user?.email?.split('@')[0] || 'User Profile'}
               </span>
-              <span className="text-[10.5px] text-slate-400 block truncate mt-0.5">
-                {user?.email || 'ashutosh@tasknera.com'}
+              <span className="text-[10px] text-slate-400 block truncate mt-0.5">
+                {user?.email || 'user@tasknera.com'}
               </span>
             </div>
           </button>
@@ -313,7 +254,7 @@ export const Header: React.FC = () => {
                 className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-all hover:border-brand-orange hover:text-brand-orange cursor-pointer flex items-center gap-1.5 shadow-2xs"
               >
                 <svg className="w-3.5 h-3.5 text-brand-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 002 2v8a2 2 0 002 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
                 <span>Book a Demo</span>
               </button>
@@ -333,11 +274,10 @@ export const Header: React.FC = () => {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Authenticated Workspace Layout: Left Sidebar + Top Search Header
+  // Authenticated Workspace Layout: Left Sidebar + Clean Top Bar
   // ───────────────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* Global CSS to push page <main> and <footer> right of the fixed sidebar */}
       <style jsx global>{`
         @media (min-width: 1024px) {
           body.has-left-sidebar main {
@@ -358,10 +298,10 @@ export const Header: React.FC = () => {
         <SidebarContent />
       </aside>
 
-      {/* 2. Top Header Bar (spans right of sidebar on desktop) */}
+      {/* 2. Top Header Bar */}
       <header className="fixed top-0 left-0 lg:left-64 right-0 h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/90 z-[100] flex items-center justify-between px-4 sm:px-6 lg:px-8 shadow-xs">
-        {/* Left: Mobile Drawer Trigger & Search Input */}
-        <div className="flex items-center gap-3 flex-1 max-w-xl">
+        {/* Left: Mobile Toggle & Simple Search */}
+        <div className="flex items-center gap-3 flex-1 max-w-md">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
@@ -373,8 +313,7 @@ export const Header: React.FC = () => {
             </svg>
           </button>
 
-          {/* Search Bar matching screenshot */}
-          <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-md">
+          <form onSubmit={handleSearchSubmit} className="relative flex-1">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -384,18 +323,17 @@ export const Header: React.FC = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search candidates, jobs, evidence..."
-              className="w-full pl-10 pr-4 py-2 bg-[#F8FAFC] hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FF5A36]/30 focus:border-[#FF5A36] transition-all"
+              placeholder="Search candidates or jobs..."
+              className="w-full pl-9 pr-3 py-1.5 bg-[#F8FAFC] hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FF5A36]/30 focus:border-[#FF5A36] transition-all"
             />
           </form>
         </div>
 
-        {/* Right: Actions matching screenshot */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
-          {/* Trial indicator if active */}
+        {/* Right: Primary Action Buttons */}
+        <div className="flex items-center gap-2 sm:gap-3">
           {user?.subscription?.isTrial && !user?.subscription?.isExpired && (
             <div
-              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10.5px] font-extrabold uppercase tracking-wider"
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10.5px] font-bold uppercase tracking-wider"
               title={`14-Day Free Trial: ${user.subscription.daysLeft} days left`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
@@ -403,28 +341,24 @@ export const Header: React.FC = () => {
             </div>
           )}
 
-          {/* Upload Resumes Button */}
           <Link
             href="/jobs"
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold rounded-xl transition-all shadow-2xs hover:border-slate-400 active:scale-95 whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-semibold rounded-xl transition-all shadow-2xs hover:border-slate-400 whitespace-nowrap"
           >
             <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
-            <span className="hidden sm:inline">Upload resumes</span>
-            <span className="sm:hidden">Upload</span>
+            <span>Upload CVs</span>
           </Link>
 
-          {/* New Requisition Button */}
           <Link
             href="/jobs/create"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#FF5A36] hover:bg-[#E04826] text-white text-xs font-bold rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95 whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#FF5A36] hover:bg-[#E04826] text-white text-xs font-bold rounded-xl transition-all shadow-sm whitespace-nowrap"
           >
             <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
-            <span className="hidden sm:inline">New requisition</span>
-            <span className="sm:hidden">New</span>
+            <span>New Job</span>
           </Link>
         </div>
       </header>
@@ -436,13 +370,13 @@ export const Header: React.FC = () => {
             className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 w-72 bg-[#0F172A] flex flex-col z-[210] shadow-2xl animate-in slide-in-from-left duration-200">
+          <div className="fixed inset-y-0 left-0 w-64 bg-[#0F172A] flex flex-col z-[210] shadow-2xl">
             <SidebarContent />
           </div>
         </div>
       )}
 
-      {/* Global Modals */}
+      {/* Modals */}
       <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} initialMode={authMode} />
       <MyProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
       <BookDemoModal isOpen={demoOpen} onClose={() => setDemoOpen(false)} />

@@ -291,226 +291,96 @@ export default function DashboardPage() {
     );
   }, [jobs, jobSearch]);
 
-  const overviewKpis = [
+  const simpleKpis = [
     {
-      label: 'ACTIVE REQUISITIONS',
+      label: 'Active Jobs',
       value: (jobs.length > 0 ? jobs.length : 3).toString(),
-      sub: `${jobs.length > 0 ? jobs.length : 3} total requisitions`,
-      icon: (
-        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <rect x="2" y="7" width="20" height="14" rx="2" strokeWidth={1.8} />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" />
-        </svg>
-      ),
+      sub: 'Open requisitions',
+      color: 'text-slate-900',
+      badge: 'Active',
+      badgeColor: 'bg-slate-100 text-slate-700',
     },
     {
-      label: 'CANDIDATES',
+      label: 'Candidate Pool',
       value: (totalEvaluated > 0 ? totalEvaluated : 11).toString(),
-      sub: `${totalEvaluated > 0 ? totalEvaluated : 11} added in range`,
-      icon: (
-        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      ),
+      sub: 'Resumes in database',
+      color: 'text-slate-900',
+      badge: 'Evaluated',
+      badgeColor: 'bg-blue-50 text-blue-700',
     },
     {
-      label: 'RESUMES PROCESSED',
-      value: (totalEvaluated > 0 ? totalEvaluated : 11).toString(),
-      sub: 'Structured extraction complete',
-      icon: (
-        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      ),
-    },
-    {
-      label: 'PENDING EVALUATION',
-      value: '0',
-      sub: 'Queued or processing',
-      icon: (
-        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="9" strokeWidth={1.8} />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 7v5l3 3" />
-        </svg>
-      ),
-    },
-    {
-      label: 'STRONG MATCHES',
+      label: 'Strong Matches',
       value: (submitCount > 0 ? submitCount : 5).toString(),
-      sub: '85+ deterministic score',
-      subColor: 'text-emerald-600',
-      icon: (
-        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
+      sub: '85%+ match score',
+      color: 'text-emerald-600',
+      badge: 'Recommended',
+      badgeColor: 'bg-emerald-50 text-emerald-700',
     },
     {
-      label: 'KNOCK-OUT FAILURES',
+      label: 'Needs Review',
       value: (rejectCount > 0 ? rejectCount : 3).toString(),
-      sub: 'Mandatory criteria unmet',
-      subColor: 'text-rose-500',
-      icon: (
-        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="9" strokeWidth={1.8} />
-          <circle cx="12" cy="12" r="3" strokeWidth={1.8} />
-        </svg>
-      ),
-    },
-    {
-      label: 'INTERVIEWS SCHEDULED',
-      value: '0',
-      sub: 'Awaiting outcome',
-      icon: (
-        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <rect x="3" y="4" width="18" height="18" rx="2" strokeWidth={1.8} />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 2v4M8 2v4M3 10h18" />
-        </svg>
-      ),
-    },
-    {
-      label: 'SCREENING TURNAROUND',
-      value: '5.5h',
-      sub: '5.5 h average',
-      icon: (
-        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
+      sub: 'Criteria unmet or pending',
+      color: 'text-amber-600',
+      badge: 'Action Needed',
+      badgeColor: 'bg-amber-50 text-amber-700',
     },
   ];
 
   const pipeline = [
-    { stage: 'Total Evaluated', value: totalEvaluated, color: 'bg-brand-charcoal' },
-    { stage: 'Submit (Accept)', value: submitCount,    color: 'bg-emerald-500'    },
-    { stage: 'Reject',          value: rejectCount,    color: 'bg-rose-400'       },
+    { stage: 'Total Evaluated', value: totalEvaluated, color: 'bg-slate-700' },
+    { stage: 'Strong Matches',  value: submitCount,    color: 'bg-emerald-500' },
+    { stage: 'Needs Review',    value: rejectCount,    color: 'bg-rose-400' },
   ];
 
   return (
-    <div className="min-h-screen bg-[#EEF2F6] text-[#1E293B] flex flex-col selection:bg-brand-orange-pale selection:text-brand-orange">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#1E293B] flex flex-col font-sans">
       <Header />
 
-      <main className="max-w-screen-xl mx-auto px-6 pt-24 pb-16 flex-1 w-full">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 flex-1 w-full">
 
-        {/* Recruitment Overview Headline matching reference image */}
-        <div className="mb-6">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-            RECRUITMENT OVERVIEW
+        {/* Clean, Simple Header */}
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hiring Dashboard</h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Welcome back, {user?.name || user?.email?.split('@')[0] || 'Recruiter'}. Track open positions and candidate matches.
+            </p>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] tracking-tight">
-            Your hiring intelligence, in one place
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-3xl leading-relaxed">
-            Every number below is computed from stored evaluations. AI extracts evidence, the arithmetic decides the score, recruiters make the call.
-          </p>
 
-          {/* Time Filter Pills matching reference image */}
-          <div className="flex items-center gap-1.5 mt-5">
-            {[
-              { id: 'today', label: 'Today' },
-              { id: '7d', label: '7 days' },
-              { id: '30d', label: '30 days' },
-              { id: '90d', label: '90 days' },
-            ].map(pill => (
-              <button
-                key={pill.id}
-                type="button"
-                onClick={() => setTimeRange(pill.id as any)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                  timeRange === pill.id
-                    ? 'bg-[#0F172A] text-white shadow-xs'
-                    : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
-                }`}
+          <div className="flex items-center gap-2">
+            {canUploadJd && (
+              <Link
+                href="/jobs/create"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#FF5A36] hover:bg-[#E04826] text-white text-xs font-semibold rounded-xl transition-all shadow-xs"
               >
-                {pill.label}
-              </button>
-            ))}
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                </svg>
+                <span>Upload Job Description</span>
+              </Link>
+            )}
           </div>
         </div>
 
-        {/* 8 Metric Cards Grid matching reference image */}
+        {/* 4 Clean Metric Cards (1 Row) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {overviewKpis.map((k, i) => (
-            <div key={i} className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all relative overflow-hidden group">
-              <div className="flex items-start justify-between mb-3">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{k.label}</span>
-                <div className="w-7 h-7 rounded-lg border border-slate-200/80 flex items-center justify-center flex-shrink-0 bg-slate-50">
-                  {k.icon}
-                </div>
+          {simpleKpis.map((k, i) => (
+            <div key={i} className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xs hover:shadow-xs transition-all">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-slate-500">{k.label}</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${k.badgeColor}`}>
+                  {k.badge}
+                </span>
               </div>
-              <div className="text-3xl font-extrabold text-[#0F172A] tracking-tight">{k.value}</div>
-              <div className="text-xs mt-2 font-medium">
-                <span className={k.subColor || 'text-slate-400'}>{k.sub}</span>
+              <div className={`text-2xl sm:text-3xl font-extrabold ${k.color} tracking-tight`}>
+                {k.value}
+              </div>
+              <div className="text-[11px] text-slate-400 mt-1">
+                {k.sub}
               </div>
             </div>
           ))}
         </div>
-
-        {/* Screening Volume & Score Distribution Visual Overview */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
-          {/* Screening Volume Card */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs">
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="text-sm font-bold text-[#0F172A]">Screening volume</h3>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">30d</span>
-            </div>
-            <p className="text-xs text-slate-400 mb-4">Resumes scored in the last 30 days</p>
-            <div className="h-28 flex items-end justify-between gap-2 pt-4 px-2 border-b border-slate-100 pb-2">
-              {[3, 5, 2, 8, 4, 11, 7, 9, 6, 11, 8, 12].map((val, idx) => (
-                <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 group">
-                  <div
-                    className="w-full bg-slate-200 group-hover:bg-[#FF5A36] rounded-t-md transition-colors"
-                    style={{ height: `${(val / 12) * 80}px` }}
-                  />
-                  <span className="text-[9px] text-slate-400 font-mono">{idx % 3 === 0 ? idx + 1 : ''}</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-between items-center text-[11px] text-slate-400 pt-2 font-medium">
-              <span>Past 30 Days</span>
-              <span className="font-bold text-slate-700">{totalEvaluated > 0 ? totalEvaluated : 11} candidates processed</span>
-            </div>
-          </div>
-
-          {/* Score Distribution Card */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs">
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="text-sm font-bold text-[#0F172A]">Score distribution</h3>
-              <span className="text-xs text-slate-500 font-medium">Deterministic</span>
-            </div>
-            <p className="text-xs text-slate-400 mb-4">Final scores across stored evaluations</p>
-            <div className="space-y-2.5 pt-1">
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-600 font-medium">Strong Match (85 - 100%)</span>
-                  <span className="font-bold text-emerald-600">{submitCount > 0 ? submitCount : 5}</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: '45%' }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-600 font-medium">Moderate Match (65 - 84%)</span>
-                  <span className="font-bold text-amber-600">3</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-amber-500 rounded-full" style={{ width: '27%' }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-600 font-medium">Knock-Out / Unmet (&lt; 65%)</span>
-                  <span className="font-bold text-rose-500">{rejectCount > 0 ? rejectCount : 3}</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-rose-400 rounded-full" style={{ width: '28%' }} />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
