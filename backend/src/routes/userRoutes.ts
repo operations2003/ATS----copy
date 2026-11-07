@@ -8,6 +8,7 @@ import {
   assignUserTeam,
   deleteUser,
   getUserQuotaController,
+  updateSubscriptionPlanController,
   toggleUserActiveController,
   getRecruiterPerformanceTrackerController
 } from '../controllers/userController';
@@ -17,6 +18,9 @@ const router = Router();
 
 // GET /api/users/quota - Get organization quota and user slots
 router.get('/quota', protect, getUserQuotaController);
+
+// POST /api/users/subscription - Update subscription plan (Starter: 500, Professional: 2500)
+router.post('/subscription', protect, authorize('ADMIN'), updateSubscriptionPlanController);
 
 // GET /api/users/ta-members - Live TA members data with real database metrics
 router.get('/ta-members', protect, getTAMembers);

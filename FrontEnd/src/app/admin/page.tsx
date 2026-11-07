@@ -62,6 +62,12 @@ export default function AdminPage() {
   const [deleteError, setDeleteError] = useState('');
   const [deleteSuccess, setDeleteSuccess] = useState('');
 
+  // Subscription Plan Modal State
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [planUpdating, setPlanUpdating] = useState(false);
+  const [planSuccess, setPlanSuccess] = useState('');
+  const [planError, setPlanError] = useState('');
+
   // Live state from Store
   const [recruiters, setRecruiters] = useState<RecruiterMetric[]>([]);
   const [jobs, setJobs] = useState<JobItem[]>([]);
@@ -151,6 +157,40 @@ export default function AdminPage() {
       console.warn('Failed to fetch quota:', err);
     } finally {
       setLoadingQuota(false);
+    }
+  };
+
+  const handleSwitchPlan = async (newPlan: 'STARTER' | 'PROFESSIONAL') => {
+    setPlanUpdating(true);
+    setPlanError('');
+    setPlanSuccess('');
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+      const res = await fetch(`${backendUrl}/users/subscription`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ plan: newPlan })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update subscription plan');
+      }
+
+      setPlanSuccess(`Successfully switched to ${newPlan === 'STARTER' ? 'Starter Pack (500 resumes/month)' : 'Professional Pack (2,500 resumes/month)'}!`);
+      await fetchQuota();
+      setTimeout(() => {
+        setShowPlanModal(false);
+        setPlanSuccess('');
+      }, 1500);
+    } catch (err: any) {
+      setPlanError(err?.message || 'Failed to switch subscription plan');
+    } finally {
+      setPlanUpdating(false);
     }
   };
 
@@ -817,6 +857,35 @@ export default function AdminPage() {
                 <div className="text-sm font-black text-slate-900 mt-0.5">
                   {quota.currentActiveJobs} / {quota.maxActiveJobs}
                 </div>
+              </div>
+
+              <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
+
+              <div>
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Monthly Resume Quota</div>
+                <div className="text-sm font-black text-slate-900 mt-0.5 flex items-baseline gap-1">
+                  <span>{(quota.currentMonthResumes ?? 0).toLocaleString()} / {quota.maxResumesPerMonth.toLocaleString()}</span>
+                  <span className="text-[10px] font-bold text-slate-500">CVs</span>
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">
+                  {quota.availableResumes !== undefined ? `${quota.availableResumes.toLocaleString()} remaining` : 'Monthly quota'}
+                </div>
+              </div>
+
+              <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
+
+              <div>
+                <button
+                  onClick={() => {
+                    setPlanError('');
+                    setPlanSuccess('');
+                    setShowPlanModal(true);
+                  }}
+                  className="px-3.5 py-2 text-xs font-bold rounded-xl bg-violet-600 hover:bg-violet-700 text-white transition-all cursor-pointer shadow-sm hover:-translate-y-0.5 flex items-center gap-1.5"
+                >
+                  <span>⭐</span>
+                  <span>{quota.subscriptionPlan === 'STARTER' ? 'Upgrade to Pro (2,500)' : 'Change Plan'}</span>
+                </button>
               </div>
             </div>
           </div>
@@ -1799,6 +1868,125 @@ export default function AdminPage() {
                     </>
                   )}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── SUBSCRIPTION PLAN MODAL (STARTER: 500 / PRO: 2,500) ── */}
+        {showPlanModal && (
+          <div
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowPlanModal(false);
+            }}
+            className="fixed inset-0 z-[250] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+          >
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl relative animate-in zoom-in-95 duration-150">
+              <button
+                onClick={() => setShowPlanModal(false)}
+                className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-sm font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+
+              <div className="mb-6">
+                <span className="px-3 py-1 rounded-full bg-violet-100 text-violet-700 text-xs font-black uppercase tracking-wider">
+                  Subscription Plans
+                </span>
+                <h3 className="text-xl font-black text-slate-900 mt-2">Choose Your Hiring Quota</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Select the plan that matches your monthly resume evaluation and candidate screening volume.
+                </p>
+              </div>
+
+              {planSuccess && (
+                <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold">
+                  ✓ {planSuccess}
+                </div>
+              )}
+              {planError && (
+                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold">
+                  ⚠ {planError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                {/* Starter Pack */}
+                <div className={`p-5 rounded-2xl border-2 transition-all relative ${
+                  quota?.subscriptionPlan === 'STARTER'
+                    ? 'border-brand-orange bg-orange-50/20 shadow-xs'
+                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                }`}>
+                  {quota?.subscriptionPlan === 'STARTER' && (
+                    <span className="absolute -top-3 right-4 px-2.5 py-0.5 rounded-full bg-brand-orange text-white text-[10px] font-black uppercase">
+                      Current Plan
+                    </span>
+                  )}
+                  <h4 className="text-base font-black text-slate-900">Starter Pack</h4>
+                  <div className="text-2xl font-black text-slate-900 mt-1">
+                    500 <span className="text-xs font-semibold text-slate-500">resumes / month</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                    Essential resume intelligence for boutique agencies and small hiring teams.
+                  </p>
+                  <ul className="text-xs text-slate-600 space-y-1.5 mt-4 pt-4 border-t border-slate-100">
+                    <li className="flex items-center gap-1.5">✓ <strong>500</strong> candidate resumes per month</li>
+                    <li className="flex items-center gap-1.5">✓ Up to <strong>5</strong> recruiter accounts</li>
+                    <li className="flex items-center gap-1.5">✓ Up to <strong>20</strong> active job requisitions</li>
+                    <li className="flex items-center gap-1.5">✓ Deterministic ATS scoring engine</li>
+                  </ul>
+                  <button
+                    disabled={quota?.subscriptionPlan === 'STARTER' || planUpdating}
+                    onClick={() => handleSwitchPlan('STARTER')}
+                    className={`w-full mt-5 py-2.5 text-xs font-bold rounded-xl transition-all ${
+                      quota?.subscriptionPlan === 'STARTER'
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-slate-900 hover:bg-slate-800 text-white cursor-pointer'
+                    }`}
+                  >
+                    {quota?.subscriptionPlan === 'STARTER' ? 'Active Plan' : planUpdating ? 'Switching...' : 'Switch to Starter'}
+                  </button>
+                </div>
+
+                {/* Professional Pack */}
+                <div className={`p-5 rounded-2xl border-2 transition-all relative ${
+                  quota?.subscriptionPlan === 'PROFESSIONAL'
+                    ? 'border-violet-600 bg-violet-50/20 shadow-xs'
+                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                }`}>
+                  <span className="absolute -top-3 right-4 px-2.5 py-0.5 rounded-full bg-violet-600 text-white text-[10px] font-black uppercase">
+                    {quota?.subscriptionPlan === 'PROFESSIONAL' ? 'Current Plan' : 'Most Popular'}
+                  </span>
+                  <h4 className="text-base font-black text-slate-900">Professional Pack</h4>
+                  <div className="text-2xl font-black text-slate-900 mt-1">
+                    2,500 <span className="text-xs font-semibold text-slate-500">resumes / month</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                    High-volume candidate matching and evaluation for fast-scaling recruitment operations.
+                  </p>
+                  <ul className="text-xs text-slate-600 space-y-1.5 mt-4 pt-4 border-t border-slate-100">
+                    <li className="flex items-center gap-1.5">✓ <strong>2,500</strong> candidate resumes per month</li>
+                    <li className="flex items-center gap-1.5">✓ Up to <strong>15</strong> recruiter accounts</li>
+                    <li className="flex items-center gap-1.5">✓ <strong>Unlimited</strong> active job requisitions</li>
+                    <li className="flex items-center gap-1.5">✓ Priority ATS evaluation queue</li>
+                    <li className="flex items-center gap-1.5">✓ Client Candidate Share Portals</li>
+                  </ul>
+                  <button
+                    disabled={quota?.subscriptionPlan === 'PROFESSIONAL' || planUpdating}
+                    onClick={() => handleSwitchPlan('PROFESSIONAL')}
+                    className={`w-full mt-5 py-2.5 text-xs font-bold rounded-xl transition-all ${
+                      quota?.subscriptionPlan === 'PROFESSIONAL'
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-violet-600 hover:bg-violet-700 text-white cursor-pointer shadow-md'
+                    }`}
+                  >
+                    {quota?.subscriptionPlan === 'PROFESSIONAL' ? 'Active Plan' : planUpdating ? 'Switching...' : 'Switch to Professional'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl text-center text-xs text-slate-500">
+                Need more than 2,500 resumes or custom enterprise architecture? Contact <a href="mailto:operations@tasknera.com" className="text-brand-orange font-bold hover:underline">operations@tasknera.com</a>
               </div>
             </div>
           </div>

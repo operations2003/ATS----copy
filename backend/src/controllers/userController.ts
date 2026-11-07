@@ -2,7 +2,7 @@ import { Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../config/prisma';
 import { AuthRequest, UserRole } from '../middleware/authMiddleware';
-import { checkUserQuota, getOrganizationQuota } from '../services/organizationService';
+import { checkUserQuota, getOrganizationQuota, changeSubscriptionPlan } from '../services/organizationService';
 import { getRecruiterPerformance, getAllRecruitersPerformance } from '../services/recruiterPerformanceService';
 
 // @desc    Create a new member (Admin / Client Admin only)
@@ -1039,6 +1039,43 @@ export const getUserQuotaController = async (req: AuthRequest, res: Response): P
     res.status(200).json({ success: true, quota });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to fetch user quota' });
+  }
+};
+
+// @desc    Update subscription plan (Starter: 500, Professional: 2500)
+// @route   POST /api/users/subscription
+// @access  Private (ADMIN, CLIENT_ADMIN, SUPER_ADMIN)
+export const updateSubscriptionPlanController = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const callerRole = req.user?.role || 'MEMBER';
+    const isSuperAdmin = callerRole === 'SUPER_ADMIN' || req.user?.email?.toLowerCase().trim() === 'operations@tasknera.com';
+    const isClientAdmin = callerRole === 'CLIENT_ADMIN' || callerRole === 'ADMIN';
+
+    if (!isSuperAdmin && !isClientAdmin) {
+      res.status(403).json({ error: 'Forbidden: Only administrators can modify subscription plans.' });
+      return;
+    }
+
+    const orgId = req.user?.organizationId || 'org-tasknera';
+    const { plan } = req.body;
+
+    if (!plan || !['STARTER', 'PROFESSIONAL', 'ENTERPRISE'].includes(String(plan).toUpperCase())) {
+      res.status(400).json({ error: 'Valid plan required: STARTER, PROFESSIONAL, or ENTERPRISE' });
+      return;
+    }
+
+    const updated = await changeSubscriptionPlan(orgId, String(plan).toUpperCase(), req.user?.userId);
+    const quota = await getOrganizationQuota(orgId);
+
+    res.status(200).json({
+      success: true,
+      message: `Subscription successfully updated to ${updated.subscriptionPlan} Plan (${quota.maxResumesPerMonth.toLocaleString()} resumes/month).`,
+      organization: updated,
+      quota
+    });
+  } catch (error: any) {
+    console.error('[User Controller] Error updating subscription plan:', error);
+    res.status(500).json({ error: error.message || 'Failed to update subscription plan' });
   }
 };
 

@@ -80,6 +80,32 @@ export interface UpdateSubscriptionInput {
   status?: OrgStatus;
 }
 
+export const PLAN_LIMITS: Record<string, {
+  maxResumesPerMonth: number;
+  maxUsers: number;
+  maxRecruiters: number;
+  maxActiveJobs: number;
+}> = {
+  STARTER: {
+    maxResumesPerMonth: 500,
+    maxUsers: 5,
+    maxRecruiters: 5,
+    maxActiveJobs: 20
+  },
+  PROFESSIONAL: {
+    maxResumesPerMonth: 2500,
+    maxUsers: 15,
+    maxRecruiters: 15,
+    maxActiveJobs: 100
+  },
+  ENTERPRISE: {
+    maxResumesPerMonth: 999999,
+    maxUsers: 999,
+    maxRecruiters: 999,
+    maxActiveJobs: 999
+  }
+};
+
 /**
  * Concurrency-safe quota check inside a transaction or query
  */
@@ -136,13 +162,28 @@ export async function checkUserQuota(
  * Retrieve organization quota details
  */
 export async function getOrganizationQuota(organizationId: string) {
-  const org = await prisma.organization.findUnique({
+  let org = await prisma.organization.findUnique({
     where: { id: organizationId }
   });
 
   if (!org) {
-    throw new Error(`Organization "${organizationId}" not found`);
+    org = await prisma.organization.create({
+      data: {
+        id: organizationId,
+        name: 'TaskNera Technologies',
+        subscriptionPlan: 'STARTER',
+        maxUsers: 5,
+        maxRecruiters: 5,
+        maxActiveJobs: 20,
+        maxResumesPerMonth: 500,
+        status: 'ACTIVE'
+      }
+    });
   }
+
+  const planKey = (org.subscriptionPlan || 'STARTER').toUpperCase();
+  const planDefaults = PLAN_LIMITS[planKey] || PLAN_LIMITS.STARTER;
+  const maxResumesPerMonth = org.maxResumesPerMonth || planDefaults.maxResumesPerMonth;
 
   const totalUsers = await prisma.user.count({
     where: { organizationId }
@@ -162,11 +203,30 @@ export async function getOrganizationQuota(organizationId: string) {
     }
   });
 
+  // Calculate current monthly resume usage (1st of month to end of month)
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  const currentMonthResumes = await prisma.candidate.count({
+    where: {
+      organizationId,
+      created_at: {
+        gte: startOfMonth,
+        lte: endOfMonth
+      }
+    }
+  });
+
+  const availableResumes = Math.max(0, maxResumesPerMonth - currentMonthResumes);
+  const percentUsed = Math.min(100, Math.round((currentMonthResumes / maxResumesPerMonth) * 100));
+  const resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
   return {
     organizationId: org.id,
     organizationName: org.name,
     status: org.status,
-    subscriptionPlan: org.subscriptionPlan,
+    subscriptionPlan: planKey,
     billingCycle: org.billingCycle,
     subscriptionExpiry: org.subscriptionExpiry,
     totalLimit: org.maxUsers,
@@ -178,7 +238,11 @@ export async function getOrganizationQuota(organizationId: string) {
     maxActiveJobs: org.maxActiveJobs,
     currentActiveJobs: activeJobsCount,
     availableJobSlots: Math.max(0, org.maxActiveJobs - activeJobsCount),
-    maxResumesPerMonth: org.maxResumesPerMonth
+    maxResumesPerMonth,
+    currentMonthResumes,
+    availableResumes,
+    percentUsed,
+    resetsOn
   };
 }
 
@@ -334,7 +398,16 @@ export async function updateOrganizationSubscription(
     }
 
     const updateData: any = {};
-    if (subData.subscriptionPlan) updateData.subscriptionPlan = subData.subscriptionPlan;
+    if (subData.subscriptionPlan) {
+      const planKey = subData.subscriptionPlan.toUpperCase();
+      updateData.subscriptionPlan = planKey;
+      if (PLAN_LIMITS[planKey]) {
+        updateData.maxResumesPerMonth = PLAN_LIMITS[planKey].maxResumesPerMonth;
+        updateData.maxUsers = PLAN_LIMITS[planKey].maxUsers;
+        updateData.maxRecruiters = PLAN_LIMITS[planKey].maxRecruiters;
+        updateData.maxActiveJobs = PLAN_LIMITS[planKey].maxActiveJobs;
+      }
+    }
     if (subData.billingCycle) updateData.billingCycle = subData.billingCycle;
     if (subData.subscriptionExpiry !== undefined) updateData.subscriptionExpiry = subData.subscriptionExpiry;
     if (subData.status) updateData.status = subData.status;
@@ -364,6 +437,50 @@ export async function updateOrganizationSubscription(
     });
 
     return updatedOrg;
+  });
+}
+
+/**
+ * Direct subscription plan change (Starter: 500 resumes/mo, Professional: 2500 resumes/mo)
+ */
+export async function changeSubscriptionPlan(
+  organizationId: string,
+  newPlan: string,
+  userId?: string
+) {
+  const planKey = String(newPlan || 'STARTER').toUpperCase();
+  const limits = PLAN_LIMITS[planKey] || PLAN_LIMITS.STARTER;
+
+  return await prisma.$transaction(async (tx) => {
+    const updated = await tx.organization.update({
+      where: { id: organizationId },
+      data: {
+        subscriptionPlan: planKey,
+        maxResumesPerMonth: limits.maxResumesPerMonth,
+        maxUsers: limits.maxUsers,
+        maxRecruiters: limits.maxRecruiters,
+        maxActiveJobs: limits.maxActiveJobs,
+        status: 'ACTIVE'
+      }
+    });
+
+    const auditUserId = await resolveAuditUserId(tx, userId);
+    await tx.auditLog.create({
+      data: {
+        organizationId,
+        userId: auditUserId,
+        action: 'CHANGE_SUBSCRIPTION_PLAN',
+        targetType: 'Organization',
+        targetId: organizationId,
+        details: {
+          newPlan: planKey,
+          maxResumesPerMonth: limits.maxResumesPerMonth,
+          updatedAt: new Date().toISOString()
+        }
+      }
+    });
+
+    return updated;
   });
 }
 

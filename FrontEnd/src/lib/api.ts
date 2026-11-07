@@ -59,6 +59,10 @@ export interface OrganizationQuota {
   currentActiveJobs: number;
   availableJobSlots: number;
   maxResumesPerMonth: number;
+  currentMonthResumes?: number;
+  availableResumes?: number;
+  percentUsed?: number;
+  resetsOn?: string;
 }
 
 export interface ClientOrganization {

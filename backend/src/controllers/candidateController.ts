@@ -1254,6 +1254,44 @@ export const uploadCandidateCVs = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
+    // ── SUBSCRIPTION RESUME QUOTA ENFORCEMENT (STARTER: 500, PROFESSIONAL: 2500) ──
+    if (!isSuperAdmin) {
+      const org = await prisma.organization.findUnique({
+        where: { id: userOrgId },
+        select: { subscriptionPlan: true, maxResumesPerMonth: true, status: true }
+      });
+
+      const planName = (org?.subscriptionPlan || 'STARTER').toUpperCase();
+      const planLimit = org?.maxResumesPerMonth ?? (planName === 'PROFESSIONAL' ? 2500 : 500);
+
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+      const currentMonthUsage = await prisma.candidate.count({
+        where: {
+          organizationId: userOrgId,
+          created_at: {
+            gte: startOfMonth,
+            lte: endOfMonth
+          }
+        }
+      });
+
+      if (currentMonthUsage + files.length > planLimit) {
+        res.status(403).json({
+          error: `Monthly resume quota reached for your ${planName} plan.`,
+          message: `Your ${planName} plan allows ${planLimit.toLocaleString()} candidate resumes per month. You have processed ${currentMonthUsage.toLocaleString()} / ${planLimit.toLocaleString()} resumes this month. Uploading ${files.length} more resume(s) would exceed your quota. Please upgrade your subscription to the Professional Plan (2,500 resumes/month) to continue evaluating candidates.`,
+          quotaExceeded: true,
+          plan: planName,
+          limit: planLimit,
+          used: currentMonthUsage,
+          remaining: Math.max(0, planLimit - currentMonthUsage)
+        });
+        return;
+      }
+    }
+
     console.log(`\n=============================================================`);
     console.log(`[Batch CV Upload] Received ${files.length} file(s) for Job ID: ${jobId}`);
     console.log(`=============================================================`);

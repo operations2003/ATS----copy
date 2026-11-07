@@ -69,6 +69,8 @@ export const uploadFilesToBatch = async (req: AuthRequest, res: Response): Promi
   try {
     const batchId = String(req.params.batchId || '').trim();
     const userOrgId = req.user?.organizationId || 'org-tasknera';
+    const callerRole = req.user?.role || 'MEMBER';
+    const isSuperAdmin = callerRole === 'SUPER_ADMIN' || req.user?.email?.toLowerCase().trim() === 'operations@tasknera.com';
 
     if (!batchId) {
       res.status(400).json({ error: 'Batch ID is required' });
@@ -90,6 +92,40 @@ export const uploadFilesToBatch = async (req: AuthRequest, res: Response): Promi
     if (files.length === 0) {
       res.status(400).json({ error: 'No files provided for batch upload' });
       return;
+    }
+
+    // ── SUBSCRIPTION RESUME QUOTA ENFORCEMENT ──
+    if (!isSuperAdmin) {
+      const org = await prisma.organization.findUnique({
+        where: { id: userOrgId },
+        select: { subscriptionPlan: true, maxResumesPerMonth: true }
+      });
+
+      const planName = (org?.subscriptionPlan || 'STARTER').toUpperCase();
+      const planLimit = org?.maxResumesPerMonth ?? (planName === 'PROFESSIONAL' ? 2500 : 500);
+
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+      const currentMonthUsage = await prisma.candidate.count({
+        where: {
+          organizationId: userOrgId,
+          created_at: {
+            gte: startOfMonth,
+            lte: endOfMonth
+          }
+        }
+      });
+
+      if (currentMonthUsage + files.length > planLimit) {
+        res.status(403).json({
+          error: `Monthly resume quota reached for your ${planName} plan.`,
+          message: `Your ${planName} plan allows ${planLimit.toLocaleString()} resumes per month. Current usage: ${currentMonthUsage.toLocaleString()} / ${planLimit.toLocaleString()}. Please upgrade to the Professional Plan (2,500 resumes/month).`,
+          quotaExceeded: true
+        });
+        return;
+      }
     }
 
     const addedItems = [];
