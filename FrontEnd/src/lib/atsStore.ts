@@ -260,12 +260,15 @@ class ATSStore {
       loadedJobs = (Array.isArray(loadedJobs) ? loadedJobs : []).filter(j => {
         const id = String(j.id || '');
         const title = String(j.title || '').toLowerCase();
+        const client = String((j as any).client || (j as any).company || '').toLowerCase();
         return !dummyJobIds.includes(id) &&
                !id.startsWith('jd-') &&
                !id.includes('1788597184624') &&
                id !== 'b069cc8a-8e5d-47e4-8444-1c9ed2a0258b' &&
-               !title.includes('xoxoday') &&
-               !title.includes('1788597184624');
+               id !== '83838c13-a542-457c-a696-1289c9734869' &&
+               !title.includes('1788597184624') &&
+               !title.includes('test engineer') &&
+               !client.includes('test client');
       });
       this.jobs = loadedJobs;
 

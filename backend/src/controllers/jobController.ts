@@ -178,9 +178,23 @@ export const parseJobDescriptionController = async (
         (result.data as any).aiModel = semRes.aiModel;
 
         // Populate title if deterministic parser missed it or Gemini found cleaner title
+        const isMessyOrUncleanTitle = (t: string | null | undefined): boolean => {
+          if (!t || t.trim().length < 3) return true;
+          const s = t.trim().toLowerCase();
+          const words = s.split(/\s+/).length;
+          return (
+            words > 6 ||
+            s.length > 55 ||
+            /^(?:overview|summary|about|description|we\s+are|own\s+|looking\s+for)\b/i.test(s) ||
+            /(?:for|and|to|with|in|at)$/i.test(s) ||
+            s.includes("cross-functional") ||
+            s.includes("gtm planning")
+          );
+        };
+
         if (
           semRes.normalizedJd.job_title &&
-          (!result.data.positionTitle || result.data.positionTitle.length < 3)
+          (!result.data.positionTitle || isMessyOrUncleanTitle(result.data.positionTitle))
         ) {
           result.data.positionTitle = semRes.normalizedJd.job_title;
           if (result.data.job)

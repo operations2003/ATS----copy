@@ -102,7 +102,41 @@ export const ensureDefaultAdmin = async (): Promise<void> => {
     }
 
     // 3. Demote any other accounts that were previous admins
-    const designatedAdmins = [adminEmail, taskneraOrgAdminEmail, 'shubham@tasknera.com'];
+    // 2.1 Ensure Demo Admin exists
+    const demoAdminEmail = 'demo@gmail.com';
+    const demoHashedPassword = await bcrypt.hash('demo@1234', 10);
+    const existingDemo = await prisma.user.findFirst({
+      where: { email: demoAdminEmail }
+    });
+    if (!existingDemo) {
+      await prisma.user.create({
+        data: {
+          name: 'Demo Admin',
+          email: demoAdminEmail,
+          password: demoHashedPassword,
+          role: 'SUPER_ADMIN' as any,
+          organizationId: 'org-tasknera',
+          isActive: true,
+          allowJdUpload: true
+        } as any
+      });
+      console.log(`[Auth] Demo Admin account (${demoAdminEmail}) initialized as SUPER_ADMIN.`);
+    } else {
+      await prisma.user.update({
+        where: { id: existingDemo.id },
+        data: {
+          name: 'Demo Admin',
+          email: demoAdminEmail,
+          role: 'SUPER_ADMIN' as any,
+          password: demoHashedPassword,
+          isActive: true,
+          allowJdUpload: true
+        } as any
+      });
+      console.log(`[Auth] Demo Admin account (${demoAdminEmail}) verified as SUPER_ADMIN.`);
+    }
+
+    const designatedAdmins = [adminEmail, taskneraOrgAdminEmail, 'shubham@tasknera.com', 'demo@gmail.com'];
     await prisma.user.updateMany({
       where: {
         email: { notIn: designatedAdmins },

@@ -172,10 +172,21 @@ export default function HireIQHiringReality({
 
   const difficultyBadgeStyle =
     report.difficulty === 'DIFFICULT'
-      ? 'bg-rose-100 text-rose-950 border-rose-300'
+      ? 'bg-rose-50 text-rose-800 border-rose-200'
       : report.difficulty === 'MODERATE'
-      ? 'bg-amber-100 text-amber-950 border-amber-300'
-      : 'bg-emerald-100 text-emerald-950 border-emerald-300';
+      ? 'bg-amber-50 text-amber-800 border-amber-200'
+      : 'bg-emerald-50 text-emerald-800 border-emerald-200';
+
+  const difficultyDotStyle =
+    report.difficulty === 'DIFFICULT'
+      ? 'bg-rose-500'
+      : report.difficulty === 'MODERATE'
+      ? 'bg-amber-500'
+      : 'bg-emerald-500';
+
+  const cleanJobTitle = (report.jobTitle || 'Role Requisition')
+    .replace(/^overview\s+/i, '')
+    .trim();
 
   const simulatedPool = 100 + report.simulatedPoolGainPercent;
 
@@ -219,86 +230,121 @@ export default function HireIQHiringReality({
       </div>
 
       {/* ── SECTION 1: REALITY SCORE & TIME-TO-HIRE GAUGE ── */}
-      <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-xs space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-          {/* Reality Score Dial */}
-          <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center gap-5">
-            <div className="relative w-20 h-20 flex-shrink-0">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                <path
-                  className="text-slate-200"
-                  strokeWidth="3.5"
-                  stroke="currentColor"
-                  fill="none"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-                <path
-                  className={
-                    report.realityScore >= 75
-                      ? 'text-emerald-500'
-                      : report.realityScore >= 52
-                      ? 'text-amber-500'
-                      : 'text-rose-500'
-                  }
-                  strokeDasharray={`${report.realityScore}, 100`}
-                  strokeLinecap="round"
-                  strokeWidth="3.5"
-                  stroke="currentColor"
-                  fill="none"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-xl font-black font-mono text-slate-900 leading-none">
-                  {report.realityScore}
-                </span>
-                <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">/ 100</span>
+      <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-xs">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
+          {/* Card 1: Reality Score Dial */}
+          <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between overflow-hidden">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+              Hiring Reality Rating
+            </span>
+            <div className="flex items-center gap-4 py-1">
+              {/* Dial with strictly fixed dimensions */}
+              <div
+                className="relative flex-shrink-0"
+                style={{ width: '80px', height: '80px', minWidth: '80px', maxWidth: '80px' }}
+              >
+                <svg
+                  className="transform -rotate-90"
+                  style={{ width: '80px', height: '80px' }}
+                  viewBox="0 0 36 36"
+                >
+                  <path
+                    className="text-slate-200"
+                    strokeWidth="3.5"
+                    stroke="currentColor"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                  <path
+                    className={
+                      report.realityScore >= 75
+                        ? 'text-emerald-500'
+                        : report.realityScore >= 52
+                        ? 'text-amber-500'
+                        : 'text-rose-500'
+                    }
+                    strokeDasharray={`${report.realityScore}, 100`}
+                    strokeLinecap="round"
+                    strokeWidth="3.5"
+                    stroke="currentColor"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-xl font-black font-mono text-slate-900 leading-none">
+                    {report.realityScore}
+                  </span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">/ 100</span>
+                </div>
               </div>
-            </div>
 
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Hiring Reality Rating
-              </span>
-              <div className="mt-1">
-                <span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold uppercase tracking-wider border ${difficultyBadgeStyle}`}>
-                  {report.difficultyLabel}
-                </span>
+              {/* Status & Job Info */}
+              <div className="min-w-0 flex-1 space-y-1.5 overflow-hidden">
+                <div>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider border whitespace-nowrap ${difficultyBadgeStyle}`}
+                  >
+                    {report.difficultyLabel}
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  <p
+                    className="text-xs font-semibold text-slate-800 truncate"
+                    title={cleanJobTitle}
+                  >
+                    {cleanJobTitle}
+                  </p>
+                  {report.client && (
+                    <p
+                      className="text-[11px] font-medium text-slate-500 truncate"
+                      title={report.client}
+                    >
+                      {report.client}
+                    </p>
+                  )}
+                </div>
               </div>
-              <p className="text-[11px] text-slate-500 font-medium mt-1.5">
-                {report.jobTitle} • {report.client}
-              </p>
             </div>
           </div>
 
-          {/* Time-to-Hire Projection */}
-          <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+          {/* Card 2: Time-to-Hire Projection */}
+          <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
               Estimated Time-to-Fill
             </span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black font-mono text-slate-900">
-                ~{report.estimatedTimeToHireDays} Days
-              </span>
-              <span className="text-xs font-bold text-slate-500">baseline</span>
+            <div className="my-auto py-1">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-black font-mono tracking-tight text-slate-900">
+                  ~{report.estimatedTimeToHireDays} Days
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">baseline</span>
+              </div>
             </div>
-            <div className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1.5">
-              <span>🚀 Optimized with relaxations:</span>
-              <span className="font-bold underline">~{report.optimizedTimeToHireDays} Days</span>
+            <div className="pt-2.5 border-t border-slate-200/70 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 text-slate-600 font-medium">
+                <span>🚀</span>
+                <span>With relaxations:</span>
+              </div>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold border border-emerald-200/70 font-mono text-[11px]">
+                ~{report.optimizedTimeToHireDays} Days
+              </span>
             </div>
           </div>
 
-          {/* Sourcing Summary */}
-          <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+          {/* Card 3: Sourcing Summary */}
+          <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
               Candidate Pool Verdict
             </span>
-            <h4 className="text-xs font-bold text-slate-900 leading-snug">
-              {report.summaryHeadline}
-            </h4>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              {report.summaryDescription}
-            </p>
+            <div className="space-y-1.5 my-auto">
+              <h4 className="text-xs font-bold text-slate-900 leading-snug">
+                {report.summaryHeadline}
+              </h4>
+              <p className="text-[11px] text-slate-600 leading-relaxed" title={report.summaryDescription}>
+                {report.summaryDescription}
+              </p>
+            </div>
           </div>
         </div>
       </div>

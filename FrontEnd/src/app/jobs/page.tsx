@@ -184,6 +184,24 @@ function WorkedByMembers({ workers = [], isCompact = false }: { workers: JobWork
   );
 }
 
+function formatCleanPositionTitle(raw?: string | null): string {
+  if (!raw) return 'Untitled Position';
+  let t = raw.trim();
+
+  if (/gtm\s+planning/i.test(t)) {
+    return 'Demand Generation & GTM Lead';
+  }
+
+  t = t
+    .replace(/^(?:overview\s+own\s+|role\s+overview:\s*|job\s+overview:\s*|overview:\s*|overview\s+|role:\s*|position:\s*)/i, '')
+    .trim();
+  t = t.replace(/\s+(?:for|and|to|with|in|at)$/i, '').trim();
+  if (/^own\s+/i.test(t)) {
+    t = t.replace(/^own\s+/i, '').trim();
+  }
+  return t || raw;
+}
+
 export default function JobsPage() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.email?.toLowerCase().trim() === 'operations@tasknera.com' || user?.email?.toLowerCase().trim() === 'admin@gmail.com';
@@ -205,14 +223,21 @@ export default function JobsPage() {
 
       const isBadJob = (j: any) => {
         const id = String(j?.id || '');
-        const title = String(j?.position || j?.title || '').toLowerCase();
-        const client = String(j?.client || j?.company || '').toLowerCase();
-        return id === 'b069cc8a-8e5d-47e4-8444-1c9ed2a0258b' ||
-               id.includes('1788597184624') ||
-               id.startsWith('jd-') ||
-               title.includes('xoxoday') ||
-               title.includes('1788597184624') ||
-               client.includes('xoxoday');
+        const title = String(j?.position || j?.title || '').toLowerCase().trim();
+        const client = String(j?.client || j?.company || '').toLowerCase().trim();
+        return (
+          id === 'b069cc8a-8e5d-47e4-8444-1c9ed2a0258b' ||
+          id === '83838c13-a542-457c-a696-1289c9734869' ||
+          id.includes('1788597184624') ||
+          id.startsWith('jd-') ||
+          client === 'test client' ||
+          client === 'test client 2' ||
+          client.includes('test client') ||
+          title === 'test engineer' ||
+          title === 'test engineer 2' ||
+          title.includes('test engineer') ||
+          (title === 'test' && client.includes('test'))
+        );
       };
 
       let localCreatedJobs: any[] = [];
@@ -223,20 +248,32 @@ export default function JobsPage() {
           const currentUserEmail = user?.email?.toLowerCase();
           const isAdmin = user?.role === 'ADMIN' || user?.role === 'CLIENT_ADMIN' || user?.role === 'SUPER_ADMIN';
 
-          // Clean legacy bad jobs out of localStorage permanently
+          // Clean legacy test/bad jobs out of localStorage permanently & sanitize messy titles
           if (Array.isArray(raw)) {
-            const cleaned = raw.filter((j: any) => !isBadJob(j));
-            if (cleaned.length !== raw.length) {
-              localStorage.setItem('tasknera_created_jobs', JSON.stringify(cleaned));
-            }
+            const cleaned = raw
+              .filter((j: any) => !isBadJob(j))
+              .map((j: any) => {
+                const pos = j.position || j.title;
+                if (pos && (/gtm\s+planning/i.test(pos) || /^overview\s+own/i.test(pos))) {
+                  return { ...j, position: formatCleanPositionTitle(pos), title: formatCleanPositionTitle(pos) };
+                }
+                return j;
+              });
+            localStorage.setItem('tasknera_created_jobs', JSON.stringify(cleaned));
           }
 
           const rawAll = JSON.parse(localStorage.getItem('tasknera_all_jobs') || '[]');
           if (Array.isArray(rawAll)) {
-            const cleanedAll = rawAll.filter((j: any) => !isBadJob(j));
-            if (cleanedAll.length !== rawAll.length) {
-              localStorage.setItem('tasknera_all_jobs', JSON.stringify(cleanedAll));
-            }
+            const cleanedAll = rawAll
+              .filter((j: any) => !isBadJob(j))
+              .map((j: any) => {
+                const pos = j.position || j.title;
+                if (pos && (/gtm\s+planning/i.test(pos) || /^overview\s+own/i.test(pos))) {
+                  return { ...j, position: formatCleanPositionTitle(pos), title: formatCleanPositionTitle(pos) };
+                }
+                return j;
+              });
+            localStorage.setItem('tasknera_all_jobs', JSON.stringify(cleanedAll));
           }
 
           const currentOrgId = user?.organizationId || 'org-tasknera';
@@ -394,7 +431,7 @@ export default function JobsPage() {
 
         return {
           id: String(j.id),
-          title: j.position || j.title || 'Untitled Position',
+          title: formatCleanPositionTitle(j.position || j.title),
           client: j.client || j.company || 'Client Not Specified',
           location: j.location || 'Location Not Specified',
           mode: ['Remote', 'Hybrid', 'Onsite'].includes(normalizedMode) ? normalizedMode : 'Remote',

@@ -64,6 +64,24 @@ function getEffectiveSkills(candidate: any, jobReqs?: any[]): string[] {
   return Array.from(matched);
 }
 
+function formatCleanPositionTitle(raw?: string | null): string {
+  if (!raw) return 'Untitled Position';
+  let t = raw.trim();
+
+  if (/gtm\s+planning/i.test(t)) {
+    return 'Demand Generation & GTM Lead';
+  }
+
+  t = t
+    .replace(/^(?:overview\s+own\s+|role\s+overview:\s*|job\s+overview:\s*|overview:\s*|overview\s+|role:\s*|position:\s*)/i, '')
+    .trim();
+  t = t.replace(/\s+(?:for|and|to|with|in|at)$/i, '').trim();
+  if (/^own\s+/i.test(t)) {
+    t = t.replace(/^own\s+/i, '').trim();
+  }
+  return t || raw;
+}
+
 export default function DashboardPage() {
   const { user, token } = useAuth();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.email?.toLowerCase().trim() === 'operations@tasknera.com' || user?.email?.toLowerCase().trim() === 'admin@gmail.com';
@@ -85,6 +103,20 @@ export default function DashboardPage() {
         const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null);
         const headers: Record<string, string> = activeToken ? { Authorization: `Bearer ${activeToken}` } : {};
 
+        const isBadJob = (j: any) => {
+          const id = String(j?.id || '');
+          const title = String(j?.position || j?.title || '').toLowerCase().trim();
+          const client = String(j?.client || j?.company || '').toLowerCase().trim();
+          return (
+            client === 'test client' ||
+            client.includes('test client') ||
+            title === 'test engineer' ||
+            title.includes('test engineer') ||
+            id === '83838c13-a542-457c-a696-1289c9734869' ||
+            id.startsWith('jd-')
+          );
+        };
+
         // 1. Fetch user's local created jobs as client-side fallback
         let localCreated: any[] = [];
         if (typeof window !== 'undefined') {
@@ -97,6 +129,7 @@ export default function DashboardPage() {
             const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
             localCreated = (Array.isArray(raw) ? raw : []).filter((j: any) => {
+              if (isBadJob(j)) return false;
               const jOrgId = j.organizationId || 'org-tasknera';
               if (!isSuperAdmin && jOrgId !== currentOrgId) return false;
               if (isAdmin) return true;
@@ -118,7 +151,18 @@ export default function DashboardPage() {
           if (resSummary.ok) {
             const sumData = await resSummary.json();
             if (sumData.success) {
-              resolvedJobs = Array.isArray(sumData.jobs) ? sumData.jobs : [];
+              const apiJobs = Array.isArray(sumData.jobs) ? sumData.jobs : [];
+              resolvedJobs = apiJobs.filter((j: any) => !isBadJob(j)).map((j: any) => ({
+                id: String(j.id),
+                title: formatCleanPositionTitle(j.position || j.title),
+                client: j.client || j.company || 'Direct Client',
+                location: j.location || 'Remote',
+                mode: j.mode || 'Remote',
+                candidates: typeof j.candidates === 'number' ? j.candidates : 0,
+                topScore: typeof j.topScore === 'number' ? j.topScore : null,
+                status: j.status || 'Active',
+                created: j.created || 'Recent'
+              }));
               resolvedEvals = Array.isArray(sumData.recentEvaluations) ? sumData.recentEvaluations : [];
               summaryLoaded = true;
             }
@@ -138,7 +182,7 @@ export default function DashboardPage() {
             if (jobsRes.status === 'fulfilled' && jobsRes.value.ok) {
               const jData = await jobsRes.value.json();
               const apiJobs = Array.isArray(jData.jobs) ? jData.jobs : (Array.isArray(jData.data) ? jData.data : []);
-              resolvedJobs = apiJobs.map((j: any) => {
+              resolvedJobs = apiJobs.filter((j: any) => !isBadJob(j)).map((j: any) => {
                 const rawStatus = (j.status || 'Active').toLowerCase();
                 const normalizedStatus = rawStatus === 'draft' ? 'Draft' : rawStatus === 'closed' ? 'Closed' : 'Active';
                 const rawMode = (j.work_mode || j.workMode || 'Remote').trim();
@@ -146,7 +190,7 @@ export default function DashboardPage() {
                 const count = typeof j.candidatesCount === 'number' ? j.candidatesCount : (typeof j.candidates === 'number' ? j.candidates : (Array.isArray(j.candidates) ? j.candidates.length : 0));
                 return {
                   id: String(j.id),
-                  title: j.position || j.title || 'Untitled Position',
+                  title: formatCleanPositionTitle(j.position || j.title),
                   client: j.client || j.company || 'Direct Client',
                   location: j.location || 'Remote',
                   mode: ['Remote', 'Hybrid', 'Onsite'].includes(normalizedMode) ? normalizedMode : 'Remote',
@@ -189,21 +233,15 @@ export default function DashboardPage() {
         const jobMap = new Map<string, JobItem>();
         for (const j of resolvedJobs) jobMap.set(String(j.id), j);
         for (const lj of localCreated) {
-          if (!jobMap.has(String(lj.id))) {
+          if (!isBadJob(lj) && !jobMap.has(String(lj.id))) {
             const rawStatus = (lj.status || 'Active').toLowerCase();
             const normalizedStatus = rawStatus === 'draft' ? 'Draft' : rawStatus === 'closed' ? 'Closed' : 'Active';
             const rawMode = (lj.work_mode || lj.workMode || 'Remote').trim();
             const normalizedMode = rawMode.charAt(0).toUpperCase() + rawMode.slice(1).toLowerCase();
             let count = typeof lj.candidatesCount === 'number' ? lj.candidatesCount : (typeof lj.candidates === 'number' ? lj.candidates : 0);
-            if (typeof window !== 'undefined') {
-              try {
-                const localCands = JSON.parse(localStorage.getItem(`tasknera_candidates_${lj.id}`) || '[]');
-                if (Array.isArray(localCands) && localCands.length > count) count = localCands.length;
-              } catch {}
-            }
             jobMap.set(String(lj.id), {
               id: String(lj.id),
-              title: lj.position || lj.title || 'Untitled Position',
+              title: formatCleanPositionTitle(lj.position || lj.title),
               client: lj.client || lj.company || 'Direct Client',
               location: lj.location || 'Remote',
               mode: ['Remote', 'Hybrid', 'Onsite'].includes(normalizedMode) ? normalizedMode : 'Remote',
@@ -214,6 +252,64 @@ export default function DashboardPage() {
             });
           }
         }
+
+        // Ingest all candidate evaluations stored in localStorage across all jobs
+        if (typeof window !== 'undefined') {
+          try {
+            // Read tasknera_candidates_pool
+            const pool = JSON.parse(localStorage.getItem('tasknera_candidates_pool') || '[]');
+            if (Array.isArray(pool)) {
+              for (const c of pool) {
+                const score = Math.round(c.matchScore ?? c.atsScore ?? c.score ?? 0);
+                if (c.name && score > 0) {
+                  resolvedEvals.push({
+                    id: String(c.id || `eval-${resolvedEvals.length}`),
+                    name: c.name,
+                    role: c.currentTitle || c.role || 'Applicant',
+                    match: score,
+                    decision: (c.decision || (score >= 65 ? 'SUBMIT' : 'DO NOT SUBMIT')).toUpperCase(),
+                    time: c.uploadedAt ? new Date(c.uploadedAt).toLocaleDateString() : 'Recently',
+                    jobId: c.jobId
+                  });
+                }
+              }
+            }
+
+            // Check all job-specific candidate storage keys
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && key.startsWith('tasknera_candidates_') && key !== 'tasknera_candidates_pool' && !key.startsWith('tasknera_candidates_count_')) {
+                const jId = key.replace('tasknera_candidates_', '');
+                const candList = JSON.parse(localStorage.getItem(key) || '[]');
+                if (Array.isArray(candList)) {
+                  for (const c of candList) {
+                    const score = Math.round(c.matchScore ?? c.atsScore ?? c.score ?? 0);
+                    if (c.name && score > 0) {
+                      resolvedEvals.push({
+                        id: String(c.id || `eval-${resolvedEvals.length}`),
+                        name: c.name,
+                        role: c.currentTitle || c.role || 'Applicant',
+                        match: score,
+                        decision: (c.decision || (score >= 65 ? 'SUBMIT' : 'DO NOT SUBMIT')).toUpperCase(),
+                        time: c.uploadedAt ? new Date(c.uploadedAt).toLocaleDateString() : 'Recently',
+                        jobId: c.jobId || jId
+                      });
+                    }
+                  }
+                }
+              }
+            }
+
+            // Update candidate count on each job from localStorage
+            for (const [id, j] of jobMap.entries()) {
+              const rawCount = localStorage.getItem(`tasknera_candidates_count_${id}`);
+              if (rawCount) j.candidates = Math.max(j.candidates, parseInt(rawCount, 10) || 0);
+              const localCands = JSON.parse(localStorage.getItem(`tasknera_candidates_${id}`) || '[]');
+              if (Array.isArray(localCands)) j.candidates = Math.max(j.candidates, localCands.length);
+            }
+          } catch {}
+        }
+
         const mergedJobs = Array.from(jobMap.values());
 
         // 5. Strict deduplication of evaluations (1 per candidate)
@@ -260,28 +356,50 @@ export default function DashboardPage() {
     };
   }, [user, token]);
 
-  // Dynamic calculations
+  // Dynamic calculations strictly from REAL data
+  const totalJobsCount = jobs.length;
   const activeJobs = useMemo(() => jobs.filter(j => j.status === 'Active'), [jobs]);
+
   const totalEvaluated = useMemo(() => {
-    const fromCandidates = recentEvaluations.length;
+    const fromRecentEvals = recentEvaluations.length;
     const fromJobApplicants = jobs.reduce((acc, j) => acc + (j.candidates || 0), 0);
-    return Math.max(fromCandidates, fromJobApplicants);
+    return Math.max(fromRecentEvals, fromJobApplicants);
   }, [recentEvaluations, jobs]);
 
   const submitCount = useMemo(() => {
-    return recentEvaluations.filter(e => e.decision === 'SUBMIT' || e.decision === 'ACCEPT' || e.match >= 65).length;
+    return recentEvaluations.filter(e =>
+      e.decision === 'SUBMIT' || e.decision === 'ACCEPT' || (e.decision !== 'REJECT' && e.decision !== 'DO NOT SUBMIT' && e.match >= 65)
+    ).length;
+  }, [recentEvaluations]);
+
+  const reviewCount = useMemo(() => {
+    return recentEvaluations.filter(e =>
+      e.decision === 'REVIEW' || (!['SUBMIT', 'ACCEPT', 'REJECT', 'DO NOT SUBMIT'].includes(e.decision) && e.match >= 50 && e.match < 65)
+    ).length;
   }, [recentEvaluations]);
 
   const rejectCount = useMemo(() => {
-    return recentEvaluations.filter(e => (e.decision === 'DO NOT SUBMIT' || e.decision === 'REJECT') && e.match < 50).length;
+    return recentEvaluations.filter(e =>
+      e.decision === 'DO NOT SUBMIT' || e.decision === 'REJECT' || e.match < 50
+    ).length;
   }, [recentEvaluations]);
 
-  const avgCompliance = useMemo(() => {
+  const avgMatchScore = useMemo(() => {
     if (recentEvaluations.length === 0) return null;
-    const sum = recentEvaluations.reduce((acc, curr) => acc + curr.match, 0);
-    return Math.round((sum / recentEvaluations.length) * 10) / 10;
+    const validScores = recentEvaluations.map(e => e.match).filter(s => typeof s === 'number' && !isNaN(s) && s > 0);
+    if (validScores.length === 0) return null;
+    const sum = validScores.reduce((acc, curr) => acc + curr, 0);
+    return Math.round((sum / validScores.length) * 10) / 10;
   }, [recentEvaluations]);
 
+  const mandatoryMetCount = useMemo(() => {
+    return recentEvaluations.filter(e => e.match >= 75 || e.decision === 'SUBMIT').length;
+  }, [recentEvaluations]);
+
+  const submitRate = totalEvaluated > 0 ? ((submitCount / totalEvaluated) * 100).toFixed(1) : '0.0';
+  const reviewRate = totalEvaluated > 0 ? ((reviewCount / totalEvaluated) * 100).toFixed(1) : '0.0';
+  const rejectRate = totalEvaluated > 0 ? ((rejectCount / totalEvaluated) * 100).toFixed(1) : '0.0';
+  const mandatoryMetRate = totalEvaluated > 0 ? ((mandatoryMetCount / totalEvaluated) * 100).toFixed(1) : '0.0';
 
   const filteredJobs = useMemo(() => {
     return jobs.filter(j =>
@@ -291,45 +409,49 @@ export default function DashboardPage() {
     );
   }, [jobs, jobSearch]);
 
-  const simpleKpis = [
+  const stats = [
     {
-      label: 'Active Jobs',
-      value: (jobs.length > 0 ? jobs.length : 3).toString(),
-      sub: 'Open requisitions',
+      label: 'Total Evaluated',
+      value: totalEvaluated.toLocaleString(),
+      sub: totalJobsCount === 1 ? 'Across 1 active job' : `Across ${totalJobsCount} jobs`,
       color: 'text-slate-900',
-      badge: 'Active',
-      badgeColor: 'bg-slate-100 text-slate-700',
     },
     {
-      label: 'Candidate Pool',
-      value: (totalEvaluated > 0 ? totalEvaluated : 11).toString(),
-      sub: 'Resumes in database',
-      color: 'text-slate-900',
-      badge: 'Evaluated',
-      badgeColor: 'bg-blue-50 text-blue-700',
-    },
-    {
-      label: 'Strong Matches',
-      value: (submitCount > 0 ? submitCount : 5).toString(),
-      sub: '85%+ match score',
+      label: 'Submit Rate',
+      value: `${submitRate}%`,
+      sub: submitCount === 1 ? '1 candidate' : `${submitCount} candidates`,
       color: 'text-emerald-600',
-      badge: 'Recommended',
-      badgeColor: 'bg-emerald-50 text-emerald-700',
     },
     {
-      label: 'Needs Review',
-      value: (rejectCount > 0 ? rejectCount : 3).toString(),
-      sub: 'Criteria unmet or pending',
+      label: 'Review Rate',
+      value: `${reviewRate}%`,
+      sub: reviewCount === 1 ? '1 candidate' : `${reviewCount} candidates`,
       color: 'text-amber-600',
-      badge: 'Action Needed',
-      badgeColor: 'bg-amber-50 text-amber-700',
+    },
+    {
+      label: 'Rejection Rate',
+      value: `${rejectRate}%`,
+      sub: rejectCount === 1 ? '1 candidate' : `${rejectCount} candidates`,
+      color: 'text-rose-600',
+    },
+    {
+      label: 'Avg Match Score',
+      value: avgMatchScore !== null ? `${avgMatchScore}%` : '—',
+      sub: avgMatchScore !== null ? 'Deterministic mean' : 'No evaluations yet',
+      color: 'text-brand-orange',
+    },
+    {
+      label: 'Mandatory Met',
+      value: totalEvaluated > 0 ? `${mandatoryMetRate}%` : '—',
+      sub: totalEvaluated > 0 ? 'Hard rules compliance' : 'Pending evaluations',
+      color: 'text-purple-600',
     },
   ];
 
   const pipeline = [
     { stage: 'Total Evaluated', value: totalEvaluated, color: 'bg-slate-700' },
     { stage: 'Strong Matches',  value: submitCount,    color: 'bg-emerald-500' },
-    { stage: 'Needs Review',    value: rejectCount,    color: 'bg-rose-400' },
+    { stage: 'Needs Review',    value: reviewCount + rejectCount, color: 'bg-rose-400' },
   ];
 
   return (
@@ -346,22 +468,13 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* 4 Clean Metric Cards (1 Row) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {simpleKpis.map((k, i) => (
-            <div key={i} className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xs hover:shadow-xs transition-all">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-slate-500">{k.label}</span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${k.badgeColor}`}>
-                  {k.badge}
-                </span>
-              </div>
-              <div className={`text-2xl sm:text-3xl font-extrabold ${k.color} tracking-tight`}>
-                {k.value}
-              </div>
-              <div className="text-[11px] text-slate-400 mt-1">
-                {k.sub}
-              </div>
+        {/* Performance Stats Grid (Transferred from Reports) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+          {stats.map((s, i) => (
+            <div key={i} className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs transition-all hover:shadow-sm">
+              <div className={`text-2xl sm:text-3xl font-black mb-1 ${s.color}`}>{s.value}</div>
+              <div className="text-slate-800 text-xs font-bold">{s.label}</div>
+              <div className="text-slate-500 text-[11px] mt-0.5">{s.sub}</div>
             </div>
           ))}
         </div>

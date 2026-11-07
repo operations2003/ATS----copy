@@ -194,9 +194,50 @@ export async function semanticallyUnderstandJd(jdText: string): Promise<{
   );
   const fallbackReqs = await completeJdRequirementsControlled(jdText);
 
+  if (fallbackReqs && fallbackReqs.length > 0) {
+    return {
+      normalizedJd: null,
+      requirements: fallbackReqs,
+      aiModel: 'deterministic-fallback',
+      status: 'FALLBACK'
+    };
+  }
+
+  // 3. Tertiary Local Deterministic Fallback (Pure Node.js - 0 external dependencies)
+  console.log('[JD AI Service] Using built-in local parser for JD criteria extraction...');
+  try {
+    const { parseJobDescription } = await import('./jdParsingService');
+    const parsed = parseJobDescription(jdText, 'job_description.txt', 'text/plain', 1, 'plain-text', false);
+    const reqs = parsed?.data?.requirements || [];
+    const mappedLocalReqs: ControlledAiRequirement[] = reqs.map((r: any, idx: number) => ({
+      id: r.id || `req-local-${idx + 1}`,
+      requirement: r.requirement,
+      category: r.category || 'Technical Skill',
+      source_evidence: r.sourceEvidence || r.requirement,
+      confidence: 'HIGH' as const,
+      is_inferred: false,
+      is_mandatory: Boolean(r.isMandatory || r.mandatory),
+      weight: typeof r.weight === 'number' ? r.weight : (r.isMandatory ? 2.0 : 1.0),
+      aliases: r.aliases || [],
+      related_terms: [],
+      context: r.context || undefined
+    }));
+
+    if (mappedLocalReqs.length > 0) {
+      return {
+        normalizedJd: null,
+        requirements: mappedLocalReqs,
+        aiModel: 'deterministic-local-engine',
+        status: 'FALLBACK'
+      };
+    }
+  } catch (localErr: any) {
+    console.warn('[JD AI Service] Local parser fallback error:', localErr?.message);
+  }
+
   return {
     normalizedJd: null,
-    requirements: fallbackReqs,
+    requirements: fallbackReqs || [],
     aiModel: "deterministic-fallback",
     status: "FALLBACK",
   };

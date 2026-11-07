@@ -138,7 +138,7 @@ def parse_pdf_bytes(pdf_bytes: bytes, filename: str = "") -> Dict[str, Any]:
         try:
             import zlib
             import re
-            stream_regex = re.compile(b'stream[\r\n]+([\s\S]*?)[\r\n]+endstream')
+            stream_regex = re.compile(rb'stream[\r\n]+([\s\S]*?)[\r\n]+endstream')
             streams = stream_regex.findall(pdf_bytes)
             stream_pieces = []
             for s in streams:

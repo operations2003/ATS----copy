@@ -594,7 +594,8 @@ export default function AdminPage() {
     currentEmail === 'operations@tasknera.com' ||
     currentEmail === 'admin@gmail.com' ||
     currentEmail === 'admin@tasknera.com' ||
-    currentEmail === 'sheetalbedi@tasknera.com';
+    currentEmail === 'sheetalbedi@tasknera.com' ||
+    currentEmail === 'demo@gmail.com';
 
   // Smooth redirection for recruiters or unauthenticated visitors without showing any unauthorized login card
   useEffect(() => {

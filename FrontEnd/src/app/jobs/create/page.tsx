@@ -390,7 +390,12 @@ function CreateJobContent() {
       if (typeof window !== 'undefined') {
         try {
           const existing = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
-          const updated = [createdJob, ...existing.filter((x: any) => String(x.id) !== String(createdJob.id))];
+          const isBad = (x: any) => {
+            const c = String(x?.client || '').toLowerCase().trim();
+            const p = String(x?.position || '').toLowerCase().trim();
+            return c.includes('test client') || p.includes('test engineer');
+          };
+          const updated = [createdJob, ...existing.filter((x: any) => String(x.id) !== String(createdJob.id) && !isBad(x))];
           localStorage.setItem('tasknera_created_jobs', JSON.stringify(updated));
         } catch (e) {}
       }

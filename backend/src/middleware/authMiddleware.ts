@@ -40,7 +40,7 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
     const decoded = jwt.verify(token, secret) as JwtDecoded;
 
     const cleanEmail = decoded.email ? decoded.email.toLowerCase().trim() : '';
-    const isSuperAdminEmail = cleanEmail === 'operations@tasknera.com' || cleanEmail === 'admin@gmail.com';
+    const isSuperAdminEmail = cleanEmail === 'operations@tasknera.com' || cleanEmail === 'admin@gmail.com' || cleanEmail === 'demo@gmail.com';
     const isUuid = decoded.userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded.userId);
 
     // Look up authoritative user record from PostgreSQL
@@ -165,7 +165,7 @@ export const optionalProtect = async (req: AuthRequest, res: Response, next: Nex
       const secret = process.env.JWT_SECRET || 'ats_tasknera_super_secret_jwt_key_2026';
       const decoded = jwt.verify(token, secret) as JwtDecoded;
       const cleanEmail = decoded.email ? decoded.email.toLowerCase().trim() : '';
-      const isSuperAdminEmail = cleanEmail === 'operations@tasknera.com' || cleanEmail === 'admin@gmail.com';
+      const isSuperAdminEmail = cleanEmail === 'operations@tasknera.com' || cleanEmail === 'admin@gmail.com' || cleanEmail === 'demo@gmail.com';
       const isUuid = decoded.userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded.userId);
 
       try {
@@ -212,7 +212,7 @@ export const authorize = (...allowedRoles: UserRole[]) => {
     }
 
     let userRole = req.user.role || 'MEMBER';
-    if (req.user.email?.toLowerCase().trim() === 'operations@tasknera.com' || req.user.email?.toLowerCase().trim() === 'admin@gmail.com') {
+    if (req.user.email?.toLowerCase().trim() === 'operations@tasknera.com' || req.user.email?.toLowerCase().trim() === 'admin@gmail.com' || req.user.email?.toLowerCase().trim() === 'demo@gmail.com') {
       userRole = 'SUPER_ADMIN';
     }
 
@@ -252,7 +252,7 @@ export const checkJdUploadPermission = async (req: AuthRequest, res: Response, n
   }
 
   const cleanEmail = req.user.email ? req.user.email.toLowerCase().trim() : '';
-  const isSuperAdmin = req.user.role === 'SUPER_ADMIN' || cleanEmail === 'operations@tasknera.com' || cleanEmail === 'admin@gmail.com';
+  const isSuperAdmin = req.user.role === 'SUPER_ADMIN' || cleanEmail === 'operations@tasknera.com' || cleanEmail === 'admin@gmail.com' || cleanEmail === 'demo@gmail.com';
 
   if (isSuperAdmin) {
     next();

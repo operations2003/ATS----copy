@@ -814,11 +814,28 @@ export const cleanExtractedName = (
       return null;
     }
   } else {
+    // Strip leading overview labels if present
+    cleaned = cleaned
+      .replace(
+        /^(?:overview\s+own\s+|role\s+overview:\s*|job\s+overview:\s*|overview:\s*|overview\s+|summary:\s*|about\s+the\s+role:\s*)/i,
+        "",
+      )
+      .trim();
+
+    const lowerCleaned = cleaned.toLowerCase();
+    const wordCount = cleaned.split(/\s+/).length;
+
     if (
-      ["not specified", "unknown", "n/a", "na", "none"].includes(
-        cleaned.toLowerCase(),
+      ["not specified", "unknown", "n/a", "na", "none"].includes(lowerCleaned) ||
+      cleaned.length < 2 ||
+      cleaned.length > 75 ||
+      wordCount > 8 ||
+      /^(?:own\s+|responsible\s+for|managing\s+|we\s+are|looking\s+for|execute\s+|to\s+lead)\b/i.test(
+        lowerCleaned,
       ) ||
-      cleaned.length < 2
+      /(?:for|and|to|with|in|at)$/i.test(cleaned) ||
+      lowerCleaned.includes("cross-functional") ||
+      lowerCleaned.includes("demand generation,")
     ) {
       return null;
     }
@@ -1470,6 +1487,13 @@ export const extractCompanyAndPosition = (
         "",
       )
       .trim();
+
+    // Skip overview headers (not position titles)
+    const isOverviewHeader =
+      /^(?:role\s+overview|job\s+overview|position\s+overview|overview\s+of\s+the\s+role|company\s+overview|about\s+the\s+role)\b/i.test(
+        cleanPosScanLine,
+      );
+    if (isOverviewHeader) continue;
 
     // Explicit Position Label (e.g. "Open Positions", "Position:", "Job Title:")
     const posLabelMatch = cleanPosScanLine.match(

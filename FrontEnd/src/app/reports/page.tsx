@@ -7,15 +7,6 @@ import Footer from '@/components/Footer';
 export default function ReportsPage() {
   const [period, setPeriod] = useState('30');
 
-  const stats = [
-    { label: 'Total Evaluated', value: '1,847', sub: 'Across 24 jobs', color: 'text-slate-900' },
-    { label: 'Submit Rate', value: '42.0%', sub: '776 candidates', color: 'text-emerald-600' },
-    { label: 'Review Rate', value: '31.0%', sub: '572 candidates', color: 'text-amber-600' },
-    { label: 'Rejection Rate', value: '27.0%', sub: '499 candidates', color: 'text-rose-600' },
-    { label: 'Avg Match Score', value: '79.2%', sub: 'Deterministic mean', color: 'text-brand-orange' },
-    { label: 'Mandatory Met', value: '92.4%', sub: 'Hard rules compliance', color: 'text-purple-600' },
-  ];
-
   const pipeline = [
     { stage: 'Submitted to Client', count: 776, color: 'bg-emerald-500', max: 776 },
     { stage: 'Client Interview Stage', count: 312, color: 'bg-blue-500', max: 776 },
@@ -56,17 +47,6 @@ export default function ReportsPage() {
             <option value="90">Last 90 days</option>
             <option value="all">All time records</option>
           </select>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-          {stats.map((s, i) => (
-            <div key={i} className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs transition-all hover:shadow-sm">
-              <div className={`text-2xl font-black mb-1 ${s.color}`}>{s.value}</div>
-              <div className="text-slate-800 text-xs font-bold">{s.label}</div>
-              <div className="text-slate-500 text-[11px] mt-0.5">{s.sub}</div>
-            </div>
-          ))}
         </div>
 
         {/* Funnel & Position Pipelines */}

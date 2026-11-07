@@ -24,7 +24,7 @@ export const getDashboardSummaryController = async (
 
     const currentUserId = req.user.userId;
     const callerRole = req.user.role || 'MEMBER';
-    const isSuperAdmin = callerRole === 'SUPER_ADMIN' || req.user.email?.toLowerCase().trim() === 'operations@tasknera.com' || req.user.email?.toLowerCase().trim() === 'admin@gmail.com';
+    const isSuperAdmin = callerRole === 'SUPER_ADMIN' || req.user.email?.toLowerCase().trim() === 'operations@tasknera.com' || req.user.email?.toLowerCase().trim() === 'admin@gmail.com' || req.user.email?.toLowerCase().trim() === 'demo@gmail.com';
     const isClientAdmin = callerRole === 'CLIENT_ADMIN' || callerRole === 'ADMIN';
     const userOrgId = req.user.organizationId || 'org-tasknera';
 
