@@ -1981,7 +1981,7 @@ export default function JobCandidatesPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                   </svg>
                 )}
-                <span>{showUploadZone ? 'Close Dropzone' : '+ Upload CVs'}</span>
+                <span>{showUploadZone ? 'Close Dropzone' : 'Upload CVs'}</span>
               </button>
             </div>
           </div>
