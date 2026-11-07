@@ -339,27 +339,11 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 flex-1 w-full">
 
         {/* Clean, Simple Header */}
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hiring Dashboard</h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Welcome back, {user?.name || user?.email?.split('@')[0] || 'Recruiter'}. Track open positions and candidate matches.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {canUploadJd && (
-              <Link
-                href="/jobs/create"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#FF5A36] hover:bg-[#E04826] text-white text-xs font-semibold rounded-xl transition-all shadow-xs"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                </svg>
-                <span>Upload Job Description</span>
-              </Link>
-            )}
-          </div>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Hiring Dashboard</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Welcome back, {user?.name || user?.email?.split('@')[0] || 'Recruiter'}. Track open positions and candidate matches.
+          </p>
         </div>
 
         {/* 4 Clean Metric Cards (1 Row) */}
@@ -386,26 +370,21 @@ export default function DashboardPage() {
 
           {/* Active jobs table */}
           <div className="lg:col-span-2 bg-white border border-slate-200/90 rounded-3xl shadow-sm overflow-hidden flex flex-col">
-            <div className="p-5 sm:px-6 sm:py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/70">
+            <div className="p-4 sm:px-6 sm:py-4 border-b border-slate-100 flex items-center justify-between gap-3 bg-slate-50/70">
               <div>
-                <h2 className="text-base font-bold text-[#1E293B]">Your Active Jobs & JDs</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Click a position to review requirements or evaluate candidate CVs</p>
+                <h2 className="text-sm font-bold text-[#1E293B]">Active Job Requisitions</h2>
+                <p className="text-[11px] text-slate-500">Open positions for candidate matching</p>
               </div>
 
-              <div className="flex items-center gap-3">
-                {jobs.length > 0 && (
-                  <input
-                    type="text"
-                    placeholder="Filter positions..."
-                    value={jobSearch}
-                    onChange={e => setJobSearch(e.target.value)}
-                    className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-orange/30 w-44"
-                  />
-                )}
-                <Link href="/jobs" className="text-xs text-brand-orange font-bold hover:underline whitespace-nowrap">
-                  All ({jobs.length}) →
-                </Link>
-              </div>
+              {jobs.length > 0 && (
+                <input
+                  type="text"
+                  placeholder="Filter positions..."
+                  value={jobSearch}
+                  onChange={e => setJobSearch(e.target.value)}
+                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#FF5A36] w-44"
+                />
+              )}
             </div>
 
             <div className="overflow-x-auto flex-1">
@@ -478,9 +457,8 @@ export default function DashboardPage() {
 
             {/* Recent evaluations */}
             <div className="bg-white border border-slate-200/90 rounded-3xl shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/70">
-                <h2 className="text-sm font-bold text-[#1E293B]">Recent ATS Evaluations</h2>
-                <Link href="/candidates" className="text-xs text-brand-orange font-bold hover:underline">Talent Pool →</Link>
+              <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/70">
+                <h2 className="text-sm font-bold text-[#1E293B]">Recent Candidate Evaluations</h2>
               </div>
               <div className="divide-y divide-slate-100">
                 {recentEvaluations.length === 0 ? (

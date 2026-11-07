@@ -329,7 +329,7 @@ export const Header: React.FC = () => {
           </form>
         </div>
 
-        {/* Right: Primary Action Buttons */}
+        {/* Right: Single Primary Action */}
         <div className="flex items-center gap-2 sm:gap-3">
           {user?.subscription?.isTrial && !user?.subscription?.isExpired && (
             <div
@@ -342,23 +342,13 @@ export const Header: React.FC = () => {
           )}
 
           <Link
-            href="/jobs"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-semibold rounded-xl transition-all shadow-2xs hover:border-slate-400 whitespace-nowrap"
-          >
-            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-            <span>Upload CVs</span>
-          </Link>
-
-          <Link
             href="/jobs/create"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#FF5A36] hover:bg-[#E04826] text-white text-xs font-bold rounded-xl transition-all shadow-sm whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#FF5A36] hover:bg-[#E04826] text-white text-xs font-bold rounded-xl transition-all shadow-xs whitespace-nowrap"
           >
             <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
-            <span>New Job</span>
+            <span>+ New Job</span>
           </Link>
         </div>
       </header>
