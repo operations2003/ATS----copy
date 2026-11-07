@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
@@ -71,6 +71,7 @@ export default function AdminPage() {
     totalResumesSeen: number;
     totalShortlisted: number;
     conversionRate: number;
+    meanScore?: number | null;
   } | null>(null);
 
   const [loadingMembers, setLoadingMembers] = useState(false);
@@ -408,21 +409,90 @@ export default function AdminPage() {
 
   const stats = atsStore.getAdminOverviewStats();
 
+  // Real candidate evaluations collected across jobs and storage
+  const allCandidateEvaluations = useMemo(() => {
+    const list: Array<{ score: number; decision: string }> = [];
+
+    // From candidates state
+    for (const c of candidates) {
+      const score = Math.round((c as any).matchScore ?? (c as any).score ?? (c as any).atsScore ?? 0);
+      if (score > 0) {
+        list.push({ score, decision: (c.decision || (score >= 65 ? 'SUBMIT' : 'DO NOT SUBMIT')).toUpperCase() });
+      }
+    }
+
+    // Ingest all candidate evaluations stored in localStorage across all jobs
+    if (typeof window !== 'undefined') {
+      try {
+        const pool = JSON.parse(localStorage.getItem('tasknera_candidates_pool') || '[]');
+        if (Array.isArray(pool)) {
+          for (const c of pool) {
+            const score = Math.round(c.matchScore ?? c.atsScore ?? c.score ?? 0);
+            if (c.name && score > 0) {
+              list.push({ score, decision: (c.decision || (score >= 65 ? 'SUBMIT' : 'DO NOT SUBMIT')).toUpperCase() });
+            }
+          }
+        }
+
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('tasknera_candidates_') && key !== 'tasknera_candidates_pool' && !key.startsWith('tasknera_candidates_count_')) {
+            const candList = JSON.parse(localStorage.getItem(key) || '[]');
+            if (Array.isArray(candList)) {
+              for (const c of candList) {
+                const score = Math.round(c.matchScore ?? c.atsScore ?? c.score ?? 0);
+                if (c.name && score > 0) {
+                  list.push({ score, decision: (c.decision || (score >= 65 ? 'SUBMIT' : 'DO NOT SUBMIT')).toUpperCase() });
+                }
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+    return list;
+  }, [candidates]);
+
+  // Candidates who passed ATS evaluation (SUBMIT, ACCEPT, or match score >= 65%)
+  const passedCandidatesCount = useMemo(() => {
+    return allCandidateEvaluations.filter((e: { score: number; decision: string }) =>
+      e.decision === 'SUBMIT' || e.decision === 'ACCEPT' || (e.decision !== 'REJECT' && e.decision !== 'DO NOT SUBMIT' && e.score >= 65)
+    ).length;
+  }, [allCandidateEvaluations]);
+
+  const realMeanScore = useMemo(() => {
+    if (overviewStats?.meanScore !== undefined && overviewStats.meanScore !== null) {
+      return overviewStats.meanScore;
+    }
+    const validScores = allCandidateEvaluations
+      .map((e: { score: number; decision: string }) => e.score)
+      .filter((s: number) => typeof s === 'number' && !isNaN(s) && s > 0);
+    if (validScores.length === 0) return null;
+    const sum = validScores.reduce((acc: number, curr: number) => acc + curr, 0);
+    return Math.round((sum / validScores.length) * 10) / 10;
+  }, [allCandidateEvaluations, overviewStats]);
+
   // Aggregate stats across team members and organization so client admin always sees real data
   const teamTotalResumes = recruiters.reduce((sum, r) => sum + (r.resumesSeen || 0), 0);
   const teamTotalShortlisted = recruiters.reduce((sum, r) => sum + (r.tlApprovedCount || 0), 0);
 
-  const effectiveTotalResumes = overviewStats?.totalResumesSeen !== undefined
-    ? Math.max(overviewStats.totalResumesSeen, teamTotalResumes)
-    : Math.max(teamTotalResumes, stats.totalResumesSeen);
+  const effectiveTotalResumes = Math.max(
+    overviewStats?.totalResumesSeen || 0,
+    teamTotalResumes,
+    stats.totalResumesSeen,
+    allCandidateEvaluations.length
+  );
 
-  const effectiveTotalShortlisted = overviewStats?.totalShortlisted !== undefined
-    ? Math.max(overviewStats.totalShortlisted, teamTotalShortlisted)
-    : Math.max(teamTotalShortlisted, stats.totalShortlisted);
+  const effectiveTotalSubmitted = Math.max(
+    overviewStats?.totalShortlisted || 0,
+    teamTotalShortlisted,
+    stats.totalShortlisted,
+    passedCandidatesCount
+  );
 
   const effectiveConversionRate = effectiveTotalResumes > 0
-    ? Math.round((effectiveTotalShortlisted / effectiveTotalResumes) * 100)
-    : (overviewStats?.conversionRate ?? stats.conversionRate);
+    ? Math.round((effectiveTotalSubmitted / effectiveTotalResumes) * 100)
+    : 0;
 
   const existingDepartments = Array.from(
     new Set(
@@ -792,20 +862,22 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Metric 4: Shortlisted for Client */}
+          {/* Metric 3: Submitted Candidates (Passed) */}
           <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">Shortlisted Candidates</span>
+              <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">Submitted Candidates</span>
               <span className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center font-bold text-xs">
                 ⭐
               </span>
             </div>
             <div className="text-3xl font-black text-slate-900 tracking-tight">
-              {effectiveTotalShortlisted}
+              {effectiveTotalSubmitted}
             </div>
             <div className="flex items-center justify-between text-xs text-slate-500 mt-2.5 pt-2.5 border-t border-slate-100">
               <span className="text-emerald-600 font-bold">{effectiveConversionRate}% Conversion</span>
-              <span className="font-semibold text-slate-700">Mean Score: 88%</span>
+              <span className="font-semibold text-slate-700">
+                {realMeanScore !== null ? `Mean Score: ${realMeanScore}%` : 'Mean Score: —'}
+              </span>
             </div>
           </div>
         </div>

@@ -619,7 +619,7 @@ export const getTAMembers = async (req: AuthRequest, res: Response): Promise<voi
     const orgEvaluationWhere: any = targetOrgId ? { organizationId: targetOrgId } : {};
     const orgCandidateWhere: any = targetOrgId ? { organizationId: targetOrgId } : {};
 
-    const [totalOrgCandidates, totalOrgEvaluations, totalOrgShortlisted] = await Promise.all([
+    const [totalOrgCandidates, totalOrgEvaluations, totalOrgShortlisted, orgEvaluations] = await Promise.all([
       prisma.candidate.count({ where: orgCandidateWhere }),
       prisma.evaluation.count({ where: orgEvaluationWhere }),
       prisma.evaluation.count({
@@ -627,11 +627,26 @@ export const getTAMembers = async (req: AuthRequest, res: Response): Promise<voi
           ...orgEvaluationWhere,
           OR: [
             { decision: 'SUBMIT' },
-            { score: { gte: 70 } }
+            { decision: 'ACCEPT' },
+            { score: { gte: 65 } },
+            { atsScore: { gte: 65 } }
           ]
         }
+      }),
+      prisma.evaluation.findMany({
+        where: orgEvaluationWhere,
+        select: { score: true, atsScore: true },
+        take: 300,
+        orderBy: { createdAt: 'desc' }
       })
     ]);
+
+    const validScores = orgEvaluations
+      .map((e: any) => e.atsScore ?? e.score)
+      .filter((s: any) => typeof s === 'number' && !isNaN(s) && s > 0);
+    const meanScore = validScores.length > 0
+      ? Math.round((validScores.reduce((a: number, b: number) => a + b, 0) / validScores.length) * 10) / 10
+      : null;
 
     const membersTotalResumes = taMembers.reduce((sum, m) => sum + (m.resumesSeen || 0), 0);
     const membersTotalShortlisted = taMembers.reduce((sum, m) => sum + (m.tlApprovedCount || 0), 0);
@@ -650,6 +665,7 @@ export const getTAMembers = async (req: AuthRequest, res: Response): Promise<voi
         totalResumesSeen,
         totalShortlisted,
         conversionRate,
+        meanScore,
         activeRecruiters: taMembers.length
       }
     });
