@@ -159,15 +159,6 @@ export default function EvaluationsPage() {
                 </button>
               </div>
             )}
-            <Link
-              href="/jobs/create"
-              className="flex items-center gap-2 px-5 py-3 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-bold rounded-xl transition-all shadow-orange hover:shadow-orange-lg hover:-translate-y-0.5"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-              </svg>
-              New Evaluation
-            </Link>
           </div>
         </div>
 

@@ -329,7 +329,7 @@ export const Header: React.FC = () => {
           </form>
         </div>
 
-        {/* Right: Single Primary Action */}
+        {/* Right: Single Global Action */}
         <div className="flex items-center gap-2 sm:gap-3">
           {user?.subscription?.isTrial && !user?.subscription?.isExpired && (
             <div
@@ -341,15 +341,17 @@ export const Header: React.FC = () => {
             </div>
           )}
 
-          <Link
-            href="/jobs/create"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#FF5A36] hover:bg-[#E04826] text-white text-xs font-bold rounded-xl transition-all shadow-xs whitespace-nowrap"
-          >
-            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-            </svg>
-            <span>+ New Job</span>
-          </Link>
+          {!pathname?.startsWith('/jobs/create') && (
+            <Link
+              href="/jobs/create"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#FF5A36] hover:bg-[#E04826] text-white text-xs font-bold rounded-xl transition-all shadow-xs whitespace-nowrap"
+            >
+              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>New Job</span>
+            </Link>
+          )}
         </div>
       </header>
 
