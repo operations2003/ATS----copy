@@ -22,7 +22,7 @@ interface InterviewNotification {
 const INTERVIEW_STORAGE_KEY = 'tasknera_interviews_frontend_v1';
 const NOTIFICATION_READ_STORAGE_KEY = 'tasknera_interview_notification_read_v1';
 
-export const Header: React.FC = () => {
+const Header: React.FC = () => {
   const [mobileOpen, setMobileOpen]     = useState(false);
   const [authOpen, setAuthOpen]         = useState(false);
   const [demoOpen, setDemoOpen]         = useState(false);
@@ -756,3 +756,4 @@ export const Header: React.FC = () => {
 };
 
 export default Header;
+export { Header };
