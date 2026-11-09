@@ -45,8 +45,8 @@ const SCORE_BUCKETS = [
 ];
 
 const FUNNEL_STAGES = [
-  'Screening', 'Shortlisted', 'Recruiter screen',
-  'Technical interview', 'HR interview', 'Selected', 'Offered', 'Joined',
+  'Screening', 'Shortlisted', 'Recruiter Name',
+  'Round 1 Phase', 'Round 2 Phase', 'Selected', 'Offered', 'Joined',
 ];
 
 const scoreColor = (n: number | null) => {
@@ -151,9 +151,9 @@ export default function DashboardPage() {
       let stage = '';
       if (normalized === 'screening' || status === 'SCREENED' || status === 'SOURCED') stage = 'Screening';
       else if (normalized === 'shortlisted' || ['SHORTLISTED', 'PENDING_TL_REVIEW', 'TL_APPROVED', 'OVERRIDDEN'].includes(status)) stage = 'Shortlisted';
-      else if (normalized === 'recruiter name' || normalized === 'recruiter screen') stage = 'Recruiter screen';
-      else if (normalized === 'round 1 phase' || normalized.includes('technical')) stage = 'Technical interview';
-      else if (normalized === 'round 2 phase' || normalized.includes('hr')) stage = 'HR interview';
+      else if (normalized === 'recruiter name' || normalized === 'recruiter screen') stage = 'Recruiter Name';
+      else if (normalized === 'round 1 phase' || normalized.includes('technical')) stage = 'Round 1 Phase';
+      else if (normalized === 'round 2 phase' || normalized.includes('hr')) stage = 'Round 2 Phase';
       else if (normalized === 'selected') stage = 'Selected';
       else if (normalized === 'offered') stage = 'Offered';
       else if (normalized === 'joined' || status === 'JOINED') stage = 'Joined';
@@ -166,7 +166,7 @@ export default function DashboardPage() {
       interviews.forEach((interview: any, index: number) => {
         const round = String(interview?.round || '').toLowerCase();
         const candidateId = String(interview?.candidateId || interview?.id || `interview-${index}`);
-        const stage = round.includes('hr') ? 'HR interview' : round.includes('technical') ? 'Technical interview' : round.includes('recruiter') ? 'Recruiter screen' : '';
+        const stage = round.includes('hr') ? 'Round 2 Phase' : round.includes('technical') ? 'Round 1 Phase' : round.includes('recruiter') ? 'Recruiter Name' : '';
         if (stage && interview.status !== 'cancelled') stageMembers.get(stage)?.add(candidateId);
       });
     } catch {}
@@ -480,14 +480,9 @@ export default function DashboardPage() {
     return Math.round((sum / validScores.length) * 10) / 10;
   }, [recentEvaluations]);
 
-  const mandatoryMetCount = useMemo(() => {
-    return recentEvaluations.filter(e => e.match >= 75 || e.decision === 'SUBMIT').length;
-  }, [recentEvaluations]);
-
   const submitRate = totalEvaluated > 0 ? ((submitCount / totalEvaluated) * 100).toFixed(1) : '0.0';
   const reviewRate = totalEvaluated > 0 ? ((reviewCount / totalEvaluated) * 100).toFixed(1) : '0.0';
   const rejectRate = totalEvaluated > 0 ? ((rejectCount / totalEvaluated) * 100).toFixed(1) : '0.0';
-  const mandatoryMetRate = totalEvaluated > 0 ? ((mandatoryMetCount / totalEvaluated) * 100).toFixed(1) : '0.0';
 
   const filteredJobs = useMemo(() => {
     return jobs.filter(j =>
@@ -529,9 +524,9 @@ export default function DashboardPage() {
       color: 'text-brand-orange',
     },
     {
-      label: 'Mandatory Met',
-      value: totalEvaluated > 0 ? `${mandatoryMetRate}%` : '—',
-      sub: totalEvaluated > 0 ? 'Hard rules compliance' : 'Pending evaluations',
+      label: 'Conversion Percentage',
+      value: `${submitRate}%`,
+      sub: submitCount === 1 ? '1 candidate converted' : `${submitCount} candidates converted`,
       color: 'text-purple-600',
     },
   ];

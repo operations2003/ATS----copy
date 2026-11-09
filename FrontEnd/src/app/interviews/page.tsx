@@ -199,6 +199,7 @@ export default function InterviewsPage() {
   useEffect(() => {
     if (!isHydrated) return;
     localStorage.setItem(INTERVIEW_STORAGE_KEY, JSON.stringify(store));
+    window.dispatchEvent(new Event('tasknera:interviews-updated'));
   }, [isHydrated, store]);
 
   const requisitionOptions = useMemo(() => {

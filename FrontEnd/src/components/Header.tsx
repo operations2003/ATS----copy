@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
@@ -8,6 +8,19 @@ import { AuthModal } from './AuthModal';
 import { MyProfileModal } from './MyProfileModal';
 import BookDemoModal from './BookDemoModal';
 import Logo from './Logo';
+
+interface InterviewNotification {
+  id: string;
+  interviewId: string;
+  kind: 'today' | 'reminder';
+  title: string;
+  description: string;
+  timeLabel: string;
+  startAt: string;
+}
+
+const INTERVIEW_STORAGE_KEY = 'tasknera_interviews_frontend_v1';
+const NOTIFICATION_READ_STORAGE_KEY = 'tasknera_interview_notification_read_v1';
 
 export const Header: React.FC = () => {
   const [mobileOpen, setMobileOpen]     = useState(false);
@@ -17,10 +30,98 @@ export const Header: React.FC = () => {
   const [profileOpen, setProfileOpen]   = useState(false);
   const [searchQuery, setSearchQuery]   = useState('');
   const [mounted, setMounted]           = useState(false);
+  const [interviewNotifications, setInterviewNotifications] = useState<InterviewNotification[]>([]);
+  const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    const refreshNotifications = () => {
+      let interviews: any[] = [];
+      try {
+        const saved = JSON.parse(localStorage.getItem(INTERVIEW_STORAGE_KEY) || '{}');
+        interviews = Array.isArray(saved?.interviews) ? saved.interviews : [];
+      } catch {
+        interviews = [];
+      }
+
+      let readIds: string[] = [];
+      try {
+        const savedReadIds = JSON.parse(localStorage.getItem(NOTIFICATION_READ_STORAGE_KEY) || '[]');
+        if (Array.isArray(savedReadIds)) readIds = savedReadIds.map(String);
+      } catch {
+        readIds = [];
+      }
+      setReadNotificationIds(new Set(readIds));
+
+      const now = Date.now();
+      const notifications: InterviewNotification[] = [];
+      interviews.forEach((interview: any) => {
+        if (String(interview?.status || '').toLowerCase() !== 'scheduled') return;
+        const start = new Date(interview.startAt);
+        const startTime = start.getTime();
+        if (!Number.isFinite(startTime)) return;
+
+        const candidateName = String(interview.candidateName || 'Candidate');
+        const roleAndRound = [interview.role, interview.round].filter(Boolean).join(' · ');
+        const time = start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+        const interviewId = String(interview.id || `${interview.candidateId || candidateName}-${interview.startAt}`);
+        const todayId = `today:${interviewId}:${start.toLocaleDateString()}`;
+        const isToday = start.toDateString() === new Date(now).toDateString();
+
+        if (isToday) {
+          notifications.push({
+            id: todayId,
+            interviewId,
+            kind: 'today',
+            title: 'Interview scheduled today',
+            description: [candidateName, roleAndRound].filter(Boolean).join(' · '),
+            timeLabel: `Today at ${time}`,
+            startAt: interview.startAt,
+          });
+        }
+
+        if (startTime > now && startTime - now <= 60 * 60 * 1000) {
+          const minutesRemaining = Math.max(1, Math.ceil((startTime - now) / 60_000));
+          notifications.push({
+            id: `reminder:${interviewId}`,
+            interviewId,
+            kind: 'reminder',
+            title: 'Interview reminder',
+            description: `${candidateName}${roleAndRound ? ` · ${roleAndRound}` : ''} starts in ${minutesRemaining >= 60 ? '1 hour' : `${minutesRemaining} min`}`,
+            timeLabel: `Starts at ${time}`,
+            startAt: interview.startAt,
+          });
+        }
+      });
+
+      notifications.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime() || (a.kind === 'reminder' ? -1 : 1));
+      setInterviewNotifications(notifications);
+    };
+
+    refreshNotifications();
+    const poll = window.setInterval(refreshNotifications, 30_000);
+    window.addEventListener('storage', refreshNotifications);
+    window.addEventListener('tasknera:interviews-updated', refreshNotifications);
+    return () => {
+      window.clearInterval(poll);
+      window.removeEventListener('storage', refreshNotifications);
+      window.removeEventListener('tasknera:interviews-updated', refreshNotifications);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!notificationPanelRef.current?.contains(event.target as Node)) setNotificationsOpen(false);
+    };
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    return () => document.removeEventListener('mousedown', closeOnOutsideClick);
+  }, [notificationsOpen]);
 
   const pathname = usePathname();
   const router   = useRouter();
@@ -88,6 +189,17 @@ export const Header: React.FC = () => {
     } else {
       router.push(`/candidates?search=${term}`);
     }
+  };
+
+  const unreadNotificationCount = interviewNotifications.filter(notification => !readNotificationIds.has(notification.id)).length;
+
+  const markNotificationsRead = () => {
+    const nextReadIds = new Set(readNotificationIds);
+    interviewNotifications.forEach(notification => nextReadIds.add(notification.id));
+    setReadNotificationIds(nextReadIds);
+    try {
+      localStorage.setItem(NOTIFICATION_READ_STORAGE_KEY, JSON.stringify(Array.from(nextReadIds)));
+    } catch {}
   };
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -356,6 +468,78 @@ export const Header: React.FC = () => {
 
         {/* Right: Status / Trial Badge */}
         <div className="flex items-center gap-2 sm:gap-3">
+          <div className="relative" ref={notificationPanelRef}>
+            <button
+              type="button"
+              onClick={() => setNotificationsOpen(open => !open)}
+              aria-label={`Notifications${unreadNotificationCount ? `, ${unreadNotificationCount} unread` : ''}`}
+              aria-haspopup="dialog"
+              aria-expanded={notificationsOpen}
+              className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
+              </svg>
+              {unreadNotificationCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-rose-500 px-1 text-[9px] font-bold leading-none text-white">
+                  {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                </span>
+              )}
+            </button>
+
+            {notificationsOpen && (
+              <div role="dialog" aria-label="Notifications" className="absolute right-0 top-full z-[160] mt-3 w-[min(420px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.18)]">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3.5">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-bold text-slate-900">Notifications</h2>
+                    {unreadNotificationCount > 0 && <span className="rounded-full bg-[#EEE8FF] px-2 py-0.5 text-[10px] font-bold text-[#5436C8]">{unreadNotificationCount} new</span>}
+                  </div>
+                  {unreadNotificationCount > 0 && (
+                    <button type="button" onClick={markNotificationsRead} className="shrink-0 text-[11px] font-semibold text-[#5436C8] transition hover:text-[#39239E]">
+                      ✓ Mark all read
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-[min(60vh,420px)] overflow-y-auto">
+                  {interviewNotifications.length === 0 ? (
+                    <div className="px-5 py-10 text-center">
+                      <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
+                      </div>
+                      <p className="text-xs font-semibold text-slate-700">No interview reminders right now</p>
+                      <p className="mt-1 text-[11px] text-slate-400">Today&apos;s interviews and one-hour reminders will appear here.</p>
+                    </div>
+                  ) : interviewNotifications.map(notification => {
+                    const isRead = readNotificationIds.has(notification.id);
+                    return (
+                      <div key={notification.id} className={`flex gap-3 border-b border-slate-100 px-4 py-3.5 last:border-b-0 ${isRead ? 'bg-white' : 'bg-[#FCFBFF]'}`}>
+                        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F7F2FB] text-[#62347B]">
+                          {notification.kind === 'reminder' ? (
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="8.5" strokeWidth="1.8" /><path strokeLinecap="round" strokeWidth="1.8" d="M12 7v5l3 2" /></svg>
+                          ) : (
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3.5" y="5" width="17" height="16" rx="2" strokeWidth="1.8" /><path strokeLinecap="round" strokeWidth="1.8" d="M7.5 3.5v3M16.5 3.5v3M3.5 9h17M8 13h2m4 0h2" /></svg>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-xs font-bold leading-5 text-slate-800">{notification.title}</p>
+                            {!isRead && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#5436C8]" aria-label="Unread" />}
+                          </div>
+                          <p className="mt-0.5 text-[11px] leading-[1.45] text-slate-500">{notification.description}</p>
+                          <p className="mt-1 text-[10px] font-medium text-slate-400">{notification.timeLabel}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <Link href="/interviews" onClick={() => setNotificationsOpen(false)} className="flex items-center justify-center gap-1 border-t border-slate-100 px-4 py-3 text-xs font-bold text-[#5436C8] transition hover:bg-slate-50">
+                  View interviews <span aria-hidden="true">›</span>
+                </Link>
+              </div>
+            )}
+          </div>
           {user?.subscription?.isTrial && !user?.subscription?.isExpired && (
             <div
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10.5px] font-bold uppercase tracking-wider"
