@@ -16,7 +16,15 @@ type PipelineStage =
   | 'Offered'
   | 'Joined';
 
-type InterviewRound = 'Recruiter Screen' | 'Technical Interview' | 'HR Interview';
+type InterviewRound =
+  | 'Recruiter Screen'
+  | 'Technical Interview'
+  | 'Technical Interview (Round 1)'
+  | 'Technical Interview (Round 2)'
+  | 'Managerial / System Design'
+  | 'Leadership / HR Round'
+  | 'HR Interview'
+  | string;
 
 interface PipelineCandidate {
   id: string;
@@ -103,15 +111,16 @@ export default function PipelinePage() {
   const [requisitionFilter, setRequisitionFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
 
-  // Schedule Interview Modal State (triggered when moving to Round 1 Phase)
+  // Schedule Interview Modal State (triggered when moving to Round 1 Phase or Round 2 Phase)
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [schedulingCandidate, setSchedulingCandidate] = useState<PipelineCandidate | null>(null);
+  const [schedulingTargetStage, setSchedulingTargetStage] = useState<PipelineStage>('Round 1 Phase');
   const [scheduleError, setScheduleError] = useState('');
   const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({
-    round: 'Technical Interview',
+    round: 'Technical Interview (Round 1)',
     startAt: getDefaultStartAt(),
     interviewer: '',
-    meetingPlace: 'Google Meet',
+    meetingPlace: '',
     notes: '',
   });
 
@@ -377,15 +386,16 @@ export default function PipelinePage() {
     const nextStage = stages[currentIndex + direction];
     if (!nextStage) return;
 
-    // ── SPECIFIC TRIGGER: Once moved to Round 1 Phase, show the Schedule Interview modal ──
-    if (nextStage === 'Round 1 Phase') {
+    // ── SPECIFIC TRIGGER: When moving to Round 1 Phase OR Round 2 Phase, show Schedule Interview modal ──
+    if (nextStage === 'Round 1 Phase' || nextStage === 'Round 2 Phase') {
       setSchedulingCandidate(candidate);
+      setSchedulingTargetStage(nextStage);
       setScheduleError('');
       setScheduleForm({
-        round: 'Technical Interview',
+        round: nextStage === 'Round 2 Phase' ? 'Technical Interview (Round 2)' : 'Technical Interview (Round 1)',
         startAt: getDefaultStartAt(),
         interviewer: user?.name || user?.email || '',
-        meetingPlace: 'Google Meet',
+        meetingPlace: '',
         notes: '',
       });
       setIsScheduleOpen(true);
@@ -410,6 +420,11 @@ export default function PipelinePage() {
       return;
     }
 
+    if (!scheduleForm.meetingPlace.trim()) {
+      setScheduleError('Please provide interview meeting link or location.');
+      return;
+    }
+
     try {
       // 1. Create interview entry
       const interviewId = `interview-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -419,17 +434,18 @@ export default function PipelinePage() {
         candidateName: schedulingCandidate.name,
         role: schedulingCandidate.role,
         requisitionId: schedulingCandidate.requisitionId,
-        round: scheduleForm.round,
+        round: scheduleForm.round as any,
         startAt: new Date(scheduleForm.startAt).toISOString(),
         interviewer: scheduleForm.interviewer.trim(),
-        meetingPlace: scheduleForm.meetingPlace.trim() || 'Google Meet',
+        meetingPlace: scheduleForm.meetingPlace.trim(),
         notes: scheduleForm.notes.trim(),
         status: 'scheduled' as const,
       };
 
+      const roundLabel = schedulingTargetStage === 'Round 2 Phase' ? 'Round 2' : 'Round 1';
       const activityItem = {
         id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        title: 'Interview scheduled',
+        title: `${roundLabel} Interview scheduled`,
         detail: `${schedulingCandidate.name} • ${scheduleForm.round} • ${new Date(scheduleForm.startAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`,
         at: new Date().toISOString(),
       };
@@ -450,8 +466,8 @@ export default function PipelinePage() {
       console.warn('[Pipeline] Could not save scheduled interview:', saveErr);
     }
 
-    // 3. Move candidate to "Round 1 Phase"
-    applyStageMove(schedulingCandidate.id, 'Round 1 Phase');
+    // 3. Move candidate to targeted stage (Round 1 Phase or Round 2 Phase)
+    applyStageMove(schedulingCandidate.id, schedulingTargetStage);
 
     // 4. Close modal
     setIsScheduleOpen(false);
@@ -586,10 +602,12 @@ export default function PipelinePage() {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h2 id="schedule-interview-title" className="text-xl font-bold text-[#172033]">
-                  Schedule interview
+                  {schedulingTargetStage === 'Round 2 Phase' ? 'Schedule Round 2 interview' : 'Schedule interview'}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Add the round details for the candidate and interview team.
+                  {schedulingTargetStage === 'Round 2 Phase'
+                    ? 'Add the round 2 details, new date & time, and meeting link.'
+                    : 'Add the round details for the candidate and interview team.'}
                 </p>
               </div>
               <button
@@ -627,9 +645,19 @@ export default function PipelinePage() {
                     }
                     className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/15"
                   >
-                    <option value="Technical Interview">Technical Interview (Round 1)</option>
-                    <option value="Recruiter Screen">Recruiter Screen</option>
-                    <option value="HR Interview">HR Interview</option>
+                    {schedulingTargetStage === 'Round 2 Phase' ? (
+                      <>
+                        <option value="Technical Interview (Round 2)">Technical Interview (Round 2)</option>
+                        <option value="Managerial / System Design">Managerial / System Design</option>
+                        <option value="Leadership / HR Round">Leadership / HR Round</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="Technical Interview (Round 1)">Technical Interview (Round 1)</option>
+                        <option value="Recruiter Screen">Recruiter Screen</option>
+                        <option value="HR Interview">HR Interview</option>
+                      </>
+                    )}
                   </select>
                 </label>
 
@@ -664,11 +692,12 @@ export default function PipelinePage() {
                 <label className="block text-xs font-semibold text-slate-700">
                   Meeting link or location
                   <input
+                    required
                     value={scheduleForm.meetingPlace}
                     onChange={event =>
                       setScheduleForm(current => ({ ...current, meetingPlace: event.target.value }))
                     }
-                    placeholder="Video link or office"
+                    placeholder="Video link (e.g. Google Meet / Zoom) or office"
                     className="mt-1.5 w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/15"
                   />
                 </label>
@@ -697,8 +726,8 @@ export default function PipelinePage() {
                 <button
                   type="button"
                   onClick={() => {
-                    // Option to advance to Round 1 Phase directly without booking interview
-                    applyStageMove(schedulingCandidate.id, 'Round 1 Phase');
+                    // Option to advance to target stage directly without booking interview
+                    applyStageMove(schedulingCandidate.id, schedulingTargetStage);
                     setIsScheduleOpen(false);
                     setSchedulingCandidate(null);
                   }}
@@ -722,7 +751,7 @@ export default function PipelinePage() {
                     type="submit"
                     className="rounded-xl bg-[#F26943] px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#e95d38]"
                   >
-                    Confirm interview
+                    {schedulingTargetStage === 'Round 2 Phase' ? 'Confirm Round 2 interview' : 'Confirm interview'}
                   </button>
                 </div>
               </div>
