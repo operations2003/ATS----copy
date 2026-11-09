@@ -45,7 +45,7 @@ const SCORE_BUCKETS = [
 ];
 
 const FUNNEL_STAGES = [
-  'Sourced', 'Screening', 'Shortlisted', 'Recruiter screen',
+  'Screening', 'Shortlisted', 'Recruiter screen',
   'Technical interview', 'HR interview', 'Selected', 'Offered', 'Joined',
 ];
 
@@ -149,8 +149,7 @@ export default function DashboardPage() {
       const status = String(candidate.stageStatus || candidate.status || '').toUpperCase();
       const normalized = savedStage.toLowerCase();
       let stage = '';
-      if (normalized === 'sourced' || status === 'SOURCED') stage = 'Sourced';
-      else if (normalized === 'screening' || status === 'SCREENED') stage = 'Screening';
+      if (normalized === 'screening' || status === 'SCREENED' || status === 'SOURCED') stage = 'Screening';
       else if (normalized === 'shortlisted' || ['SHORTLISTED', 'PENDING_TL_REVIEW', 'TL_APPROVED', 'OVERRIDDEN'].includes(status)) stage = 'Shortlisted';
       else if (normalized === 'recruiter name' || normalized === 'recruiter screen') stage = 'Recruiter screen';
       else if (normalized === 'round 1 phase' || normalized.includes('technical')) stage = 'Technical interview';
