@@ -21,7 +21,6 @@ import {
   areSkillsEquivalent,
 } from '@/utils/requirementUtils';
 import CandidateLinkModal from '@/components/CandidateLinkModal';
-import HireIQHiringReality from '@/components/jobs/HireIQHiringReality';
 import HireIQCandidateCompareAndSubmitModal, { CandidateComparisonItem } from '@/components/evaluation/HireIQCandidateCompareAndSubmitModal';
 import ClientShareCreateModal, { SelectedCandidateSummary } from '@/components/ClientShareCreateModal';
 import ClientShareManagerModal from '@/components/ClientShareManagerModal';
@@ -615,7 +614,6 @@ export default function JobCandidatesPage() {
   const [isEditingPosition, setIsEditingPosition] = useState(false);
   const [editPositionInput, setEditPositionInput] = useState('');
   const [isCandidateLinkOpen, setIsCandidateLinkOpen] = useState(false);
-  const [showRealityModal, setShowRealityModal] = useState(false);
 
   // Candidate Selection for Comparison & Client Submission
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
@@ -1941,15 +1939,6 @@ export default function JobCandidatesPage() {
               </Link>
               <button
                 type="button"
-                onClick={() => setShowRealityModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/15 text-white text-xs font-semibold rounded-xl border border-white/15 transition-all cursor-pointer backdrop-blur-sm"
-                title="Stress-test role feasibility"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-brand-orange animate-pulse" />
-                <span>Reality Check</span>
-              </button>
-              <button
-                type="button"
                 onClick={() => setIsCandidateLinkOpen(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/15 text-white text-xs font-semibold rounded-xl border border-white/15 transition-all cursor-pointer backdrop-blur-sm"
                 title="Candidate application link"
@@ -3126,33 +3115,6 @@ export default function JobCandidatesPage() {
           jobId={jobId}
           jobTitle={job?.position || 'Job Requisition'}
         />
-
-        {/* HireIQ Hiring Reality Stress Test Modal */}
-        {showRealityModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 max-w-4xl w-full shadow-2xl relative max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-brand-orange">
-                    Role Feasibility Stress Test
-                  </span>
-                  <h3 className="text-lg font-black text-slate-900 mt-0.5">
-                    {job?.position || 'Job Requisition'} • {job?.client || 'Hiring Organization'}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowRealityModal(false)}
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-sm font-bold cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <HireIQHiringReality jobId={jobId as string} />
-            </div>
-          </div>
-        )}
 
         {/* Floating Selection Toolbar for Compare & Client Submission */}
         {selectedCandidateIds.length > 0 && (
