@@ -529,6 +529,12 @@ export default function DashboardPage() {
       sub: submitCount === 1 ? '1 candidate converted' : `${submitCount} candidates converted`,
       color: 'text-purple-600',
     },
+    {
+      label: 'Time to Hire',
+      value: '— days',
+      sub: 'Average time from opening to hire',
+      color: 'text-cyan-700',
+    },
   ];
 
   const pipeline = [
@@ -586,7 +592,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Performance Stats Grid (Transferred from Reports) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4 mb-8">
           {stats.map((s, i) => (
             <div key={i} className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs transition-all hover:shadow-sm">
               <div className={`text-2xl sm:text-3xl font-black mb-1 ${s.color}`}>{s.value}</div>
