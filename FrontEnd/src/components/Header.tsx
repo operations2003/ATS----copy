@@ -34,6 +34,18 @@ export const Header: React.FC = () => {
   const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationPanelRef = useRef<HTMLDivElement>(null);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    'RECRUITMENT WORKSPACE': true,
+    'ANALYTICS & AUTOMATION': true,
+    'ADMINISTRATION': true,
+  });
+
+  const toggleSection = (sectionKey: string) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [sectionKey]: !(prev[sectionKey] ?? true),
+    }));
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -381,47 +393,81 @@ export const Header: React.FC = () => {
     },
   ];
 
-  // Helper to render section items
-  const renderNavSection = (title: string, items: SidebarNavItem[]) => (
-    <div className="space-y-1">
-      <div className="text-[9.5px] font-extrabold tracking-wider uppercase text-slate-400/90 px-3 pt-1">
-        {title}
+  // Helper to render collapsible dropdown section items
+  const renderNavSection = (title: string, items: SidebarNavItem[]) => {
+    const isOpen = openSections[title] ?? true;
+    const hasActiveItem = items.some(item => active(item.href));
+
+    return (
+      <div className="space-y-1">
+        {/* Collapsible Dropdown Header */}
+        <button
+          type="button"
+          onClick={() => toggleSection(title)}
+          className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-slate-800/50 transition-colors group cursor-pointer text-left"
+          aria-expanded={isOpen}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={`text-[9.5px] font-extrabold tracking-wider uppercase transition-colors truncate ${
+              hasActiveItem ? 'text-[#FF5A36]' : 'text-slate-400/90 group-hover:text-slate-200'
+            }`}>
+              {title}
+            </span>
+            <span className="text-[9px] font-bold text-slate-500 bg-slate-800/90 px-1.5 py-0.2 rounded-md border border-slate-700/60 shrink-0">
+              {items.length}
+            </span>
+          </div>
+          <svg
+            className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-transform duration-200 shrink-0 ${
+              isOpen ? 'rotate-180 text-slate-200' : 'rotate-0'
+            }`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {/* Dropdown Items (Collapsible) */}
+        {isOpen && (
+          <div className="space-y-0.5 pt-0.5">
+            {items.map(item => {
+              const isItemActive = active(item.href);
+              return (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                    isItemActive
+                      ? 'border border-[#FF5A36] bg-[#1E293B] text-white shadow-xs font-semibold'
+                      : 'border border-transparent text-slate-300 hover:text-white hover:bg-slate-800/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={`transition-colors ${isItemActive ? 'text-[#FF5A36]' : 'text-slate-400 group-hover:text-slate-200'}`}>
+                      {item.icon}
+                    </div>
+                    <span className="truncate">{item.label}</span>
+                  </div>
+                  {item.badge && (
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                      isItemActive
+                        ? 'bg-[#FF5A36]/20 text-[#FF5A36] border border-[#FF5A36]/30'
+                        : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    }`}>
+                      {item.badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
-      <div className="space-y-0.5">
-        {items.map(item => {
-          const isItemActive = active(item.href);
-          return (
-            <Link
-              key={item.label}
-              href={item.href}
-              onClick={() => setMobileOpen(false)}
-              className={`group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                isItemActive
-                  ? 'border border-[#FF5A36] bg-[#1E293B] text-white shadow-xs font-semibold'
-                  : 'border border-transparent text-slate-300 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className={`transition-colors ${isItemActive ? 'text-[#FF5A36]' : 'text-slate-400 group-hover:text-slate-200'}`}>
-                  {item.icon}
-                </div>
-                <span className="truncate">{item.label}</span>
-              </div>
-              {item.badge && (
-                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                  isItemActive
-                    ? 'bg-[#FF5A36]/20 text-[#FF5A36] border border-[#FF5A36]/30'
-                    : 'bg-slate-800 text-slate-400 border border-slate-700'
-                }`}>
-                  {item.badge}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </div>
-    </div>
-  );
+    );
+  };
 
   // ───────────────────────────────────────────────────────────────────────────
   // Clean Sidebar Component (HIRE IQ Proposed Structure)
