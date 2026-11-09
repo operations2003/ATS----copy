@@ -447,8 +447,7 @@ export const getCandidateEvaluation = async (req: AuthRequest, res: Response): P
     const evaluation = await evaluateCandidateAgainstRequirements(candidateData, jobData, requirements);
 
     if (jobData?.id && jobData.id !== 'pool') {
-      const targetOrg = jobData.organizationId || (typeof orgId !== 'undefined' ? orgId : (typeof organizationId !== 'undefined' ? organizationId : 'org-tasknera'));
-      markJdAsConsumed(jobData.id, targetOrg, user?.userId).catch(() => null);
+      markJdAsConsumed(jobData.id, jobData.organizationId || orgId, user?.userId).catch(() => null);
     }
 
     res.status(200).json({
@@ -525,8 +524,7 @@ export const evaluateCandidateController = async (req: AuthRequest, res: Respons
     const evaluation = await evaluateCandidateAgainstRequirements(candidateData, jobData, requirements);
 
     if (jobData?.id && jobData.id !== 'pool') {
-      const targetOrg = jobData.organizationId || (typeof orgId !== 'undefined' ? orgId : (typeof organizationId !== 'undefined' ? organizationId : 'org-tasknera'));
-      markJdAsConsumed(jobData.id, targetOrg, user?.userId).catch(() => null);
+      markJdAsConsumed(jobData.id, jobData.organizationId || orgId, user?.userId).catch(() => null);
     }
 
     // Ensure Candidate exists in PostgreSQL database with valid UUID
@@ -1012,8 +1010,7 @@ export const matchCandidateWithJobController = async (req: AuthRequest, res: Res
     const evaluation = await evaluateCandidateAgainstRequirements(candidateData, jobData, requirements);
 
     if (jobData?.id && jobData.id !== 'pool') {
-      const targetOrg = jobData.organizationId || (typeof orgId !== 'undefined' ? orgId : (typeof organizationId !== 'undefined' ? organizationId : 'org-tasknera'));
-      markJdAsConsumed(jobData.id, targetOrg, user?.userId).catch(() => null);
+      markJdAsConsumed(jobData.id, jobData.organizationId || organizationId, user?.userId).catch(() => null);
     }
 
     const finalScore = evaluation.overallScore ?? evaluation.overallMatch ?? 0;
