@@ -16,6 +16,8 @@ type PipelineStage =
   | 'Offered'
   | 'Joined';
 
+type InterviewRound = 'Recruiter Screen' | 'Technical Interview' | 'HR Interview';
+
 interface PipelineCandidate {
   id: string;
   name: string;
@@ -27,7 +29,16 @@ interface PipelineCandidate {
   decision?: 'SUBMIT' | 'REVIEW' | 'DO NOT SUBMIT';
 }
 
+interface ScheduleForm {
+  round: InterviewRound;
+  startAt: string;
+  interviewer: string;
+  meetingPlace: string;
+  notes: string;
+}
+
 const STORAGE_KEY = 'tasknera_recruitment_pipeline_v1';
+const INTERVIEW_STORAGE_KEY = 'tasknera_interviews_frontend_v1';
 
 const stages: PipelineStage[] = [
   'Sourced',
@@ -62,6 +73,14 @@ const DUMMY_IDS = new Set([
   'cand-6',
 ]);
 
+function getDefaultStartAt(): string {
+  const target = new Date();
+  target.setDate(target.getDate() + 1);
+  target.setHours(15, 0, 0, 0);
+  const local = new Date(target.getTime() - target.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
 function getMatchPresentation(candidate: PipelineCandidate) {
   if (candidate.decision === 'DO NOT SUBMIT' || candidate.score < 60) {
     return { label: 'DO NOT SUBMIT', className: 'border-rose-200 bg-rose-50 text-rose-600', dot: true };
@@ -83,6 +102,18 @@ export default function PipelinePage() {
   ]);
   const [requisitionFilter, setRequisitionFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
+
+  // Schedule Interview Modal State (triggered when moving to Round 1 Phase)
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+  const [schedulingCandidate, setSchedulingCandidate] = useState<PipelineCandidate | null>(null);
+  const [scheduleError, setScheduleError] = useState('');
+  const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({
+    round: 'Technical Interview',
+    startAt: getDefaultStartAt(),
+    interviewer: '',
+    meetingPlace: 'Google Meet',
+    notes: '',
+  });
 
   // Load real requisitions and parsed candidates
   useEffect(() => {
@@ -216,14 +247,12 @@ export default function PipelinePage() {
           if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) {
-              // Legacy format: array of candidate objects
               for (const c of parsed) {
                 if (c && c.id && !DUMMY_IDS.has(c.id) && stages.includes(c.stage)) {
                   stageOverrides[c.id] = c.stage;
                 }
               }
             } else if (parsed && typeof parsed === 'object') {
-              // Map format: { [candidateId]: PipelineStage }
               for (const [cId, cStage] of Object.entries(parsed)) {
                 if (!DUMMY_IDS.has(cId) && stages.includes(cStage as PipelineStage)) {
                   stageOverrides[cId] = cStage as PipelineStage;
@@ -319,30 +348,114 @@ export default function PipelinePage() {
     [candidates, requisitionFilter]
   );
 
-  // Move candidate between stages and persist to localStorage
-  const moveCandidate = (candidateId: string, direction: -1 | 1) => {
+  // Core helper to commit a stage move to state and localStorage
+  const applyStageMove = (candidateId: string, newStage: PipelineStage) => {
     setCandidates(current => {
       const updated = current.map(candidate => {
         if (candidate.id !== candidateId) return candidate;
-        const currentIndex = stages.indexOf(candidate.stage);
-        const nextStage = stages[currentIndex + direction];
-        return nextStage ? { ...candidate, stage: nextStage } : candidate;
+        return { ...candidate, stage: newStage };
       });
 
       try {
-        const stageMap: Record<string, PipelineStage> = {};
-        for (const c of updated) {
-          if (!DUMMY_IDS.has(c.id)) {
-            stageMap[c.id] = c.stage;
-          }
-        }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(stageMap));
+        // Save full candidate array for compatibility with /interviews page
+        const cleanedForStorage = updated.filter(c => !DUMMY_IDS.has(c.id));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanedForStorage));
       } catch (e) {
         console.warn('[Pipeline] Could not save stage:', e);
       }
 
       return updated;
     });
+  };
+
+  // Move candidate between stages
+  const moveCandidate = (candidateId: string, direction: -1 | 1) => {
+    const candidate = candidates.find(c => c.id === candidateId);
+    if (!candidate) return;
+
+    const currentIndex = stages.indexOf(candidate.stage);
+    const nextStage = stages[currentIndex + direction];
+    if (!nextStage) return;
+
+    // ── SPECIFIC TRIGGER: Once moved to Round 1 Phase, show the Schedule Interview modal ──
+    if (nextStage === 'Round 1 Phase') {
+      setSchedulingCandidate(candidate);
+      setScheduleError('');
+      setScheduleForm({
+        round: 'Technical Interview',
+        startAt: getDefaultStartAt(),
+        interviewer: user?.name || user?.email || '',
+        meetingPlace: 'Google Meet',
+        notes: '',
+      });
+      setIsScheduleOpen(true);
+      return;
+    }
+
+    applyStageMove(candidateId, nextStage);
+  };
+
+  // Handle interview scheduling form submit
+  const handleConfirmSchedule = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!schedulingCandidate) return;
+
+    if (!scheduleForm.interviewer.trim()) {
+      setScheduleError('Please provide interviewer name or email.');
+      return;
+    }
+
+    if (!scheduleForm.startAt) {
+      setScheduleError('Please select interview date & time.');
+      return;
+    }
+
+    try {
+      // 1. Create interview entry
+      const interviewId = `interview-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const newInterview = {
+        id: interviewId,
+        candidateId: schedulingCandidate.id,
+        candidateName: schedulingCandidate.name,
+        role: schedulingCandidate.role,
+        requisitionId: schedulingCandidate.requisitionId,
+        round: scheduleForm.round,
+        startAt: new Date(scheduleForm.startAt).toISOString(),
+        interviewer: scheduleForm.interviewer.trim(),
+        meetingPlace: scheduleForm.meetingPlace.trim() || 'Google Meet',
+        notes: scheduleForm.notes.trim(),
+        status: 'scheduled' as const,
+      };
+
+      const activityItem = {
+        id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        title: 'Interview scheduled',
+        detail: `${schedulingCandidate.name} • ${scheduleForm.round} • ${new Date(scheduleForm.startAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`,
+        at: new Date().toISOString(),
+      };
+
+      // 2. Persist to tasknera_interviews_frontend_v1
+      const rawStore = localStorage.getItem(INTERVIEW_STORAGE_KEY);
+      let store: any = { interviews: [], outcomes: [], activity: [] };
+      if (rawStore) {
+        try {
+          store = JSON.parse(rawStore);
+        } catch {}
+      }
+
+      store.interviews = [newInterview, ...(store.interviews || [])];
+      store.activity = [activityItem, ...(store.activity || [])].slice(0, 25);
+      localStorage.setItem(INTERVIEW_STORAGE_KEY, JSON.stringify(store));
+    } catch (saveErr) {
+      console.warn('[Pipeline] Could not save scheduled interview:', saveErr);
+    }
+
+    // 3. Move candidate to "Round 1 Phase"
+    applyStageMove(schedulingCandidate.id, 'Round 1 Phase');
+
+    // 4. Close modal
+    setIsScheduleOpen(false);
+    setSchedulingCandidate(null);
   };
 
   return (
@@ -452,6 +565,171 @@ export default function PipelinePage() {
           </div>
         )}
       </main>
+
+      {/* ── SCHEDULE INTERVIEW MODAL (ON MOVE TO ROUND 1 PHASE) ── */}
+      {isScheduleOpen && schedulingCandidate && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) {
+              setIsScheduleOpen(false);
+              setSchedulingCandidate(null);
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="schedule-interview-title"
+            className="my-auto w-full max-w-xl rounded-3xl bg-white p-5 shadow-2xl sm:p-7"
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 id="schedule-interview-title" className="text-xl font-bold text-[#172033]">
+                  Schedule interview
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Add the round details for the candidate and interview team.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsScheduleOpen(false);
+                  setSchedulingCandidate(null);
+                }}
+                aria-label="Close"
+                className="rounded-lg p-1 text-xl leading-none text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                ×
+              </button>
+            </div>
+
+            <form className="space-y-4" onSubmit={handleConfirmSchedule}>
+              <label className="block text-xs font-semibold text-slate-700">
+                Candidate
+                <div className="mt-1.5 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-3 text-sm font-bold text-slate-800">
+                  <span>{schedulingCandidate.name}</span>
+                  <span className="text-xs font-medium text-slate-500">{schedulingCandidate.role}</span>
+                </div>
+              </label>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Round
+                  <select
+                    value={scheduleForm.round}
+                    onChange={event =>
+                      setScheduleForm(current => ({
+                        ...current,
+                        round: event.target.value as InterviewRound,
+                      }))
+                    }
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/15"
+                  >
+                    <option value="Technical Interview">Technical Interview (Round 1)</option>
+                    <option value="Recruiter Screen">Recruiter Screen</option>
+                    <option value="HR Interview">HR Interview</option>
+                  </select>
+                </label>
+
+                <label className="block text-xs font-semibold text-slate-700">
+                  Date &amp; time
+                  <input
+                    required
+                    type="datetime-local"
+                    value={scheduleForm.startAt}
+                    onChange={event =>
+                      setScheduleForm(current => ({ ...current, startAt: event.target.value }))
+                    }
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/15"
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Interviewer
+                  <input
+                    required
+                    value={scheduleForm.interviewer}
+                    onChange={event =>
+                      setScheduleForm(current => ({ ...current, interviewer: event.target.value }))
+                    }
+                    placeholder="Name or email"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/15"
+                  />
+                </label>
+
+                <label className="block text-xs font-semibold text-slate-700">
+                  Meeting link or location
+                  <input
+                    value={scheduleForm.meetingPlace}
+                    onChange={event =>
+                      setScheduleForm(current => ({ ...current, meetingPlace: event.target.value }))
+                    }
+                    placeholder="Video link or office"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/15"
+                  />
+                </label>
+              </div>
+
+              <label className="block text-xs font-semibold text-slate-700">
+                Notes
+                <textarea
+                  rows={3}
+                  value={scheduleForm.notes}
+                  onChange={event =>
+                    setScheduleForm(current => ({ ...current, notes: event.target.value }))
+                  }
+                  placeholder="Optional details for the interview team"
+                  className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/15"
+                />
+              </label>
+
+              {scheduleError && (
+                <p role="alert" className="text-xs font-medium text-rose-600">
+                  {scheduleError}
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Option to advance to Round 1 Phase directly without booking interview
+                    applyStageMove(schedulingCandidate.id, 'Round 1 Phase');
+                    setIsScheduleOpen(false);
+                    setSchedulingCandidate(null);
+                  }}
+                  className="text-xs font-medium text-slate-500 hover:text-slate-700"
+                >
+                  Move without scheduling
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsScheduleOpen(false);
+                      setSchedulingCandidate(null);
+                    }}
+                    className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-[#F26943] px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#e95d38]"
+                  >
+                    Confirm interview
+                  </button>
+                </div>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </>
   );
 }

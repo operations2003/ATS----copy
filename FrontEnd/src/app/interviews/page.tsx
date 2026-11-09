@@ -65,14 +65,7 @@ interface ScheduleForm {
 const INTERVIEW_STORAGE_KEY = 'tasknera_interviews_frontend_v1';
 const PIPELINE_STORAGE_KEY = 'tasknera_recruitment_pipeline_v1';
 
-const demoQueue: QueueCandidate[] = [
-  { id: 'sarah-mitchell', name: 'Sarah Mitchell', role: 'SAP CO Lead Consultant', score: 91.88, stage: 'Shortlisted', requisitionId: 'sap-co-lead-consultant' },
-  { id: 'ananya-bose', name: 'Ananya Bose', role: 'Data Platform Architect', score: 89, stage: 'Shortlisted', requisitionId: 'data-platform-architect' },
-  { id: 'rahul-menon', name: 'Rahul Menon', role: 'Senior Python Engineer', score: 85.5, stage: 'Shortlisted', requisitionId: 'senior-python-engineer' },
-  { id: 'daniel-okafor', name: 'Daniel Okafor', role: 'Senior Python Engineer', score: 32.5, stage: 'Technical interview', requisitionId: 'senior-python-engineer' },
-  { id: 'jennifer-lopez', name: 'Jennifer Lopez', role: 'SAP CO Lead Consultant', score: 29.77, stage: 'Technical interview', requisitionId: 'sap-co-lead-consultant' },
-  { id: 'elena-petrova', name: 'Elena Petrova', role: 'Data Platform Architect', score: 18.22, stage: 'Technical interview', requisitionId: 'data-platform-architect' },
-];
+const demoQueue: QueueCandidate[] = [];
 
 const roundOptions: InterviewRound[] = ['Recruiter Screen', 'Technical Interview', 'HR Interview'];
 
