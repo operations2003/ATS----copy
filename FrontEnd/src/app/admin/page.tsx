@@ -1961,10 +1961,6 @@ export default function AdminPage() {
                   )}
                 </div>
               </div>
-
-              <div className="p-3 bg-slate-50 rounded-xl text-center text-xs text-slate-500">
-                Need more than 2,500 resumes or custom enterprise architecture? Contact Super Admin at <a href="mailto:operations@tasknera.com" className="text-brand-orange font-bold hover:underline">operations@tasknera.com</a>
-              </div>
             </div>
           </div>
         )}
