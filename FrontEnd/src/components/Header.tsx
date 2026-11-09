@@ -173,8 +173,22 @@ export const Header: React.FC = () => {
 
   const active = (href: string) => {
     if (!pathname) return false;
-    if (pathname === href) return true;
-    if (href !== '/' && href !== '/dashboard' && pathname.startsWith(href + '/')) {
+    const basePath = href.split('?')[0];
+    const query = href.includes('?') ? href.split('?')[1] : null;
+
+    if (query) {
+      if (pathname === basePath) {
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          const [qKey, qVal] = query.split('=');
+          if (params.get(qKey) === qVal) return true;
+        }
+      }
+      return false;
+    }
+
+    if (pathname === basePath) return true;
+    if (basePath !== '/' && basePath !== '/dashboard' && pathname.startsWith(basePath + '/')) {
       return true;
     }
     return false;
@@ -203,9 +217,16 @@ export const Header: React.FC = () => {
   };
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Clean, Simple Navigation Items (No clutter)
+  // HIRE IQ Navigation Groups (Proposed Structure)
   // ───────────────────────────────────────────────────────────────────────────
-  const navItems = [
+  interface SidebarNavItem {
+    label: string;
+    href: string;
+    badge?: string;
+    icon: React.ReactNode;
+  }
+
+  const recruitmentWorkspaceItems: SidebarNavItem[] = [
     {
       label: 'Dashboard',
       href: '/dashboard',
@@ -219,7 +240,7 @@ export const Header: React.FC = () => {
       ),
     },
     {
-      label: 'Jobs & JDs',
+      label: 'Jobs & Requisitions',
       href: '/jobs',
       icon: (
         <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -229,7 +250,7 @@ export const Header: React.FC = () => {
       ),
     },
     {
-      label: 'Candidates',
+      label: 'Candidate Database',
       href: '/candidates',
       icon: (
         <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -238,7 +259,17 @@ export const Header: React.FC = () => {
       ),
     },
     {
-      label: 'Pipeline',
+      label: 'AI Evaluations',
+      href: '/evaluations',
+      badge: 'AI',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Recruitment Pipeline',
       href: '/pipeline',
       icon: (
         <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -258,7 +289,28 @@ export const Header: React.FC = () => {
       ),
     },
     {
-      label: 'Reports',
+      label: 'Talent Pool',
+      href: '/candidates?view=talent-pool',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Clients',
+      href: '/clients',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+        </svg>
+      ),
+    },
+  ];
+
+  const analyticsAutomationItems: SidebarNavItem[] = [
+    {
+      label: 'Analytics & Reports',
       href: '/reports',
       icon: (
         <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -266,75 +318,159 @@ export const Header: React.FC = () => {
         </svg>
       ),
     },
-    ...(isAdmin ? [
-      {
-        label: isSuperAdmin ? 'Super Admin' : 'Admin Hub',
-        href: isSuperAdmin ? '/super-admin' : '/admin',
-        icon: (
-          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        ),
-      }
-    ] : []),
+    {
+      label: 'AI Recruitment Assistant',
+      href: '/evaluations?assistant=open',
+      badge: 'AI',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Automation Centre',
+      href: '/pipeline?automation=open',
+      badge: 'Auto',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      ),
+    },
   ];
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // Clean Sidebar Component
-  // ───────────────────────────────────────────────────────────────────────────
-  const SidebarContent = () => (
-    <div className="flex flex-col h-full bg-[#0F172A] text-slate-300 font-sans select-none overflow-y-auto">
-      {/* Brand Header */}
-      <div className="px-5 pt-6 pb-4 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-xl bg-[#FF5722] text-white font-black text-base flex items-center justify-center shadow-md flex-shrink-0">
-          H
-        </div>
-        <div className="min-w-0">
-          <span className="text-white font-bold text-base tracking-tight block leading-tight">HireIQ</span>
-          <span className="text-[8px] uppercase tracking-[0.2em] font-semibold text-slate-400 block mt-0.5">
-            RECRUITMENT INTELLIGENCE
-          </span>
-        </div>
-      </div>
+  const administrationItems: SidebarNavItem[] = [
+    {
+      label: 'Team Management',
+      href: isSuperAdmin ? '/super-admin' : '/admin',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Subscription & Billing',
+      href: isSuperAdmin ? '/super-admin?tab=subscription' : '/admin?view=subscription',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <rect x="2" y="5" width="20" height="14" rx="2" strokeWidth={2} />
+          <line x1="2" y1="10" x2="22" y2="10" strokeWidth={2} />
+        </svg>
+      ),
+    },
+    {
+      label: 'Security & Audit Logs',
+      href: isSuperAdmin ? '/super-admin?tab=audit' : '/admin?tab=audit',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Settings',
+      href: '/settings',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+    },
+  ];
 
-      {/* Workspace Indicator */}
-      <div className="mx-3.5 mb-5 px-3 py-2.5 rounded-xl bg-[#182238] border border-slate-700/60">
-        <div suppressHydrationWarning className="text-xs font-semibold text-white truncate">
-          {(user as any)?.organizationName || 'TaskNera Demo Workspace'}
-        </div>
-        <div suppressHydrationWarning className="text-[9.5px] uppercase font-bold text-slate-400 tracking-wider mt-0.5">
-          {isSuperAdmin ? 'SUPER ADMIN' : isClientAdmin ? 'ORG ADMIN' : 'RECRUITER'}
-        </div>
+  // Helper to render section items
+  const renderNavSection = (title: string, items: SidebarNavItem[]) => (
+    <div className="space-y-1">
+      <div className="text-[9.5px] font-extrabold tracking-wider uppercase text-slate-400/90 px-3 pt-1">
+        {title}
       </div>
-
-      {/* Primary Navigation */}
-      <div className="px-3 space-y-1 flex-1">
-        <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 mb-2 px-3">
-          MENU
-        </div>
-        {navItems.map((item) => {
+      <div className="space-y-0.5">
+        {items.map(item => {
           const isItemActive = active(item.href);
           return (
             <Link
               key={item.label}
               href={item.href}
               onClick={() => setMobileOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
+              className={`group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
                 isItemActive
-                  ? 'border border-[#FF5A36] bg-[#1E293B] text-white shadow-xs'
+                  ? 'border border-[#FF5A36] bg-[#1E293B] text-white shadow-xs font-semibold'
                   : 'border border-transparent text-slate-300 hover:text-white hover:bg-slate-800/60'
               }`}
             >
-              <div className={isItemActive ? 'text-[#FF5A36]' : 'text-slate-400'}>{item.icon}</div>
-              <span>{item.label}</span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className={`transition-colors ${isItemActive ? 'text-[#FF5A36]' : 'text-slate-400 group-hover:text-slate-200'}`}>
+                  {item.icon}
+                </div>
+                <span className="truncate">{item.label}</span>
+              </div>
+              {item.badge && (
+                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                  isItemActive
+                    ? 'bg-[#FF5A36]/20 text-[#FF5A36] border border-[#FF5A36]/30'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                }`}>
+                  {item.badge}
+                </span>
+              )}
             </Link>
           );
         })}
       </div>
+    </div>
+  );
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Clean Sidebar Component (HIRE IQ Proposed Structure)
+  // ───────────────────────────────────────────────────────────────────────────
+  const SidebarContent = () => (
+    <div
+      className="flex flex-col h-full bg-[#0F172A] text-slate-300 font-sans select-none overflow-y-auto"
+      style={{
+        scrollbarWidth: 'thin',
+        scrollbarColor: '#334155 #0F172A',
+      }}
+    >
+      {/* Brand Header */}
+      <div className="px-5 pt-5 pb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-[#FF5722] text-white font-black text-base flex items-center justify-center shadow-md flex-shrink-0">
+            H
+          </div>
+          <div className="min-w-0">
+            <span className="text-white font-black text-base tracking-tight block leading-tight">HIRE IQ</span>
+            <span className="text-[8px] uppercase tracking-[0.2em] font-semibold text-slate-400 block mt-0.5">
+              RECRUITMENT INTELLIGENCE
+            </span>
+          </div>
+        </div>
+        <span className="rounded-full bg-[#FF5722]/15 px-2 py-0.5 text-[10px] font-bold text-[#FF5722] border border-[#FF5722]/25 tracking-wide shrink-0">
+          Proposed
+        </span>
+      </div>
+
+      {/* Workspace Indicator */}
+      <div className="mx-3.5 mb-3 px-3 py-2 rounded-xl bg-[#182238] border border-slate-700/60">
+        <div suppressHydrationWarning className="text-xs font-semibold text-white truncate">
+          {(user as any)?.organizationName || 'TaskNera Demo Workspace'}
+        </div>
+        <div suppressHydrationWarning className="text-[9px] uppercase font-bold text-slate-400 tracking-wider mt-0.5">
+          {isSuperAdmin ? 'SUPER ADMIN' : isClientAdmin ? 'ORG ADMIN' : 'RECRUITER'}
+        </div>
+      </div>
+
+      {/* Navigation Groups */}
+      <div className="px-3 space-y-4 flex-1 pb-4">
+        {renderNavSection('RECRUITMENT WORKSPACE', recruitmentWorkspaceItems)}
+        {renderNavSection('ANALYTICS & AUTOMATION', analyticsAutomationItems)}
+        {renderNavSection('ADMINISTRATION', administrationItems)}
+      </div>
 
       {/* Profile & Logout Pinned to Bottom */}
-      <div className="mt-auto p-3.5 border-t border-slate-800/90 bg-[#0B132B]">
+      <div className="mt-auto p-3.5 border-t border-slate-800/90 bg-[#0B132B] shrink-0">
         <div className="flex items-center justify-between gap-2 p-1.5 rounded-xl hover:bg-slate-800/60 transition-colors">
           <button
             type="button"
