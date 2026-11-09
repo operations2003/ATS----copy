@@ -45,6 +45,22 @@ interface ScheduleForm {
   notes: string;
 }
 
+export interface InterviewFeedbackRatings {
+  technicalKnowledge: number;
+  communication: number;
+  problemSolving: number;
+  roleSpecificSkills: number;
+  experience: number;
+}
+
+const defaultFeedbackRatings: InterviewFeedbackRatings = {
+  technicalKnowledge: 4,
+  communication: 4,
+  problemSolving: 4,
+  roleSpecificSkills: 4,
+  experience: 4,
+};
+
 const STORAGE_KEY = 'tasknera_recruitment_pipeline_v1';
 const INTERVIEW_STORAGE_KEY = 'tasknera_interviews_frontend_v1';
 
@@ -122,6 +138,14 @@ export default function PipelinePage() {
     meetingPlace: '',
     notes: '',
   });
+
+  // Interviewer Feedback Modal State (for Round 1 Phase and Round 2 Phase)
+  const [feedbackCandidate, setFeedbackCandidate] = useState<PipelineCandidate | null>(null);
+  const [feedbackRound, setFeedbackRound] = useState<string>('Technical Interview (Round 1)');
+  const [feedbackRatings, setFeedbackRatings] = useState<InterviewFeedbackRatings>(defaultFeedbackRatings);
+  const [feedbackRecommendation, setFeedbackRecommendation] = useState<'Strong Hire' | 'Hire' | 'Hold' | 'Do Not Hire'>('Hire');
+  const [feedbackComments, setFeedbackComments] = useState('');
+  const [feedbackOutcomesMap, setFeedbackOutcomesMap] = useState<Record<string, { averageRating: number; recommendation: string; round: string }>>({});
 
   // Load real requisitions and parsed candidates
   useEffect(() => {
@@ -371,9 +395,34 @@ export default function PipelinePage() {
         });
       }
 
+      // 5. Ingest existing interview outcomes / feedback
+      const outMap: Record<string, { averageRating: number; recommendation: string; round: string }> = {};
+      if (typeof window !== 'undefined') {
+        try {
+          const rawStore = localStorage.getItem(INTERVIEW_STORAGE_KEY);
+          if (rawStore) {
+            const parsedStore = JSON.parse(rawStore);
+            if (parsedStore && Array.isArray(parsedStore.outcomes)) {
+              for (const o of parsedStore.outcomes) {
+                if (o) {
+                  const entry = {
+                    averageRating: typeof o.averageRating === 'number' ? o.averageRating : 4.0,
+                    recommendation: o.finalRecommendation || o.outcome || 'Hire',
+                    round: o.round || 'Interview Round',
+                  };
+                  if (o.candidateId) outMap[String(o.candidateId).toLowerCase()] = entry;
+                  if (o.candidateName) outMap[String(o.candidateName).toLowerCase()] = entry;
+                }
+              }
+            }
+          }
+        } catch {}
+      }
+
       if (isMounted) {
         setRequisitions(reqOptions);
         setCandidates(mappedCandidates);
+        setFeedbackOutcomesMap(outMap);
         setIsLoading(false);
       }
     }
@@ -511,6 +560,83 @@ export default function PipelinePage() {
     setSchedulingCandidate(null);
   };
 
+  // Handle Interviewer Feedback form submit
+  const handleSavePipelineFeedback = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!feedbackCandidate) return;
+
+    const sum =
+      feedbackRatings.technicalKnowledge +
+      feedbackRatings.communication +
+      feedbackRatings.problemSolving +
+      feedbackRatings.roleSpecificSkills +
+      feedbackRatings.experience;
+    const avgScore = Math.round((sum / 5) * 10) / 10;
+
+    const outcome = {
+      id: `outcome-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      candidateId: feedbackCandidate.id,
+      candidateName: feedbackCandidate.name,
+      role: feedbackCandidate.role,
+      requisitionId: feedbackCandidate.requisitionId,
+      round: feedbackRound,
+      when: new Date().toISOString(),
+      outcome:
+        feedbackRecommendation === 'Strong Hire'
+          ? 'Strong Yes'
+          : feedbackRecommendation === 'Hire'
+          ? 'Yes'
+          : feedbackRecommendation === 'Hold'
+          ? 'Maybe'
+          : 'No',
+      finalRecommendation: feedbackRecommendation,
+      ratings: feedbackRatings,
+      averageRating: avgScore,
+      comments: feedbackComments.trim(),
+    };
+
+    try {
+      const rawStore = localStorage.getItem(INTERVIEW_STORAGE_KEY);
+      let store: any = { interviews: [], outcomes: [], activity: [] };
+      if (rawStore) {
+        try {
+          store = JSON.parse(rawStore);
+        } catch {}
+      }
+
+      store.outcomes = [outcome, ...(store.outcomes || [])];
+      if (Array.isArray(store.interviews)) {
+        store.interviews = store.interviews.map((item: any) =>
+          item.candidateId === feedbackCandidate.id || item.candidateName === feedbackCandidate.name
+            ? { ...item, status: 'completed' }
+            : item
+        );
+      }
+
+      const activityItem = {
+        id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        title: `${feedbackRound} feedback recorded`,
+        detail: `${feedbackCandidate.name} • ${feedbackRecommendation} (★ ${avgScore})`,
+        at: new Date().toISOString(),
+      };
+      store.activity = [activityItem, ...(store.activity || [])].slice(0, 25);
+      localStorage.setItem(INTERVIEW_STORAGE_KEY, JSON.stringify(store));
+
+      const cid = feedbackCandidate.id.toLowerCase();
+      const cname = feedbackCandidate.name.toLowerCase();
+      setFeedbackOutcomesMap(prev => ({
+        ...prev,
+        [cid]: { averageRating: avgScore, recommendation: feedbackRecommendation, round: feedbackRound },
+        [cname]: { averageRating: avgScore, recommendation: feedbackRecommendation, round: feedbackRound },
+      }));
+    } catch (saveErr) {
+      console.warn('[Pipeline] Could not save feedback:', saveErr);
+    }
+
+    setFeedbackCandidate(null);
+    setFeedbackComments('');
+  };
+
   return (
     <>
       <Header />
@@ -599,6 +725,40 @@ export default function PipelinePage() {
                               </span>
                               <span className="shrink-0 text-[13px] font-bold tabular-nums text-slate-800">{candidate.score}</span>
                             </div>
+
+                            {/* Round 1 & Round 2 Interviewer Feedback Action */}
+                            {(stage === 'Round 1 Phase' || stage === 'Round 2 Phase') && (() => {
+                              const outcome =
+                                feedbackOutcomesMap[candidate.id.toLowerCase()] ||
+                                feedbackOutcomesMap[candidate.name.toLowerCase()];
+                              return (
+                                <div className="mt-2.5 flex items-center justify-between gap-1.5 border-t border-slate-100 pt-2 text-xs">
+                                  {outcome ? (
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                                      <span className="text-amber-500">★</span> {outcome.averageRating.toFixed(1)} · {outcome.recommendation}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-medium text-slate-400">Feedback pending</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFeedbackCandidate(candidate);
+                                      setFeedbackRound(stage === 'Round 2 Phase' ? 'Technical Interview (Round 2)' : 'Technical Interview (Round 1)');
+                                      setFeedbackRatings(defaultFeedbackRatings);
+                                      setFeedbackRecommendation(outcome?.recommendation === 'Strong Hire' || outcome?.recommendation === 'Hire' || outcome?.recommendation === 'Hold' || outcome?.recommendation === 'Do Not Hire' ? outcome.recommendation : 'Hire');
+                                      setFeedbackComments('');
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition shadow-2xs"
+                                  >
+                                    <svg className="h-3 w-3 text-[#F26943]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                    {outcome ? 'Edit feedback' : 'Record feedback'}
+                                  </button>
+                                </div>
+                              );
+                            })()}
 
                             <div className="mt-2.5 flex items-center justify-between">
                               <button
@@ -815,6 +975,192 @@ export default function PipelinePage() {
           </section>
         </div>
       )}
+
+      {/* ── INTERVIEWER FEEDBACK MODAL (FOR ROUND 1 & ROUND 2) ── */}
+      {feedbackCandidate && (() => {
+        const sum =
+          feedbackRatings.technicalKnowledge +
+          feedbackRatings.communication +
+          feedbackRatings.problemSolving +
+          feedbackRatings.roleSpecificSkills +
+          feedbackRatings.experience;
+        const avgScore = Math.round((sum / 5) * 10) / 10;
+        const kpis = [
+          { key: 'technicalKnowledge' as const, label: 'Technical knowledge rating', desc: 'Understanding of core architecture, concepts, and technical depth' },
+          { key: 'communication' as const, label: 'Communication rating', desc: 'Clarity of articulation, active listening, and structured delivery' },
+          { key: 'problemSolving' as const, label: 'Problem-solving rating', desc: 'Analytical thinking, handling edge-cases, and logical reasoning' },
+          { key: 'roleSpecificSkills' as const, label: 'Role-specific skills rating', desc: 'Hands-on competency with required tools, domain knowledge & tasks' },
+          { key: 'experience' as const, label: 'Experience rating', desc: 'Depth of relevant track record, seniority, and demonstrated impact' },
+        ];
+
+        return (
+          <div
+            className="fixed inset-0 z-[320] flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4"
+            onMouseDown={event => {
+              if (event.target === event.currentTarget) {
+                setFeedbackCandidate(null);
+              }
+            }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="pipeline-feedback-title"
+              className="my-auto w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-7"
+            >
+              <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF1EB] px-2.5 py-0.5 text-[11px] font-bold text-[#F26943]">
+                    Interviewer Feedback Form
+                  </div>
+                  <h2 id="pipeline-feedback-title" className="mt-1 text-xl font-bold text-[#172033]">
+                    {feedbackCandidate.name} — {feedbackRound}
+                  </h2>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {feedbackCandidate.role} · Current Stage: {feedbackCandidate.stage}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFeedbackCandidate(null)}
+                  aria-label="Close"
+                  className="rounded-lg p-1.5 text-xl leading-none text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form className="mt-5 space-y-6" onSubmit={handleSavePipelineFeedback}>
+                {/* Round selection */}
+                <label className="block text-xs font-bold text-slate-700">
+                  Interview Round
+                  <select
+                    value={feedbackRound}
+                    onChange={e => setFeedbackRound(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/15"
+                  >
+                    <option value="Technical Interview (Round 1)">Round 1: Technical Interview (Round 1)</option>
+                    <option value="Technical Interview (Round 2)">Round 2: Technical Interview (Round 2)</option>
+                    <option value="Managerial / System Design">Round 2: Managerial / System Design</option>
+                    <option value="Leadership / HR Round">Leadership / HR Round</option>
+                  </select>
+                </label>
+
+                {/* 1. KPIs Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Evaluation KPIs</h3>
+                    <span className="inline-flex items-center gap-1.5 rounded-xl bg-orange-50 px-3 py-1 text-xs font-bold text-[#F26943] border border-orange-100">
+                      Overall KPI Average: {avgScore.toFixed(1)} / 5.0
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {kpis.map(kpi => {
+                      const currentValue = feedbackRatings[kpi.key];
+                      return (
+                        <div key={kpi.key} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-3.5 transition hover:border-slate-300">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <div className="min-w-0">
+                              <label className="text-xs font-bold text-slate-800">{kpi.label}</label>
+                              <p className="text-[11px] text-slate-500">{kpi.desc}</p>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {[1, 2, 3, 4, 5].map(num => {
+                                const isSelected = currentValue === num;
+                                return (
+                                  <button
+                                    key={num}
+                                    type="button"
+                                    onClick={() => setFeedbackRatings(prev => ({ ...prev, [kpi.key]: num }))}
+                                    className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs font-bold transition-all ${
+                                      isSelected
+                                        ? 'bg-[#F26943] text-white shadow-sm ring-2 ring-[#F26943]/20 scale-105'
+                                        : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                                    }`}
+                                  >
+                                    {num}
+                                  </button>
+                                );
+                              })}
+                              <span className="ml-1 text-[11px] font-semibold text-slate-600 w-16 text-right">
+                                {currentValue === 1 ? 'Poor' : currentValue === 2 ? 'Fair' : currentValue === 3 ? 'Good' : currentValue === 4 ? 'Very Good' : 'Excellent'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. Comments */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Comments &amp; interviewer notes
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={feedbackComments}
+                    onChange={event => setFeedbackComments(event.target.value)}
+                    placeholder="Provide specific observations, candidate strengths, potential concerns, and next steps..."
+                    className="w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/15 placeholder:text-slate-400"
+                  />
+                </div>
+
+                {/* 3. Final Recommendation */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-2">
+                    Final recommendation
+                  </label>
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                    {[
+                      { val: 'Strong Hire', label: 'Strong Hire', sub: 'Strong Yes', bg: 'border-emerald-300 bg-emerald-50/70 text-emerald-800' },
+                      { val: 'Hire', label: 'Hire', sub: 'Yes / Meets Bar', bg: 'border-teal-300 bg-teal-50/70 text-teal-800' },
+                      { val: 'Hold', label: 'Hold', sub: 'Maybe / Borderline', bg: 'border-amber-300 bg-amber-50/70 text-amber-800' },
+                      { val: 'Do Not Hire', label: 'Do Not Hire', sub: 'No', bg: 'border-rose-300 bg-rose-50/70 text-rose-800' },
+                    ].map(rec => {
+                      const isSelected = feedbackRecommendation === rec.val;
+                      return (
+                        <button
+                          key={rec.val}
+                          type="button"
+                          onClick={() => setFeedbackRecommendation(rec.val as any)}
+                          className={`flex flex-col items-center justify-center rounded-2xl border p-3 text-center transition-all ${
+                            isSelected
+                              ? `${rec.bg} ring-2 ring-brand-orange shadow-sm font-bold`
+                              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="text-xs font-bold leading-tight">{rec.label}</span>
+                          <span className="text-[10px] opacity-75 mt-0.5">{rec.sub}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Form Actions */}
+                <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setFeedbackCandidate(null)}
+                    className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-[#F26943] px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#e95d38]"
+                  >
+                    Save round feedback
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        );
+      })()}
     </>
   );
 }
