@@ -1501,62 +1501,6 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Assigned Department</label>
-                    <select
-                      value={newMemberTeamSelect}
-                      onChange={e => setNewMemberTeamSelect(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange/30 cursor-pointer"
-                    >
-                      <option value="General">General (Default)</option>
-                      {existingDepartments.map(dept => (
-                        <option key={dept} value={dept}>{dept}</option>
-                      ))}
-                      <option value="__CUSTOM__">+ Add Custom Department...</option>
-                    </select>
-
-                    {newMemberTeamSelect === '__CUSTOM__' && (
-                      <div className="mt-2 animate-in fade-in slide-in-from-top-1 duration-150">
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Engineering, Sales, HR, Finance"
-                          value={newMemberCustomTeam}
-                          onChange={e => setNewMemberCustomTeam(e.target.value)}
-                          className="w-full px-3.5 py-2 bg-white border border-brand-orange/50 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Role / Authority</label>
-                    <select
-                      value={newMemberRoleSelect}
-                      onChange={e => setNewMemberRoleSelect(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange/30 cursor-pointer"
-                    >
-                      <option value="General">General</option>
-                      <option value="TEAM_LEAD">Team Lead</option>
-                      <option value="__CUSTOM__">+ Add Custom Role...</option>
-                    </select>
-
-                    {newMemberRoleSelect === '__CUSTOM__' && (
-                      <div className="mt-2 animate-in fade-in slide-in-from-top-1 duration-150">
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Senior Recruiter, Sourcer, HR Executive"
-                          value={newMemberCustomRole}
-                          onChange={e => setNewMemberCustomRole(e.target.value)}
-                          className="w-full px-3.5 py-2 bg-white border border-brand-orange/50 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-
                 <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 mt-5">
                   <button
                     type="button"
@@ -1662,62 +1606,6 @@ export default function AdminPage() {
                     onChange={e => setEditMemberEmail(e.target.value)}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange/30"
                   />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Assigned Department</label>
-                    <select
-                      value={editMemberTeamSelect}
-                      onChange={e => setEditMemberTeamSelect(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange/30 cursor-pointer"
-                    >
-                      <option value="General">General (Default)</option>
-                      {existingDepartments.map(dept => (
-                        <option key={dept} value={dept}>{dept}</option>
-                      ))}
-                      <option value="__CUSTOM__">+ Add Custom Department...</option>
-                    </select>
-
-                    {editMemberTeamSelect === '__CUSTOM__' && (
-                      <div className="mt-2 animate-in fade-in slide-in-from-top-1 duration-150">
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Engineering, Sales, HR, Finance"
-                          value={editMemberCustomTeam}
-                          onChange={e => setEditMemberCustomTeam(e.target.value)}
-                          className="w-full px-3.5 py-2 bg-white border border-brand-orange/50 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Role / Authority</label>
-                    <select
-                      value={editMemberRoleSelect}
-                      onChange={e => setEditMemberRoleSelect(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange/30 cursor-pointer"
-                    >
-                      <option value="General">General</option>
-                      <option value="TEAM_LEAD">Team Lead</option>
-                      <option value="__CUSTOM__">+ Add Custom Role...</option>
-                    </select>
-
-                    {editMemberRoleSelect === '__CUSTOM__' && (
-                      <div className="mt-2 animate-in fade-in slide-in-from-top-1 duration-150">
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Senior Recruiter, Sourcer, HR Executive"
-                          value={editMemberCustomRole}
-                          onChange={e => setEditMemberCustomRole(e.target.value)}
-                          className="w-full px-3.5 py-2 bg-white border border-brand-orange/50 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
-                        />
-                      </div>
-                    )}
-                  </div>
                 </div>
 
                 <div>
