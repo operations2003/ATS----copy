@@ -107,6 +107,137 @@ export const PLAN_LIMITS: Record<string, {
 };
 
 /**
+ * Count the number of unique JDs consumed (evaluated against at least 1 CV).
+ * Includes active jobs with candidates/evaluations and deleted jobs that had evaluations.
+ */
+export async function getConsumedJdCount(organizationId: string): Promise<number> {
+  try {
+    // 1. Find all active jobs belonging to this org that have at least 1 candidate, application, or evaluation
+    const activeEvaluatedJobs = await prisma.job.findMany({
+      where: {
+        organizationId,
+        OR: [
+          { candidates: { some: {} } },
+          { evaluations: { some: {} } },
+          { applications: { some: {} } }
+        ]
+      },
+      select: { id: true }
+    });
+
+    // 2. Find all audit log entries for JDs that were evaluated and consumed (persists even if job deleted)
+    const evaluatedAuditLogs = await prisma.auditLog.findMany({
+      where: {
+        organizationId,
+        action: 'JD_EVALUATED_CONSUMED',
+        targetType: 'Job'
+      },
+      select: { targetId: true }
+    });
+
+    const consumedJobIds = new Set<string>();
+    for (const j of activeEvaluatedJobs) {
+      if (j.id) consumedJobIds.add(String(j.id));
+    }
+    for (const log of evaluatedAuditLogs) {
+      if (log.targetId) consumedJobIds.add(String(log.targetId));
+    }
+
+    return consumedJobIds.size;
+  } catch (err: any) {
+    console.error('[getConsumedJdCount] Error calculating consumed JDs:', err);
+    return await prisma.job.count({
+      where: {
+        organizationId,
+        status: { in: ['active', 'published'] }
+      }
+    }).catch(() => 0);
+  }
+}
+
+/**
+ * Checks whether a specific job has already been evaluated against any CV
+ */
+export async function isJdAlreadyEvaluated(jobId: string): Promise<boolean> {
+  if (!jobId || jobId === 'pool') return false;
+  try {
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      select: {
+        id: true,
+        _count: {
+          select: {
+            candidates: true,
+            evaluations: true,
+            applications: true
+          }
+        }
+      }
+    });
+
+    if (job && (
+      (job._count?.candidates || 0) > 0 ||
+      (job._count?.evaluations || 0) > 0 ||
+      (job._count?.applications || 0) > 0
+    )) {
+      return true;
+    }
+
+    const audit = await prisma.auditLog.findFirst({
+      where: {
+        action: 'JD_EVALUATED_CONSUMED',
+        targetType: 'Job',
+        targetId: jobId
+      }
+    });
+
+    return !!audit;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Idempotently mark a JD as evaluated and consumed
+ */
+export async function markJdAsConsumed(
+  jobId: string,
+  organizationId: string,
+  userId?: string,
+  details?: any
+): Promise<void> {
+  if (!jobId || jobId === 'pool' || !organizationId) return;
+
+  try {
+    const existing = await prisma.auditLog.findFirst({
+      where: {
+        organizationId,
+        action: 'JD_EVALUATED_CONSUMED',
+        targetType: 'Job',
+        targetId: jobId
+      }
+    });
+
+    if (!existing) {
+      const auditUserId = await resolveAuditUserId(prisma, userId);
+      await prisma.auditLog.create({
+        data: {
+          organizationId,
+          userId: auditUserId,
+          action: 'JD_EVALUATED_CONSUMED',
+          targetType: 'Job',
+          targetId: jobId,
+          details: details || { markedAt: new Date().toISOString() }
+        }
+      });
+      console.log(`[JD Consumption Ledger] Job "${jobId}" marked as CONSUMED for organization "${organizationId}".`);
+    }
+  } catch (err: any) {
+    console.warn(`[markJdAsConsumed] Could not record audit log:`, err?.message || err);
+  }
+}
+
+/**
  * Concurrency-safe quota check inside a transaction or query
  */
 export async function checkUserQuota(
@@ -196,12 +327,7 @@ export async function getOrganizationQuota(organizationId: string) {
     }
   });
 
-  const activeJobsCount = await prisma.job.count({
-    where: {
-      organizationId,
-      status: { in: ['active', 'published'] }
-    }
-  });
+  const consumedJobsCount = await getConsumedJdCount(organizationId);
 
   // Calculate current monthly resume usage (1st of month to end of month)
   const now = new Date();
@@ -236,8 +362,8 @@ export async function getOrganizationQuota(organizationId: string) {
     currentRecruiters: recruiterCount,
     availableRecruiterSlots: Math.max(0, org.maxRecruiters - recruiterCount),
     maxActiveJobs: org.maxActiveJobs,
-    currentActiveJobs: activeJobsCount,
-    availableJobSlots: Math.max(0, org.maxActiveJobs - activeJobsCount),
+    currentActiveJobs: consumedJobsCount,
+    availableJobSlots: Math.max(0, org.maxActiveJobs - consumedJobsCount),
     maxResumesPerMonth,
     currentMonthResumes,
     availableResumes,
@@ -633,13 +759,8 @@ export async function getAllOrganizationsWithStats() {
         }
       });
 
-      // 3. Active jobs count
-      const activeJobsCount = await prisma.job.count({
-        where: {
-          organizationId: org.id,
-          status: { in: ['active', 'published'] }
-        }
-      });
+      // 3. Consumed jobs count (JDs evaluated against at least 1 CV)
+      const consumedJobsCount = await getConsumedJdCount(org.id);
 
       // 4. Total evaluations / candidates processed
       const candidatesCount = await prisma.candidate.count({
@@ -686,8 +807,8 @@ export async function getAllOrganizationsWithStats() {
         availableUserSlots: Math.max(0, org.maxUsers - totalUsers),
         currentRecruiters: recruiterCount,
         availableRecruiterSlots: Math.max(0, org.maxRecruiters - recruiterCount),
-        currentActiveJobs: activeJobsCount,
-        availableJobSlots: Math.max(0, org.maxActiveJobs - activeJobsCount),
+        currentActiveJobs: consumedJobsCount,
+        availableJobSlots: Math.max(0, org.maxActiveJobs - consumedJobsCount),
         totalCandidates: candidatesCount,
         totalEvaluations: evaluationsCount,
         clientAdmin

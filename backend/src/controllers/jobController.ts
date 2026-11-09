@@ -7,6 +7,11 @@ import {
 } from "../services/jdParsingService";
 import { extractDocumentTextViaPython } from "../services/pythonDocumentClient";
 import { CANDIDATE_STORE } from "./candidateController";
+import {
+  getConsumedJdCount,
+  isJdAlreadyEvaluated,
+  markJdAsConsumed,
+} from "../services/organizationService";
 
 // Standard 36-character UUID format regex
 const UUID_REGEX =
@@ -811,15 +816,11 @@ export const createJob = async (
           where: { id: targetOrgId },
         });
         if (org && org.maxActiveJobs) {
-          const currentActive = await prisma.job.count({
-            where: {
-              organizationId: targetOrgId,
-              status: { in: ["active", "published"] },
-            },
-          });
-          if (currentActive >= org.maxActiveJobs) {
+          const consumedJds = await getConsumedJdCount(targetOrgId);
+          if (consumedJds >= org.maxActiveJobs) {
             res.status(400).json({
-              error: `Active job requisition limit reached. Your organization is allowed ${org.maxActiveJobs} active jobs. Please archive old jobs or contact your platform administrator.`,
+              error: `Job requisition limit reached. Your organization is allowed ${org.maxActiveJobs} evaluated Job Descriptions on the ${org.subscriptionPlan || 'STARTER'} plan. You have already evaluated ${consumedJds} / ${org.maxActiveJobs} JDs. Please upgrade your subscription to add more JDs.`,
+              code: 'JD_LIMIT_REACHED',
             });
             return;
           }
@@ -1919,6 +1920,15 @@ export const deleteJob = async (
 
     const existingJob = await prisma.job.findUnique({
       where: { id: jobId },
+      include: {
+        _count: {
+          select: {
+            candidates: true,
+            evaluations: true,
+            applications: true,
+          },
+        },
+      },
     });
 
     if (!existingJob) {
@@ -1943,6 +1953,30 @@ export const deleteJob = async (
         return;
       }
     }
+
+    // Check if this JD was evaluated against any CVs before deleting
+    const hasBeenEvaluated =
+      (existingJob._count?.candidates || 0) > 0 ||
+      (existingJob._count?.evaluations || 0) > 0 ||
+      (existingJob._count?.applications || 0) > 0;
+
+    if (hasBeenEvaluated) {
+      // Mark as consumed in audit log before deleting records, preserving quota consumption
+      await markJdAsConsumed(
+        jobId,
+        existingJob.organizationId || userOrgId,
+        req.user?.userId,
+        {
+          client: existingJob.client,
+          position: existingJob.position,
+          deletedAt: new Date().toISOString(),
+          reason: 'Job deleted after candidate evaluation',
+          candidateCount: existingJob._count?.candidates || 0,
+        }
+      );
+    }
+    // Note: If hasBeenEvaluated is false (0 CVs uploaded/evaluated), markJdAsConsumed is NOT called.
+    // Deleting the empty JD leaves the consumed JD counter untouched (it does not increase).
 
     // Cascade delete related records
     await prisma.candidateApplication.deleteMany({ where: { job_id: jobId } });

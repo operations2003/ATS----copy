@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Header from '@/components/Header';
+import { useAuth } from '@/context/AuthContext';
+import { atsStore } from '@/lib/atsStore';
 
 type PipelineStage =
   | 'Sourced'
@@ -21,6 +23,7 @@ interface PipelineCandidate {
   score: number;
   stage: PipelineStage;
   requisitionId: string;
+  requisitionTitle?: string;
   decision?: 'SUBMIT' | 'REVIEW' | 'DO NOT SUBMIT';
 }
 
@@ -38,30 +41,29 @@ const stages: PipelineStage[] = [
   'Joined',
 ];
 
-const requisitions = [
-  { id: 'all', label: 'All requisitions' },
-  { id: 'sales-manager-gcc', label: 'Sales Manager - GCC (Qualitrix)' },
-  { id: 'data-platform-architect', label: 'Data Platform Architect' },
-  { id: 'senior-python-engineer', label: 'Senior Python Engineer' },
-  { id: 'sap-co-lead-consultant', label: 'SAP CO Lead Consultant' },
-];
-
-const initialCandidates: PipelineCandidate[] = [
-  { id: 'meera-iyer', name: 'Meera Iyer', role: 'Senior Python Engineer', score: 91.5, stage: 'Sourced', requisitionId: 'senior-python-engineer', decision: 'SUBMIT' },
-  { id: 'arjun-deshpande', name: 'Arjun Deshpande', role: 'SAP CO Lead Consultant', score: 93.75, stage: 'Sourced', requisitionId: 'sap-co-lead-consultant', decision: 'SUBMIT' },
-  { id: 'karthik-subramanian', name: 'Karthik Subramanian', role: 'Data Platform Architect', score: 71.79, stage: 'Screening', requisitionId: 'data-platform-architect', decision: 'REVIEW' },
-  { id: 'priya-raman', name: 'Priya Raman', role: 'Senior Python Engineer', score: 69.79, stage: 'Screening', requisitionId: 'senior-python-engineer', decision: 'REVIEW' },
-  { id: 'michael-chen', name: 'Michael Chen', role: 'SAP CO Lead Consultant', score: 80.63, stage: 'Screening', requisitionId: 'sap-co-lead-consultant', decision: 'REVIEW' },
-  { id: 'ananya-bose', name: 'Ananya Bose', role: 'Data Platform Architect', score: 89, stage: 'Shortlisted', requisitionId: 'data-platform-architect', decision: 'SUBMIT' },
-  { id: 'rahul-menon', name: 'Rahul Menon', role: 'Senior Python Engineer', score: 85.5, stage: 'Shortlisted', requisitionId: 'senior-python-engineer', decision: 'SUBMIT' },
-  { id: 'sarah-mitchell', name: 'Sarah Mitchell', role: 'SAP CO Lead Consultant', score: 91.88, stage: 'Shortlisted', requisitionId: 'sap-co-lead-consultant', decision: 'SUBMIT' },
-  { id: 'elena-petrova', name: 'Elena Petrova', role: 'Data Platform Architect', score: 18.22, stage: 'Round 1 Phase', requisitionId: 'data-platform-architect', decision: 'DO NOT SUBMIT' },
-  { id: 'daniel-okafor', name: 'Daniel Okafor', role: 'Senior Python Engineer', score: 32.5, stage: 'Round 1 Phase', requisitionId: 'senior-python-engineer', decision: 'DO NOT SUBMIT' },
-  { id: 'jennifer-lopez', name: 'Jennifer Lopez', role: 'SAP CO Lead Consultant', score: 29.77, stage: 'Round 1 Phase', requisitionId: 'sap-co-lead-consultant', decision: 'DO NOT SUBMIT' },
-];
+// Explicit list of dummy IDs to purge permanently
+const DUMMY_IDS = new Set([
+  'meera-iyer',
+  'arjun-deshpande',
+  'karthik-subramanian',
+  'priya-raman',
+  'michael-chen',
+  'ananya-bose',
+  'rahul-menon',
+  'sarah-mitchell',
+  'elena-petrova',
+  'daniel-okafor',
+  'jennifer-lopez',
+  'cand-1',
+  'cand-2',
+  'cand-3',
+  'cand-4',
+  'cand-5',
+  'cand-6',
+]);
 
 function getMatchPresentation(candidate: PipelineCandidate) {
-  if (candidate.decision === 'DO NOT SUBMIT' || candidate.score < 65) {
+  if (candidate.decision === 'DO NOT SUBMIT' || candidate.score < 60) {
     return { label: 'DO NOT SUBMIT', className: 'border-rose-200 bg-rose-50 text-rose-600', dot: true };
   }
   if (candidate.score < 70) {
@@ -74,53 +76,273 @@ function getMatchPresentation(candidate: PipelineCandidate) {
 }
 
 export default function PipelinePage() {
-  const [candidates, setCandidates] = useState<PipelineCandidate[]>(initialCandidates);
+  const { user } = useAuth();
+  const [candidates, setCandidates] = useState<PipelineCandidate[]>([]);
+  const [requisitions, setRequisitions] = useState<Array<{ id: string; label: string }>>([
+    { id: 'all', label: 'All requisitions' },
+  ]);
   const [requisitionFilter, setRequisitionFilter] = useState('all');
-  const [readyToPersist, setReadyToPersist] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Load real requisitions and parsed candidates
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const validCandidates = parsed.filter((candidate): candidate is PipelineCandidate =>
-            candidate &&
-            typeof candidate.id === 'string' &&
-            typeof candidate.name === 'string' &&
-            typeof candidate.role === 'string' &&
-            typeof candidate.score === 'number' &&
-            stages.includes(candidate.stage) &&
-            typeof candidate.requisitionId === 'string'
-          );
-          if (validCandidates.length > 0 || parsed.length === 0) {
-            setCandidates(validCandidates);
+    let isMounted = true;
+
+    async function loadData() {
+      setIsLoading(true);
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      const currentOrgId = user?.organizationId || 'org-tasknera';
+      const isSuperAdmin =
+        user?.role === 'SUPER_ADMIN' ||
+        user?.email?.toLowerCase().trim() === 'operations@tasknera.com' ||
+        user?.email?.toLowerCase().trim() === 'admin@gmail.com';
+
+      // 1. Fetch Real Requisitions (Jobs)
+      const jobMap = new Map<string, string>();
+      try {
+        const res = await fetch(`${backendUrl}/jobs`, { headers }).catch(() => null);
+        if (res && res.ok) {
+          const data = await res.json().catch(() => ({}));
+          const list = Array.isArray(data.jobs) ? data.jobs : Array.isArray(data.data) ? data.data : [];
+          for (const j of list) {
+            const id = String(j.id);
+            const title = String(j.position || j.title || j.client || 'Untitled Requisition');
+            jobMap.set(id, title);
           }
         }
+      } catch (err) {
+        console.warn('[Pipeline] Could not fetch jobs from API:', err);
       }
-    } catch {
-      // Keep the sample board available if local browser data is malformed.
+
+      // Merge local storage jobs
+      if (typeof window !== 'undefined') {
+        try {
+          const localJobs = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
+          if (Array.isArray(localJobs)) {
+            for (const j of localJobs) {
+              if (j && j.id && !jobMap.has(j.id)) {
+                jobMap.set(j.id, j.position || j.title || 'Untitled Requisition');
+              }
+            }
+          }
+        } catch {}
+
+        try {
+          const atsJobs = atsStore.getJobs();
+          for (const j of atsJobs) {
+            if (j && j.id && !jobMap.has(j.id)) {
+              jobMap.set(j.id, j.title || j.client || 'Untitled Requisition');
+            }
+          }
+        } catch {}
+      }
+
+      const reqOptions: Array<{ id: string; label: string }> = [
+        { id: 'all', label: 'All requisitions' },
+      ];
+      for (const [id, label] of jobMap.entries()) {
+        reqOptions.push({ id, label });
+      }
+
+      // 2. Fetch Parsed Candidates
+      let rawCandidates: any[] = [];
+      try {
+        let res = await fetch(`${backendUrl}/jobs/all/candidates`, { headers }).catch(() => null);
+        if (!res || !res.ok) {
+          res = await fetch(`${backendUrl}/candidates`, { headers }).catch(() => null);
+        }
+        if (res && res.ok) {
+          const data = await res.json().catch(() => ({}));
+          rawCandidates = Array.isArray(data.candidates) ? data.candidates : Array.isArray(data.data) ? data.data : [];
+        }
+      } catch (err) {
+        console.warn('[Pipeline] Could not fetch candidates from API:', err);
+      }
+
+      // Merge candidates saved in browser localStorage across jobs and pool
+      if (typeof window !== 'undefined') {
+        try {
+          const localPool = JSON.parse(localStorage.getItem('tasknera_candidates_pool') || '[]');
+          if (Array.isArray(localPool)) {
+            for (const lc of localPool) {
+              const lcOrgId = lc.organizationId || 'org-tasknera';
+              if (!isSuperAdmin && lcOrgId !== currentOrgId) continue;
+              if (!rawCandidates.some((r: any) => r.id === lc.id || (r.fileName && r.fileName === lc.fileName))) {
+                rawCandidates.unshift(lc);
+              }
+            }
+          }
+
+          // Scan all job-specific storage keys
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('tasknera_candidates_') && key !== 'tasknera_candidates_pool') {
+              try {
+                const jobCands = JSON.parse(localStorage.getItem(key) || '[]');
+                if (Array.isArray(jobCands)) {
+                  for (const jc of jobCands) {
+                    const jcOrgId = jc.organizationId || 'org-tasknera';
+                    if (!isSuperAdmin && jcOrgId !== currentOrgId) continue;
+                    if (!rawCandidates.some((r: any) => r.id === jc.id || (r.fileName && r.fileName === jc.fileName))) {
+                      rawCandidates.push(jc);
+                    }
+                  }
+                }
+              } catch {}
+            }
+          }
+
+          // Ingest from atsStore
+          const storeCands = atsStore.getCandidates();
+          for (const sc of storeCands) {
+            if (!rawCandidates.some((r: any) => r.id === sc.id)) {
+              rawCandidates.push(sc);
+            }
+          }
+        } catch {}
+      }
+
+      // 3. Load Saved Stage Overrides from LocalStorage
+      const stageOverrides: Record<string, PipelineStage> = {};
+      if (typeof window !== 'undefined') {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+              // Legacy format: array of candidate objects
+              for (const c of parsed) {
+                if (c && c.id && !DUMMY_IDS.has(c.id) && stages.includes(c.stage)) {
+                  stageOverrides[c.id] = c.stage;
+                }
+              }
+            } else if (parsed && typeof parsed === 'object') {
+              // Map format: { [candidateId]: PipelineStage }
+              for (const [cId, cStage] of Object.entries(parsed)) {
+                if (!DUMMY_IDS.has(cId) && stages.includes(cStage as PipelineStage)) {
+                  stageOverrides[cId] = cStage as PipelineStage;
+                }
+              }
+            }
+          }
+        } catch {}
+      }
+
+      // 4. Map Parsed Candidates & Assign Initial Stages
+      // Rule: Parsed CVs are shown in "Sourced", and any falling in the category of "SUBMIT" are in "Screening"
+      const mappedCandidates: PipelineCandidate[] = [];
+      const seenIds = new Set<string>();
+
+      for (const c of rawCandidates) {
+        const id = String(c.id || '');
+        if (!id || seenIds.has(id) || DUMMY_IDS.has(id)) continue;
+        seenIds.add(id);
+
+        const name = String(c.name || c.fileName || 'Candidate Profile').trim();
+        const role = String(c.current_title || c.currentTitle || c.role || c.jobTitle || 'Candidate').trim();
+
+        // Calculate score
+        let score = 0;
+        if (typeof c.atsScore === 'number') {
+          score = Math.round(c.atsScore * 10) / 10;
+        } else if (typeof c.matchScore === 'number') {
+          score = Math.round(c.matchScore * 10) / 10;
+        } else if (typeof c.match === 'number') {
+          score = Math.round(c.match * 10) / 10;
+        } else if (typeof c.score === 'number') {
+          score = Math.round(c.score * 10) / 10;
+        }
+
+        // Determine decision category
+        const rawDecision = String(c.decision || c.recommendation || '').toUpperCase().trim();
+        let decision: 'SUBMIT' | 'REVIEW' | 'DO NOT SUBMIT' = 'REVIEW';
+        if (rawDecision === 'SUBMIT' || rawDecision === 'TL_APPROVED' || score >= 85) {
+          decision = 'SUBMIT';
+        } else if (rawDecision === 'DO NOT SUBMIT' || rawDecision === 'REJECTED' || (score > 0 && score < 60)) {
+          decision = 'DO NOT SUBMIT';
+        }
+
+        // Requisition assignment
+        const requisitionId = String(c.job_id || c.jobId || 'all');
+        const requisitionTitle = jobMap.get(requisitionId) || c.jobTitle || undefined;
+
+        // Stage placement rule:
+        // - Honored if manually moved by recruiter
+        // - Otherwise: SUBMIT goes to "Screening", all other parsed CVs go to "Sourced"
+        let stage: PipelineStage = 'Sourced';
+        if (stageOverrides[id]) {
+          stage = stageOverrides[id];
+        } else if (decision === 'SUBMIT') {
+          stage = 'Screening';
+        } else {
+          stage = 'Sourced';
+        }
+
+        mappedCandidates.push({
+          id,
+          name,
+          role,
+          score,
+          stage,
+          requisitionId,
+          requisitionTitle,
+          decision,
+        });
+      }
+
+      if (isMounted) {
+        setRequisitions(reqOptions);
+        setCandidates(mappedCandidates);
+        setIsLoading(false);
+      }
     }
-    setReadyToPersist(true);
-  }, []);
 
-  useEffect(() => {
-    if (!readyToPersist) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(candidates));
-  }, [candidates, readyToPersist]);
+    loadData();
 
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  // Filter candidates by requisition
   const filteredCandidates = useMemo(
-    () => candidates.filter(candidate => requisitionFilter === 'all' || candidate.requisitionId === requisitionFilter),
+    () =>
+      candidates.filter(
+        candidate => requisitionFilter === 'all' || candidate.requisitionId === requisitionFilter
+      ),
     [candidates, requisitionFilter]
   );
 
+  // Move candidate between stages and persist to localStorage
   const moveCandidate = (candidateId: string, direction: -1 | 1) => {
-    setCandidates(current => current.map(candidate => {
-      if (candidate.id !== candidateId) return candidate;
-      const currentIndex = stages.indexOf(candidate.stage);
-      const nextStage = stages[currentIndex + direction];
-      return nextStage ? { ...candidate, stage: nextStage } : candidate;
-    }));
+    setCandidates(current => {
+      const updated = current.map(candidate => {
+        if (candidate.id !== candidateId) return candidate;
+        const currentIndex = stages.indexOf(candidate.stage);
+        const nextStage = stages[currentIndex + direction];
+        return nextStage ? { ...candidate, stage: nextStage } : candidate;
+      });
+
+      try {
+        const stageMap: Record<string, PipelineStage> = {};
+        for (const c of updated) {
+          if (!DUMMY_IDS.has(c.id)) {
+            stageMap[c.id] = c.stage;
+          }
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(stageMap));
+      } catch (e) {
+        console.warn('[Pipeline] Could not save stage:', e);
+      }
+
+      return updated;
+    });
   };
 
   return (
@@ -132,7 +354,7 @@ export default function PipelinePage() {
             <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Pipeline</p>
             <h1 className="text-3xl font-bold tracking-tight text-[#172033] sm:text-[34px]">Recruitment pipeline</h1>
             <p className="mt-1.5 text-sm text-slate-500 sm:text-base">
-              Move candidates through the hiring stages. Every move is saved to this browser for now.
+              Move parsed candidates through the hiring stages. Parsed CVs appear in Sourced, and recommended candidates start in Screening.
             </p>
           </div>
           <label className="block w-full xl:w-[325px]">
@@ -149,74 +371,86 @@ export default function PipelinePage() {
           </label>
         </div>
 
-        <div className="overflow-x-auto pb-4">
-          <div className="grid w-max grid-flow-col auto-cols-[292px] gap-4">
-            {stages.map((stage, stageIndex) => {
-              const stageCandidates = filteredCandidates.filter(candidate => candidate.stage === stage);
-              return (
-                <section key={stage} aria-label={`${stage} stage`} className="min-w-0">
-                  <div className="mb-3 flex h-7 items-center justify-between gap-2 px-1">
-                    <h2 className="truncate text-[12px] font-bold uppercase tracking-[0.12em] text-slate-500">{stage}</h2>
-                    <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 text-[11px] font-bold text-slate-600">
-                      {stageCandidates.length}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    {stageCandidates.length === 0 ? (
-                      <div className="flex h-[102px] items-center justify-center rounded-2xl bg-slate-100/75 text-xs font-medium text-slate-400">
-                        Empty
-                      </div>
-                    ) : stageCandidates.map(candidate => {
-                      const match = getMatchPresentation(candidate);
-                      return (
-                        <article key={candidate.id} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-[0_2px_7px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:shadow-md">
-                          <h3 className="truncate text-[14px] font-bold leading-5 text-[#172033]" title={candidate.name}>{candidate.name}</h3>
-                          <p className="mt-1 truncate text-[12px] text-slate-500" title={candidate.role}>{candidate.role}</p>
-
-                          <div className="mt-2.5 flex items-center justify-between gap-2">
-                            <span className={`inline-flex max-w-[205px] items-center gap-1.5 truncate rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-[0.08em] ${match.className}`}>
-                              {match.dot && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />}
-                              {match.label}
-                            </span>
-                            <span className="shrink-0 text-[13px] font-bold tabular-nums text-slate-800">{candidate.score}</span>
-                          </div>
-
-                          <div className="mt-2.5 flex items-center justify-between">
-                            <button
-                              type="button"
-                              onClick={() => moveCandidate(candidate.id, -1)}
-                              disabled={stageIndex === 0}
-                              aria-label={`Move ${candidate.name} to previous stage`}
-                              title="Move to previous stage"
-                              className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
-                            >
-                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 12H5m0 0 6 6m-6-6 6-6" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => moveCandidate(candidate.id, 1)}
-                              disabled={stageIndex === stages.length - 1}
-                              aria-label={`Move ${candidate.name} to next stage`}
-                              title="Move to next stage"
-                              className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
-                            >
-                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 12h14m0 0-6-6m6 6-6 6" />
-                              </svg>
-                            </button>
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </div>
-                </section>
-              );
-            })}
+        {isLoading ? (
+          <div className="flex h-64 items-center justify-center">
+            <div className="flex items-center gap-3 text-sm font-medium text-slate-500">
+              <svg className="h-5 w-5 animate-spin text-brand-orange" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              Loading recruitment pipeline...
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="overflow-x-auto pb-4">
+            <div className="grid w-max grid-flow-col auto-cols-[292px] gap-4">
+              {stages.map((stage, stageIndex) => {
+                const stageCandidates = filteredCandidates.filter(candidate => candidate.stage === stage);
+                return (
+                  <section key={stage} aria-label={`${stage} stage`} className="min-w-0">
+                    <div className="mb-3 flex h-7 items-center justify-between gap-2 px-1">
+                      <h2 className="truncate text-[12px] font-bold uppercase tracking-[0.12em] text-slate-500">{stage}</h2>
+                      <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 text-[11px] font-bold text-slate-600">
+                        {stageCandidates.length}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {stageCandidates.length === 0 ? (
+                        <div className="flex h-[102px] items-center justify-center rounded-2xl bg-slate-100/75 text-xs font-medium text-slate-400">
+                          Empty
+                        </div>
+                      ) : stageCandidates.map(candidate => {
+                        const match = getMatchPresentation(candidate);
+                        return (
+                          <article key={candidate.id} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-[0_2px_7px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:shadow-md">
+                            <h3 className="truncate text-[14px] font-bold leading-5 text-[#172033]" title={candidate.name}>{candidate.name}</h3>
+                            <p className="mt-1 truncate text-[12px] text-slate-500" title={candidate.role}>{candidate.role}</p>
+
+                            <div className="mt-2.5 flex items-center justify-between gap-2">
+                              <span className={`inline-flex max-w-[205px] items-center gap-1.5 truncate rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-[0.08em] ${match.className}`}>
+                                {match.dot && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />}
+                                {match.label}
+                              </span>
+                              <span className="shrink-0 text-[13px] font-bold tabular-nums text-slate-800">{candidate.score}</span>
+                            </div>
+
+                            <div className="mt-2.5 flex items-center justify-between">
+                              <button
+                                type="button"
+                                onClick={() => moveCandidate(candidate.id, -1)}
+                                disabled={stageIndex === 0}
+                                aria-label={`Move ${candidate.name} to previous stage`}
+                                title="Move to previous stage"
+                                className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+                              >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 12H5m0 0 6 6m-6-6 6-6" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveCandidate(candidate.id, 1)}
+                                disabled={stageIndex === stages.length - 1}
+                                aria-label={`Move ${candidate.name} to next stage`}
+                                title="Move to next stage"
+                                className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+                              >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 12h14m0 0-6-6m6 6-6 6" />
+                                </svg>
+                              </button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </main>
     </>
   );

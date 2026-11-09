@@ -18,6 +18,11 @@ import { calculateCentralizedATSScore } from '../services/centralizedATSScoringS
 import { getStandardRequirementsForPosition, EVALUATION_CACHE } from './evaluationController';
 import { getJobFromStoreOrDb, GLOBAL_JOB_STORE } from './jobController';
 import { getEffectiveSkills } from '../utils/requirementUtils';
+import {
+  getConsumedJdCount,
+  isJdAlreadyEvaluated,
+  markJdAsConsumed,
+} from '../services/organizationService';
 
 export interface CandidateRecord extends CandidateParsedProfile {
   id: string;
@@ -1150,6 +1155,12 @@ export async function evaluateAndEnrichCandidateRecord(
           create: { job_id: targetJob.id, candidate_id: targetId, stage, match_score: finalScore, status: 'active' }
         }).catch(() => null);
       }
+
+      // Record JD consumption in audit log (at least 1 CV evaluated against this JD)
+      if (targetJob?.id) {
+        const jobOrg = targetJob.organizationId || (req as any).user?.organizationId || 'org-tasknera';
+        await markJdAsConsumed(targetJob.id, jobOrg, defaultUserId || undefined);
+      }
     }
   } catch (evalErr) {
     console.warn('[CV Upload Automatic Evaluation Notice]:', evalErr);
@@ -1258,7 +1269,7 @@ export const uploadCandidateCVs = async (req: AuthRequest, res: Response): Promi
     if (!isSuperAdmin) {
       const org = await prisma.organization.findUnique({
         where: { id: userOrgId },
-        select: { subscriptionPlan: true, maxResumesPerMonth: true, status: true }
+        select: { subscriptionPlan: true, maxResumesPerMonth: true, maxActiveJobs: true, status: true }
       });
 
       const planName = (org?.subscriptionPlan || 'STARTER').toUpperCase();
@@ -1289,6 +1300,28 @@ export const uploadCandidateCVs = async (req: AuthRequest, res: Response): Promi
           remaining: Math.max(0, planLimit - currentMonthUsage)
         });
         return;
+      }
+
+      // ── SUBSCRIPTION JD QUOTA ENFORCEMENT (STARTER: 20, PROFESSIONAL: 100) ──
+      if (dbJobId) {
+        try {
+          const isEvaluated = await isJdAlreadyEvaluated(dbJobId);
+          if (!isEvaluated) {
+            const maxJobs = org?.maxActiveJobs ?? (planName === 'PROFESSIONAL' ? 100 : 20);
+            const currentConsumed = await getConsumedJdCount(userOrgId);
+            if (currentConsumed >= maxJobs) {
+              res.status(403).json({
+                error: `Job Description quota reached for your ${planName} plan.`,
+                message: `Your organization has already consumed the limit of ${maxJobs} evaluated Job Descriptions on the ${planName} Plan. Evaluating CVs against a new Job Description requires upgrading your subscription.`,
+                quotaExceeded: true,
+                code: 'JD_QUOTA_EXCEEDED'
+              });
+              return;
+            }
+          }
+        } catch (jdQuotaErr: any) {
+          console.warn('[uploadCandidateCVs] JD quota check notice:', jdQuotaErr.message);
+        }
       }
     }
 
@@ -2187,6 +2220,9 @@ export const uploadCandidateCVs = async (req: AuthRequest, res: Response): Promi
         return;
       }
       CANDIDATE_STORE.set(jobId, existingCandidates);
+      if (dbJobId) {
+        markJdAsConsumed(dbJobId, userOrgId, currentUserId || undefined).catch(() => null);
+      }
       res.status(201).json({
         success: true,
         jobId,
@@ -2273,6 +2309,9 @@ export const uploadCandidateCVs = async (req: AuthRequest, res: Response): Promi
     await Promise.all(workers);
 
     CANDIDATE_STORE.set(jobId, existingCandidates);
+    if (dbJobId) {
+      markJdAsConsumed(dbJobId, userOrgId, currentUserId || undefined).catch(() => null);
+    }
 
     // Return aggregated response for real-time frontend feedback
     res.status(201).json({

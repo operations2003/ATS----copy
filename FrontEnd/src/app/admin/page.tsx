@@ -890,7 +890,7 @@ export default function AdminPage() {
               <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
 
               <div>
-                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Active Jobs Quota</div>
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Evaluated JDs Quota</div>
                 <div className="text-sm font-black text-slate-900 mt-0.5">
                   {quota.currentActiveJobs} / {quota.maxActiveJobs}
                 </div>
@@ -1864,7 +1864,7 @@ export default function AdminPage() {
                   <ul className="text-xs text-slate-600 space-y-1.5 mt-4 pt-4 border-t border-slate-100">
                     <li className="flex items-center gap-1.5">✓ <strong>500</strong> candidate resumes per month</li>
                     <li className="flex items-center gap-1.5">✓ Up to <strong>5</strong> recruiter accounts</li>
-                    <li className="flex items-center gap-1.5">✓ Up to <strong>20</strong> active job requisitions</li>
+                    <li className="flex items-center gap-1.5">✓ Up to <strong>20</strong> evaluated job requisitions</li>
                     <li className="flex items-center gap-1.5">✓ Deterministic ATS scoring engine</li>
                   </ul>
                   {isSuperAdmin ? (
@@ -1908,7 +1908,7 @@ export default function AdminPage() {
                   <ul className="text-xs text-slate-600 space-y-1.5 mt-4 pt-4 border-t border-slate-100">
                     <li className="flex items-center gap-1.5">✓ <strong>2,500</strong> candidate resumes per month</li>
                     <li className="flex items-center gap-1.5">✓ Up to <strong>15</strong> recruiter accounts</li>
-                    <li className="flex items-center gap-1.5">✓ <strong>Unlimited</strong> active job requisitions</li>
+                    <li className="flex items-center gap-1.5">✓ Up to <strong>100</strong> evaluated job requisitions</li>
                     <li className="flex items-center gap-1.5">✓ Priority ATS evaluation queue</li>
                     <li className="flex items-center gap-1.5">✓ Client Candidate Share Portals</li>
                   </ul>

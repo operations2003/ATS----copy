@@ -2,6 +2,11 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { bulkUploadService } from '../services/bulkUploadService';
 import prisma from '../config/prisma';
+import {
+  getConsumedJdCount,
+  isJdAlreadyEvaluated,
+  markJdAsConsumed,
+} from '../services/organizationService';
 
 /**
  * Initialize a new bulk upload batch session
@@ -37,6 +42,32 @@ export const createBulkBatch = async (req: AuthRequest, res: Response): Promise<
       if (!isSuperAdmin && (jobRecord.organizationId || 'org-tasknera') !== userOrgId) {
         res.status(403).json({ error: 'Forbidden: Cannot access job from another organization' });
         return;
+      }
+
+      // ── SUBSCRIPTION JD QUOTA ENFORCEMENT ──
+      if (!isSuperAdmin) {
+        try {
+          const isEvaluated = await isJdAlreadyEvaluated(jobId);
+          if (!isEvaluated) {
+            const org = await prisma.organization.findUnique({
+              where: { id: userOrgId },
+              select: { maxActiveJobs: true, subscriptionPlan: true },
+            });
+            const maxJobs = org?.maxActiveJobs ?? 20;
+            const currentConsumed = await getConsumedJdCount(userOrgId);
+            if (currentConsumed >= maxJobs) {
+              res.status(403).json({
+                error: `Job Description quota reached for your ${org?.subscriptionPlan || 'STARTER'} plan.`,
+                message: `Your organization has already consumed the limit of ${maxJobs} evaluated Job Descriptions. Evaluating CVs against a new Job Description requires upgrading your subscription.`,
+                quotaExceeded: true,
+                code: 'JD_QUOTA_EXCEEDED',
+              });
+              return;
+            }
+          }
+        } catch (jdQuotaErr: any) {
+          console.warn('[createBulkBatch] JD quota check notice:', jdQuotaErr.message);
+        }
       }
     }
 

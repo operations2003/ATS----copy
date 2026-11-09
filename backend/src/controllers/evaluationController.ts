@@ -9,6 +9,7 @@ import { calculateCentralizedATSScore } from '../services/centralizedATSScoringS
  * Standard requirement helper for fallback jobs or unseeded requisitions
  */
 import { getJobFromStoreOrDb } from './jobController';
+import { markJdAsConsumed } from '../services/organizationService';
 
 /**
  * Standard requirement helper for fallback jobs or unseeded requisitions across multiple domains
@@ -445,6 +446,11 @@ export const getCandidateEvaluation = async (req: AuthRequest, res: Response): P
 
     const evaluation = await evaluateCandidateAgainstRequirements(candidateData, jobData, requirements);
 
+    if (jobData?.id && jobData.id !== 'pool') {
+      const targetOrg = jobData.organizationId || (typeof orgId !== 'undefined' ? orgId : (typeof organizationId !== 'undefined' ? organizationId : 'org-tasknera'));
+      markJdAsConsumed(jobData.id, targetOrg, user?.userId).catch(() => null);
+    }
+
     res.status(200).json({
       success: true,
       evaluation,
@@ -517,6 +523,11 @@ export const evaluateCandidateController = async (req: AuthRequest, res: Respons
 
     // Run deterministic / AI semantic evaluation
     const evaluation = await evaluateCandidateAgainstRequirements(candidateData, jobData, requirements);
+
+    if (jobData?.id && jobData.id !== 'pool') {
+      const targetOrg = jobData.organizationId || (typeof orgId !== 'undefined' ? orgId : (typeof organizationId !== 'undefined' ? organizationId : 'org-tasknera'));
+      markJdAsConsumed(jobData.id, targetOrg, user?.userId).catch(() => null);
+    }
 
     // Ensure Candidate exists in PostgreSQL database with valid UUID
     let dbCandidateId: string | null = null;
@@ -999,6 +1010,11 @@ export const matchCandidateWithJobController = async (req: AuthRequest, res: Res
 
     // 4. Run Requirement Matching & AI Semantic Scoring Engine
     const evaluation = await evaluateCandidateAgainstRequirements(candidateData, jobData, requirements);
+
+    if (jobData?.id && jobData.id !== 'pool') {
+      const targetOrg = jobData.organizationId || (typeof orgId !== 'undefined' ? orgId : (typeof organizationId !== 'undefined' ? organizationId : 'org-tasknera'));
+      markJdAsConsumed(jobData.id, targetOrg, user?.userId).catch(() => null);
+    }
 
     const finalScore = evaluation.overallScore ?? evaluation.overallMatch ?? 0;
     const complianceStr = evaluation.mandatoryCompliance
