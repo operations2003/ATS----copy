@@ -125,6 +125,16 @@ export const Header: React.FC = () => {
         </svg>
       ),
     },
+    {
+      label: 'Pipeline',
+      href: '/pipeline',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <rect x="3.5" y="4" width="17" height="16" rx="1.5" strokeWidth={2} />
+          <path d="M9 4.5v15M15 4.5v15" strokeWidth={2} strokeLinecap="round" />
+        </svg>
+      ),
+    },
     ...(isAdmin ? [
       {
         label: isSuperAdmin ? 'Super Admin' : 'Admin Hub',
@@ -327,6 +337,28 @@ export const Header: React.FC = () => {
 
         {/* Right: Status / Trial Badge */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {pathname?.startsWith('/pipeline') && (
+            <>
+              <Link
+                href="/candidates"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M4 16.5v2A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5v-2" />
+                </svg>
+                Upload resumes
+              </Link>
+              <Link
+                href="/jobs/create"
+                className="inline-flex items-center gap-2 rounded-xl bg-[#F26943] px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#e95d38]"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M4 16.5v2A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5v-2" />
+                </svg>
+                New requisition
+              </Link>
+            </>
+          )}
           {user?.subscription?.isTrial && !user?.subscription?.isExpired && (
             <div
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10.5px] font-bold uppercase tracking-wider"
