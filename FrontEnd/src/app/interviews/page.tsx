@@ -108,13 +108,15 @@ function mapPipelineQueue(): QueueCandidate[] {
     const parsed = JSON.parse(localStorage.getItem(PIPELINE_STORAGE_KEY) || 'null');
     if (Array.isArray(parsed)) {
       const mapped = parsed
-        .filter((candidate: any) => ['Shortlisted', 'Round 1 Phase'].includes(candidate?.stage))
+        .filter((candidate: any) =>
+          ['Shortlisted', 'Recruiter Screen', 'Round 1 Phase', 'Round 2 Phase'].includes(candidate?.stage)
+        )
         .map((candidate: any): QueueCandidate => ({
           id: String(candidate.id),
           name: String(candidate.name || 'Candidate'),
           role: String(candidate.role || 'Position pending'),
           score: Number(candidate.score) || 0,
-          stage: candidate.stage === 'Shortlisted' ? 'Shortlisted' : 'Technical interview',
+          stage: candidate.stage === 'Shortlisted' ? 'Shortlisted' : candidate.stage,
           requisitionId: String(candidate.requisitionId || 'other'),
         }));
       if (mapped.length > 0) return mapped;

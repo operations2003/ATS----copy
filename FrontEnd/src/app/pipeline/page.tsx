@@ -6,7 +6,6 @@ import { useAuth } from '@/context/AuthContext';
 import { atsStore } from '@/lib/atsStore';
 
 type PipelineStage =
-  | 'Sourced'
   | 'Screening'
   | 'Shortlisted'
   | 'Recruiter Screen'
@@ -49,7 +48,6 @@ const STORAGE_KEY = 'tasknera_recruitment_pipeline_v1';
 const INTERVIEW_STORAGE_KEY = 'tasknera_interviews_frontend_v1';
 
 const stages: PipelineStage[] = [
-  'Sourced',
   'Screening',
   'Shortlisted',
   'Recruiter Screen',
@@ -257,14 +255,21 @@ export default function PipelinePage() {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) {
               for (const c of parsed) {
-                if (c && c.id && !DUMMY_IDS.has(c.id) && stages.includes(c.stage)) {
-                  stageOverrides[c.id] = c.stage;
+                if (c && c.id && !DUMMY_IDS.has(c.id)) {
+                  // Legacy migration: any candidate previously stored in 'Sourced' maps to 'Screening'
+                  const mappedStage = c.stage === 'Sourced' ? 'Screening' : c.stage;
+                  if (stages.includes(mappedStage)) {
+                    stageOverrides[c.id] = mappedStage;
+                  }
                 }
               }
             } else if (parsed && typeof parsed === 'object') {
               for (const [cId, cStage] of Object.entries(parsed)) {
-                if (!DUMMY_IDS.has(cId) && stages.includes(cStage as PipelineStage)) {
-                  stageOverrides[cId] = cStage as PipelineStage;
+                if (!DUMMY_IDS.has(cId)) {
+                  const mappedStage = cStage === 'Sourced' ? 'Screening' : (cStage as PipelineStage);
+                  if (stages.includes(mappedStage)) {
+                    stageOverrides[cId] = mappedStage;
+                  }
                 }
               }
             }
@@ -273,7 +278,7 @@ export default function PipelinePage() {
       }
 
       // 4. Map Parsed Candidates & Assign Initial Stages
-      // Rule: Parsed CVs are shown in "Sourced", and any falling in the category of "SUBMIT" are in "Screening"
+      // Rule: Sourced section removed - all parsed candidates start directly in "Screening"
       const mappedCandidates: PipelineCandidate[] = [];
       const seenIds = new Set<string>();
 
@@ -312,14 +317,12 @@ export default function PipelinePage() {
 
         // Stage placement rule:
         // - Honored if manually moved by recruiter
-        // - Otherwise: SUBMIT goes to "Screening", all other parsed CVs go to "Sourced"
-        let stage: PipelineStage = 'Sourced';
+        // - All parsed CVs start directly in "Screening"
+        let stage: PipelineStage = 'Screening';
         if (stageOverrides[id]) {
           stage = stageOverrides[id];
-        } else if (decision === 'SUBMIT') {
-          stage = 'Screening';
         } else {
-          stage = 'Sourced';
+          stage = 'Screening';
         }
 
         mappedCandidates.push({
@@ -483,7 +486,7 @@ export default function PipelinePage() {
             <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Pipeline</p>
             <h1 className="text-3xl font-bold tracking-tight text-[#172033] sm:text-[34px]">Recruitment pipeline</h1>
             <p className="mt-1.5 text-sm text-slate-500 sm:text-base">
-              Move parsed candidates through the hiring stages. Parsed CVs appear in Sourced, and recommended candidates start in Screening.
+              Move candidates through the hiring stages. All parsed CVs start directly in Screening.
             </p>
           </div>
           <label className="block w-full xl:w-[325px]">
