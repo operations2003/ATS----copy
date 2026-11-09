@@ -252,10 +252,12 @@ export default function InterviewsPage() {
       return;
     }
 
+    const candidateName = 'name' in candidate ? candidate.name : candidate.candidateName;
+
     const interview: InterviewEntry = {
       id: editingInterviewId || newId('interview'),
       candidateId: candidate.id,
-      candidateName: candidate.name,
+      candidateName,
       role: candidate.role,
       requisitionId: candidate.requisitionId,
       round: scheduleForm.round,
@@ -266,7 +268,7 @@ export default function InterviewsPage() {
       status: 'scheduled',
     };
 
-    const detail = `${candidate.name} • ${interview.round} • ${formatDateTime(interview.startAt)}`;
+    const detail = `${candidateName} • ${interview.round} • ${formatDateTime(interview.startAt)}`;
     setStore(current => ({
       ...current,
       interviews: editingInterviewId
