@@ -145,6 +145,15 @@ export const Header: React.FC = () => {
         </svg>
       ),
     },
+    {
+      label: 'Reports',
+      href: '/reports',
+      icon: (
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 3.5h7l5 5v12A1.5 1.5 0 0117.5 22h-11A1.5 1.5 0 015 20.5v-15A2 2 0 017 3.5zM14 3.5v5h5M8.5 13h7M8.5 16.5h7" />
+        </svg>
+      ),
+    },
     ...(isAdmin ? [
       {
         label: isSuperAdmin ? 'Super Admin' : 'Admin Hub',
@@ -347,7 +356,7 @@ export const Header: React.FC = () => {
 
         {/* Right: Status / Trial Badge */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {(pathname?.startsWith('/pipeline') || pathname?.startsWith('/interviews')) && (
+          {(pathname?.startsWith('/pipeline') || pathname?.startsWith('/interviews') || pathname?.startsWith('/reports')) && (
             <>
               <Link
                 href="/candidates"
