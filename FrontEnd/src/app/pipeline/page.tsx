@@ -8,7 +8,7 @@ import { atsStore } from '@/lib/atsStore';
 type PipelineStage =
   | 'Screening'
   | 'Shortlisted'
-  | 'Recruiter Screen'
+  | 'Recruiter Name'
   | 'Round 1 Phase'
   | 'Round 2 Phase'
   | 'Selected'
@@ -34,6 +34,7 @@ interface PipelineCandidate {
   requisitionId: string;
   requisitionTitle?: string;
   decision?: 'SUBMIT' | 'REVIEW' | 'DO NOT SUBMIT';
+  recruiterName?: string;
 }
 
 interface ScheduleForm {
@@ -50,7 +51,7 @@ const INTERVIEW_STORAGE_KEY = 'tasknera_interviews_frontend_v1';
 const stages: PipelineStage[] = [
   'Screening',
   'Shortlisted',
-  'Recruiter Screen',
+  'Recruiter Name',
   'Round 1 Phase',
   'Round 2 Phase',
   'Selected',
@@ -256,8 +257,13 @@ export default function PipelinePage() {
             if (Array.isArray(parsed)) {
               for (const c of parsed) {
                 if (c && c.id && !DUMMY_IDS.has(c.id)) {
-                  // Legacy migration: any candidate previously stored in 'Sourced' maps to 'Screening'
-                  const mappedStage = c.stage === 'Sourced' ? 'Screening' : c.stage;
+                  // Legacy migrations: 'Sourced' -> 'Screening', 'Recruiter Screen' -> 'Recruiter Name'
+                  const mappedStage =
+                    c.stage === 'Sourced'
+                      ? 'Screening'
+                      : c.stage === 'Recruiter Screen'
+                      ? 'Recruiter Name'
+                      : c.stage;
                   if (stages.includes(mappedStage)) {
                     stageOverrides[c.id] = mappedStage;
                   }
@@ -266,7 +272,12 @@ export default function PipelinePage() {
             } else if (parsed && typeof parsed === 'object') {
               for (const [cId, cStage] of Object.entries(parsed)) {
                 if (!DUMMY_IDS.has(cId)) {
-                  const mappedStage = cStage === 'Sourced' ? 'Screening' : (cStage as PipelineStage);
+                  const mappedStage =
+                    cStage === 'Sourced'
+                      ? 'Screening'
+                      : cStage === 'Recruiter Screen'
+                      ? 'Recruiter Name'
+                      : (cStage as PipelineStage);
                   if (stages.includes(mappedStage)) {
                     stageOverrides[cId] = mappedStage;
                   }
@@ -325,6 +336,28 @@ export default function PipelinePage() {
           stage = 'Screening';
         }
 
+        // Resolve Recruiter Name who added / parsed this candidate
+        const isUuid = (val?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val || '');
+        let recruiterName =
+          c.recruiterName ||
+          c.user?.name ||
+          c.uploadedByName ||
+          c.assignedRecruiter ||
+          c.recruiter ||
+          c.screenedBy;
+        if (!recruiterName && c.user?.email) {
+          recruiterName = c.user.email;
+        }
+        if (!recruiterName || isUuid(recruiterName)) {
+          if (c.uploadedBy && !isUuid(c.uploadedBy)) {
+            recruiterName = c.uploadedBy;
+          } else if (c.createdBy && !isUuid(c.createdBy)) {
+            recruiterName = c.createdBy;
+          } else {
+            recruiterName = user?.name || user?.email || 'Recruiter';
+          }
+        }
+
         mappedCandidates.push({
           id,
           name,
@@ -334,6 +367,7 @@ export default function PipelinePage() {
           requisitionId,
           requisitionTitle,
           decision,
+          recruiterName,
         });
       }
 
@@ -538,6 +572,25 @@ export default function PipelinePage() {
                           <article key={candidate.id} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-[0_2px_7px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:shadow-md">
                             <h3 className="truncate text-[14px] font-bold leading-5 text-[#172033]" title={candidate.name}>{candidate.name}</h3>
                             <p className="mt-1 truncate text-[12px] text-slate-500" title={candidate.role}>{candidate.role}</p>
+
+                            {/* Recruiter who added this candidate */}
+                            {stage === 'Recruiter Name' ? (
+                              <div className="mt-2.5 rounded-xl border border-indigo-100 bg-indigo-50/80 px-2.5 py-1.5 text-[11px] text-indigo-900 shadow-xs">
+                                <div className="flex items-center gap-1.5 font-semibold">
+                                  <svg className="h-3.5 w-3.5 shrink-0 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                  </svg>
+                                  <span className="truncate">Added by: <strong className="font-bold text-indigo-700">{candidate.recruiterName || user?.name || 'Recruiter'}</strong></span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="mt-1.5 flex items-center gap-1 text-[11px] text-slate-400">
+                                <svg className="h-3 w-3 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                                <span className="truncate">{candidate.recruiterName || user?.name || 'Recruiter'}</span>
+                              </div>
+                            )}
 
                             <div className="mt-2.5 flex items-center justify-between gap-2">
                               <span className={`inline-flex max-w-[205px] items-center gap-1.5 truncate rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-[0.08em] ${match.className}`}>

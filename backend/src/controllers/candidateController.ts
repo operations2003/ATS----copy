@@ -34,6 +34,8 @@ export interface CandidateRecord extends CandidateParsedProfile {
   uploadedAt: string;
   uploadedBy?: string;
   createdBy?: string;
+  recruiterName?: string;
+  uploadedByName?: string;
   isDuplicate?: boolean;
   source?: string;
   matchScore?: number;
@@ -398,6 +400,8 @@ export function mapDbCandidateToRecord(c: any, defaultJobId?: string): Candidate
     uploadedAt: c.created_at ? c.created_at.toISOString() : new Date().toISOString(),
     uploadedBy: c.created_by,
     createdBy: c.created_by,
+    recruiterName: c.user?.name || c.user?.email || c.recruiterName || c.assignedRecruiter || undefined,
+    uploadedByName: c.user?.name || c.user?.email || c.uploadedByName || undefined,
     organizationId: c.organizationId || c.user?.organizationId || 'org-tasknera',
     source: c.source || 'manual_upload',
     ...(() => {
@@ -466,6 +470,10 @@ export const getAllCandidates = async (req: AuthRequest, res: Response): Promise
           source: true,
           created_at: true,
           organizationId: true,
+          created_by: true,
+          user: {
+            select: { id: true, name: true, email: true }
+          },
           skills: {
             select: { skill: true }
           },
@@ -659,6 +667,10 @@ export const getCandidatesForJob = async (req: AuthRequest, res: Response): Prom
           source: true,
           created_at: true,
           organizationId: true,
+          created_by: true,
+          user: {
+            select: { id: true, name: true, email: true }
+          },
           skills: {
             select: { skill: true }
           },

@@ -109,7 +109,7 @@ function mapPipelineQueue(): QueueCandidate[] {
     if (Array.isArray(parsed)) {
       const mapped = parsed
         .filter((candidate: any) =>
-          ['Shortlisted', 'Recruiter Screen', 'Round 1 Phase', 'Round 2 Phase'].includes(candidate?.stage)
+          ['Shortlisted', 'Recruiter Screen', 'Recruiter Name', 'Round 1 Phase', 'Round 2 Phase'].includes(candidate?.stage)
         )
         .map((candidate: any): QueueCandidate => ({
           id: String(candidate.id),
