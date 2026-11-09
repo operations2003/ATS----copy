@@ -53,6 +53,30 @@ export interface InterviewFeedbackRatings {
   experience: number;
 }
 
+export interface CandidateRoundOutcome {
+  id: string;
+  round: string;
+  when: string;
+  outcome: string;
+  finalRecommendation?: string;
+  averageRating?: number;
+  ratings?: InterviewFeedbackRatings;
+  comments: string;
+  interviewer?: string;
+}
+
+function isRound1(roundName?: string) {
+  if (!roundName) return false;
+  const lower = roundName.toLowerCase();
+  return lower.includes('round 1') || lower.includes('(round 1)') || lower.includes('phase 1') || lower.includes('recruiter screen');
+}
+
+function isRound2(roundName?: string) {
+  if (!roundName) return false;
+  const lower = roundName.toLowerCase();
+  return lower.includes('round 2') || lower.includes('(round 2)') || lower.includes('phase 2') || lower.includes('managerial') || lower.includes('leadership');
+}
+
 const defaultFeedbackRatings: InterviewFeedbackRatings = {
   technicalKnowledge: 4,
   communication: 4,
@@ -139,13 +163,16 @@ export default function PipelinePage() {
     notes: '',
   });
 
-  // Interviewer Feedback Modal State (for Round 1 Phase and Round 2 Phase)
+  // Interviewer Feedback & Multi-Round History State (Round 1 & Round 2 tracking)
   const [feedbackCandidate, setFeedbackCandidate] = useState<PipelineCandidate | null>(null);
   const [feedbackRound, setFeedbackRound] = useState<string>('Technical Interview (Round 1)');
   const [feedbackRatings, setFeedbackRatings] = useState<InterviewFeedbackRatings>(defaultFeedbackRatings);
   const [feedbackRecommendation, setFeedbackRecommendation] = useState<'Strong Hire' | 'Hire' | 'Hold' | 'Do Not Hire'>('Hire');
   const [feedbackComments, setFeedbackComments] = useState('');
   const [feedbackOutcomesMap, setFeedbackOutcomesMap] = useState<Record<string, { averageRating: number; recommendation: string; round: string }>>({});
+  const [candidateRoundHistory, setCandidateRoundHistory] = useState<Record<string, CandidateRoundOutcome[]>>({});
+  const [candidateInterviewsMap, setCandidateInterviewsMap] = useState<Record<string, any[]>>({});
+  const [selectedHistoryCandidate, setSelectedHistoryCandidate] = useState<PipelineCandidate | null>(null);
 
   // Load real requisitions and parsed candidates
   useEffect(() => {
@@ -395,8 +422,11 @@ export default function PipelinePage() {
         });
       }
 
-      // 5. Ingest existing interview outcomes / feedback
+      // 5. Ingest existing interview outcomes & history across rounds
       const outMap: Record<string, { averageRating: number; recommendation: string; round: string }> = {};
+      const historyMap: Record<string, CandidateRoundOutcome[]> = {};
+      const interviewsMap: Record<string, any[]> = {};
+
       if (typeof window !== 'undefined') {
         try {
           const rawStore = localStorage.getItem(INTERVIEW_STORAGE_KEY);
@@ -405,13 +435,52 @@ export default function PipelinePage() {
             if (parsedStore && Array.isArray(parsedStore.outcomes)) {
               for (const o of parsedStore.outcomes) {
                 if (o) {
-                  const entry = {
+                  const entry: CandidateRoundOutcome = {
+                    id: String(o.id || `outcome-${Math.random()}`),
+                    round: String(o.round || 'Interview Round'),
+                    when: String(o.when || new Date().toISOString()),
+                    outcome: String(o.outcome || 'Yes'),
+                    finalRecommendation: o.finalRecommendation,
                     averageRating: typeof o.averageRating === 'number' ? o.averageRating : 4.0,
-                    recommendation: o.finalRecommendation || o.outcome || 'Hire',
-                    round: o.round || 'Interview Round',
+                    ratings: o.ratings,
+                    comments: String(o.comments || ''),
+                    interviewer: o.interviewer,
                   };
-                  if (o.candidateId) outMap[String(o.candidateId).toLowerCase()] = entry;
-                  if (o.candidateName) outMap[String(o.candidateName).toLowerCase()] = entry;
+
+                  const keys = [
+                    o.candidateId ? String(o.candidateId).toLowerCase() : null,
+                    o.candidateName ? String(o.candidateName).toLowerCase() : null,
+                  ].filter(Boolean) as string[];
+
+                  for (const k of keys) {
+                    if (!historyMap[k]) historyMap[k] = [];
+                    if (!historyMap[k].some(it => it.id === entry.id)) {
+                      historyMap[k].push(entry);
+                    }
+                    outMap[k] = {
+                      averageRating: entry.averageRating || 4.0,
+                      recommendation: entry.finalRecommendation || entry.outcome || 'Hire',
+                      round: entry.round,
+                    };
+                  }
+                }
+              }
+            }
+
+            if (parsedStore && Array.isArray(parsedStore.interviews)) {
+              for (const inv of parsedStore.interviews) {
+                if (inv) {
+                  const keys = [
+                    inv.candidateId ? String(inv.candidateId).toLowerCase() : null,
+                    inv.candidateName ? String(inv.candidateName).toLowerCase() : null,
+                  ].filter(Boolean) as string[];
+
+                  for (const k of keys) {
+                    if (!interviewsMap[k]) interviewsMap[k] = [];
+                    if (!interviewsMap[k].some((it: any) => it.id === inv.id)) {
+                      interviewsMap[k].push(inv);
+                    }
+                  }
                 }
               }
             }
@@ -423,6 +492,8 @@ export default function PipelinePage() {
         setRequisitions(reqOptions);
         setCandidates(mappedCandidates);
         setFeedbackOutcomesMap(outMap);
+        setCandidateRoundHistory(historyMap);
+        setCandidateInterviewsMap(interviewsMap);
         setIsLoading(false);
       }
     }
@@ -548,6 +619,18 @@ export default function PipelinePage() {
       store.interviews = [newInterview, ...(store.interviews || [])];
       store.activity = [activityItem, ...(store.activity || [])].slice(0, 25);
       localStorage.setItem(INTERVIEW_STORAGE_KEY, JSON.stringify(store));
+
+      const cid = schedulingCandidate.id.toLowerCase();
+      const cname = schedulingCandidate.name.toLowerCase();
+      setCandidateInterviewsMap(prev => {
+        const updated = { ...prev };
+        for (const k of [cid, cname]) {
+          const list = updated[k] ? [...updated[k]] : [];
+          list.unshift(newInterview);
+          updated[k] = list;
+        }
+        return updated;
+      });
     } catch (saveErr) {
       console.warn('[Pipeline] Could not save scheduled interview:', saveErr);
     }
@@ -629,6 +712,21 @@ export default function PipelinePage() {
         [cid]: { averageRating: avgScore, recommendation: feedbackRecommendation, round: feedbackRound },
         [cname]: { averageRating: avgScore, recommendation: feedbackRecommendation, round: feedbackRound },
       }));
+
+      setCandidateRoundHistory(prev => {
+        const updated = { ...prev };
+        for (const k of [cid, cname]) {
+          const list = updated[k] ? [...updated[k]] : [];
+          const existingIdx = list.findIndex(it => it.round === feedbackRound);
+          if (existingIdx >= 0) {
+            list[existingIdx] = outcome;
+          } else {
+            list.push(outcome);
+          }
+          updated[k] = list;
+        }
+        return updated;
+      });
     } catch (saveErr) {
       console.warn('[Pipeline] Could not save feedback:', saveErr);
     }
@@ -726,36 +824,122 @@ export default function PipelinePage() {
                               <span className="shrink-0 text-[13px] font-bold tabular-nums text-slate-800">{candidate.score}</span>
                             </div>
 
-                            {/* Round 1 & Round 2 Interviewer Feedback Action */}
-                            {(stage === 'Round 1 Phase' || stage === 'Round 2 Phase') && (() => {
-                              const outcome =
-                                feedbackOutcomesMap[candidate.id.toLowerCase()] ||
-                                feedbackOutcomesMap[candidate.name.toLowerCase()];
+                            {/* ── Multi-Round Progress Tracker & History Trigger ── */}
+                            {['Round 1 Phase', 'Round 2 Phase', 'Selected', 'Offered', 'Joined'].includes(stage) && (() => {
+                              const cid = candidate.id.toLowerCase();
+                              const cname = candidate.name.toLowerCase();
+                              const history = candidateRoundHistory[cid] || candidateRoundHistory[cname] || [];
+                              const interviews = candidateInterviewsMap[cid] || candidateInterviewsMap[cname] || [];
+
+                              const r1Outcome = history.find(o => isRound1(o.round));
+                              const r2Outcome = history.find(o => isRound2(o.round));
+
+                              const r1Interview = interviews.find(i => isRound1(i.round));
+                              const r2Interview = interviews.find(i => isRound2(i.round));
+
+                              const isPastR1 = ['Round 2 Phase', 'Selected', 'Offered', 'Joined'].includes(stage);
+                              const hasHistory = history.length > 0;
+
                               return (
-                                <div className="mt-2.5 flex items-center justify-between gap-1.5 border-t border-slate-100 pt-2 text-xs">
-                                  {outcome ? (
-                                    <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
-                                      <span className="text-amber-500">★</span> {outcome.averageRating.toFixed(1)} · {outcome.recommendation}
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] font-medium text-slate-400">Feedback pending</span>
+                                <div className="mt-2.5 rounded-2xl border border-slate-200/90 bg-slate-50/70 p-2.5">
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Rounds Progress</span>
+                                    {hasHistory && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedHistoryCandidate(candidate)}
+                                        className="text-[10px] font-bold text-[#F26943] hover:underline inline-flex items-center gap-0.5"
+                                      >
+                                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        History ({history.length})
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-1.5 text-xs">
+                                    {/* Round 1 pill */}
+                                    <div className={`rounded-xl border p-2 flex flex-col justify-between transition-all ${
+                                      r1Outcome
+                                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                                        : r1Interview
+                                        ? 'border-violet-200 bg-violet-50 text-violet-800'
+                                        : (stage === 'Round 1 Phase' || isPastR1)
+                                        ? 'border-amber-200 bg-amber-50 text-amber-800'
+                                        : 'border-slate-200 bg-white text-slate-400'
+                                    }`}>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-bold">Round 1</span>
+                                        {r1Outcome && <span className="text-[10px] text-amber-500 font-bold">★ {r1Outcome.averageRating?.toFixed(1)}</span>}
+                                      </div>
+                                      <span className="text-[10px] font-medium truncate mt-0.5">
+                                        {r1Outcome
+                                          ? (r1Outcome.finalRecommendation || r1Outcome.outcome)
+                                          : r1Interview
+                                          ? (r1Interview.status === 'completed' ? 'Completed' : 'Booked')
+                                          : stage === 'Round 1 Phase'
+                                          ? 'In Progress'
+                                          : 'Completed'}
+                                      </span>
+                                    </div>
+
+                                    {/* Round 2 pill */}
+                                    <div className={`rounded-xl border p-2 flex flex-col justify-between transition-all ${
+                                      r2Outcome
+                                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                                        : r2Interview
+                                        ? 'border-violet-200 bg-violet-50 text-violet-800'
+                                        : stage === 'Round 2 Phase'
+                                        ? 'border-amber-200 bg-amber-50 text-amber-800'
+                                        : 'border-slate-200 bg-white text-slate-400'
+                                    }`}>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-bold">Round 2</span>
+                                        {r2Outcome && <span className="text-[10px] text-amber-500 font-bold">★ {r2Outcome.averageRating?.toFixed(1)}</span>}
+                                      </div>
+                                      <span className="text-[10px] font-medium truncate mt-0.5">
+                                        {r2Outcome
+                                          ? (r2Outcome.finalRecommendation || r2Outcome.outcome)
+                                          : r2Interview
+                                          ? (r2Interview.status === 'completed' ? 'Completed' : 'Booked')
+                                          : stage === 'Round 2 Phase'
+                                          ? 'In Progress'
+                                          : ['Selected', 'Offered', 'Joined'].includes(stage)
+                                          ? 'Completed'
+                                          : 'Pending'}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Action button if currently in Round 1 or Round 2 */}
+                                  {(stage === 'Round 1 Phase' || stage === 'Round 2 Phase') && (
+                                    <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center justify-between">
+                                      <span className="text-[10px] text-slate-500">
+                                        {stage === 'Round 1 Phase'
+                                          ? (r1Outcome ? 'R1 Rated' : 'R1 Feedback due')
+                                          : (r2Outcome ? 'R2 Rated' : 'R2 Feedback due')}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setFeedbackCandidate(candidate);
+                                          const targetRound = stage === 'Round 2 Phase' ? 'Technical Interview (Round 2)' : 'Technical Interview (Round 1)';
+                                          setFeedbackRound(targetRound);
+                                          setFeedbackRatings(defaultFeedbackRatings);
+                                          const currOutcome = stage === 'Round 2 Phase' ? r2Outcome : r1Outcome;
+                                          setFeedbackRecommendation(currOutcome?.finalRecommendation === 'Strong Hire' || currOutcome?.finalRecommendation === 'Hire' || currOutcome?.finalRecommendation === 'Hold' || currOutcome?.finalRecommendation === 'Do Not Hire' ? currOutcome.finalRecommendation : 'Hire');
+                                          setFeedbackComments(currOutcome?.comments || '');
+                                        }}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition shadow-2xs"
+                                      >
+                                        <svg className="h-3 w-3 text-[#F26943]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                        {(stage === 'Round 1 Phase' ? r1Outcome : r2Outcome) ? 'Edit feedback' : 'Record feedback'}
+                                      </button>
+                                    </div>
                                   )}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setFeedbackCandidate(candidate);
-                                      setFeedbackRound(stage === 'Round 2 Phase' ? 'Technical Interview (Round 2)' : 'Technical Interview (Round 1)');
-                                      setFeedbackRatings(defaultFeedbackRatings);
-                                      setFeedbackRecommendation(outcome?.recommendation === 'Strong Hire' || outcome?.recommendation === 'Hire' || outcome?.recommendation === 'Hold' || outcome?.recommendation === 'Do Not Hire' ? outcome.recommendation : 'Hire');
-                                      setFeedbackComments('');
-                                    }}
-                                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition shadow-2xs"
-                                  >
-                                    <svg className="h-3 w-3 text-[#F26943]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                    {outcome ? 'Edit feedback' : 'Record feedback'}
-                                  </button>
                                 </div>
                               );
                             })()}
@@ -1041,6 +1225,96 @@ export default function PipelinePage() {
                 }}
                 onSubmit={handleSavePipelineFeedback}
               >
+                {/* Previous Round History Context (Round 1 -> Round 2 tracking) */}
+                {(() => {
+                  const cid = feedbackCandidate.id.toLowerCase();
+                  const cname = feedbackCandidate.name.toLowerCase();
+                  const history = candidateRoundHistory[cid] || candidateRoundHistory[cname] || [];
+                  const priorEvaluations = history.filter(h => h.round !== feedbackRound);
+
+                  if (priorEvaluations.length === 0) return null;
+
+                  return (
+                    <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/60 to-indigo-50/40 p-3.5 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                          <svg className="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Previous Round Evaluation History ({priorEvaluations.length})
+                        </span>
+                        <span className="text-[11px] font-medium text-blue-700">Reference for Round 2</span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {priorEvaluations.map(prev => (
+                          <div key={prev.id} className="rounded-xl border border-blue-200/80 bg-white/90 p-3 shadow-2xs space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <span className="text-xs font-bold text-slate-800">{prev.round}</span>
+                                <div className="text-[11px] text-slate-500">
+                                  {prev.interviewer ? `Evaluated by ${prev.interviewer} · ` : ''}
+                                  {new Date(prev.when).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {typeof prev.averageRating === 'number' && (
+                                  <span className="text-xs font-bold text-amber-600">
+                                    ★ {prev.averageRating.toFixed(1)} / 5.0
+                                  </span>
+                                )}
+                                <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-bold ${
+                                  prev.finalRecommendation === 'Strong Hire' || prev.outcome === 'Strong Yes'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : prev.finalRecommendation === 'Hire' || prev.outcome === 'Yes'
+                                    ? 'bg-teal-100 text-teal-800'
+                                    : prev.finalRecommendation === 'Hold' || prev.outcome === 'Maybe'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-rose-100 text-rose-800'
+                                }`}>
+                                  {prev.finalRecommendation || prev.outcome}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* KPI chips */}
+                            {prev.ratings && (
+                              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-1 text-[11px]">
+                                <div className="rounded-lg bg-slate-50 px-2 py-1 border border-slate-100">
+                                  <span className="text-slate-500 block text-[10px]">Technical</span>
+                                  <span className="font-bold text-slate-800">{prev.ratings.technicalKnowledge}/5</span>
+                                </div>
+                                <div className="rounded-lg bg-slate-50 px-2 py-1 border border-slate-100">
+                                  <span className="text-slate-500 block text-[10px]">Communication</span>
+                                  <span className="font-bold text-slate-800">{prev.ratings.communication}/5</span>
+                                </div>
+                                <div className="rounded-lg bg-slate-50 px-2 py-1 border border-slate-100">
+                                  <span className="text-slate-500 block text-[10px]">Problem-solving</span>
+                                  <span className="font-bold text-slate-800">{prev.ratings.problemSolving}/5</span>
+                                </div>
+                                <div className="rounded-lg bg-slate-50 px-2 py-1 border border-slate-100">
+                                  <span className="text-slate-500 block text-[10px]">Role skills</span>
+                                  <span className="font-bold text-slate-800">{prev.ratings.roleSpecificSkills}/5</span>
+                                </div>
+                                <div className="rounded-lg bg-slate-50 px-2 py-1 border border-slate-100">
+                                  <span className="text-slate-500 block text-[10px]">Experience</span>
+                                  <span className="font-bold text-slate-800">{prev.ratings.experience}/5</span>
+                                </div>
+                              </div>
+                            )}
+
+                            {prev.comments && (
+                              <p className="text-xs text-slate-600 bg-slate-50 rounded-lg p-2 italic border border-slate-100">
+                                &ldquo;{prev.comments}&rdquo;
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Round selection */}
                 <label className="block text-xs font-bold text-slate-700">
                   Interview Round
@@ -1170,6 +1444,293 @@ export default function PipelinePage() {
                     className="rounded-xl bg-[#F26943] px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#e95d38]"
                   >
                     Save round feedback
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        );
+      })()}
+
+      {/* ── CANDIDATE ROUND HISTORY MODAL (TRACK CANDIDATE PROGRESS ACROSS ROUNDS) ── */}
+      {selectedHistoryCandidate && (() => {
+        const cid = selectedHistoryCandidate.id.toLowerCase();
+        const cname = selectedHistoryCandidate.name.toLowerCase();
+        const historyOutcomes = candidateRoundHistory[cid] || candidateRoundHistory[cname] || [];
+        const historyInterviews = candidateInterviewsMap[cid] || candidateInterviewsMap[cname] || [];
+
+        const r1Outcome = historyOutcomes.find(o => isRound1(o.round));
+        const r2Outcome = historyOutcomes.find(o => isRound2(o.round));
+        const r1Interview = historyInterviews.find(i => isRound1(i.round));
+        const r2Interview = historyInterviews.find(i => isRound2(i.round));
+
+        const isPastR1 = ['Round 2 Phase', 'Selected', 'Offered', 'Joined'].includes(selectedHistoryCandidate.stage);
+
+        return (
+          <div
+            className="fixed inset-0 z-[330] flex items-center justify-center bg-slate-950/50 p-3 sm:p-4"
+            onMouseDown={event => {
+              if (event.target === event.currentTarget) {
+                setSelectedHistoryCandidate(null);
+              }
+            }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="candidate-history-title"
+              className="flex flex-col w-full max-w-2xl max-h-[90vh] rounded-3xl bg-white shadow-2xl overflow-hidden"
+            >
+              {/* Pinned Header */}
+              <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-4 sm:px-7 sm:py-4 bg-white shrink-0">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-slate-700">
+                    <svg className="h-3.5 w-3.5 text-[#F26943]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Candidate Progress &amp; Round History
+                  </div>
+                  <h2 id="candidate-history-title" className="mt-1 text-xl font-bold text-[#172033]">
+                    {selectedHistoryCandidate.name}
+                  </h2>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {selectedHistoryCandidate.role} · Current Stage: <span className="font-semibold text-slate-700">{selectedHistoryCandidate.stage}</span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedHistoryCandidate(null)}
+                  aria-label="Close"
+                  className="rounded-lg p-1.5 text-xl leading-none text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Scrollable Body */}
+              <div
+                className="flex-1 overflow-y-auto px-6 py-4 sm:px-7 space-y-5"
+                style={{
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: '#CBD5E1 #F8FAFC',
+                }}
+              >
+                {/* 1. Track candidate progress across rounds */}
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2.5">
+                    Interview Rounds Progress
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Round 1 Card */}
+                    <div className={`rounded-2xl border p-3.5 flex flex-col justify-between transition-all ${
+                      r1Outcome
+                        ? 'border-emerald-200 bg-emerald-50/70 text-emerald-900'
+                        : r1Interview
+                        ? 'border-violet-200 bg-violet-50/70 text-violet-900'
+                        : (selectedHistoryCandidate.stage === 'Round 1 Phase' || isPastR1)
+                        ? 'border-amber-200 bg-amber-50/70 text-amber-900'
+                        : 'border-slate-200 bg-slate-50/70 text-slate-500'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider">Round 1</span>
+                        {r1Outcome && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-xs font-bold text-amber-600 shadow-2xs">
+                            ★ {r1Outcome.averageRating?.toFixed(1)} / 5.0
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2 text-sm font-bold">
+                        {r1Outcome ? 'Evaluation Recorded' : r1Interview ? 'Interview Scheduled' : selectedHistoryCandidate.stage === 'Round 1 Phase' ? 'In Round 1 Phase' : isPastR1 ? 'Completed' : 'Pending'}
+                      </div>
+                      <div className="mt-1 text-xs opacity-80">
+                        {r1Outcome
+                          ? `Recommendation: ${r1Outcome.finalRecommendation || r1Outcome.outcome}`
+                          : r1Interview
+                          ? `Date: ${new Date(r1Interview.startAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`
+                          : 'Not scheduled yet'}
+                      </div>
+                    </div>
+
+                    {/* Round 2 Card */}
+                    <div className={`rounded-2xl border p-3.5 flex flex-col justify-between transition-all ${
+                      r2Outcome
+                        ? 'border-emerald-200 bg-emerald-50/70 text-emerald-900'
+                        : r2Interview
+                        ? 'border-violet-200 bg-violet-50/70 text-violet-900'
+                        : selectedHistoryCandidate.stage === 'Round 2 Phase'
+                        ? 'border-amber-200 bg-amber-50/70 text-amber-900'
+                        : 'border-slate-200 bg-slate-50/70 text-slate-500'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider">Round 2</span>
+                        {r2Outcome && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-xs font-bold text-amber-600 shadow-2xs">
+                            ★ {r2Outcome.averageRating?.toFixed(1)} / 5.0
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2 text-sm font-bold">
+                        {r2Outcome ? 'Evaluation Recorded' : r2Interview ? 'Interview Scheduled' : selectedHistoryCandidate.stage === 'Round 2 Phase' ? 'In Round 2 Phase' : ['Selected', 'Offered', 'Joined'].includes(selectedHistoryCandidate.stage) ? 'Completed' : 'Pending'}
+                      </div>
+                      <div className="mt-1 text-xs opacity-80">
+                        {r2Outcome
+                          ? `Recommendation: ${r2Outcome.finalRecommendation || r2Outcome.outcome}`
+                          : r2Interview
+                          ? `Date: ${new Date(r2Interview.startAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`
+                          : 'Awaiting Round 1 completion'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Detailed History across rounds */}
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2.5">
+                    Evaluations &amp; Feedback History ({historyOutcomes.length})
+                  </h3>
+
+                  {historyOutcomes.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500">
+                      No interview feedback has been recorded for this candidate yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-3.5">
+                      {historyOutcomes.map((item, idx) => (
+                        <div key={item.id || idx} className="rounded-2xl border border-slate-200 bg-slate-50/40 p-4 space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200/60 pb-2.5">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex rounded-md bg-[#FFF1EB] px-2 py-0.5 text-[11px] font-bold text-[#F26943]">
+                                  {isRound1(item.round) ? 'Round 1' : isRound2(item.round) ? 'Round 2' : 'Interview Round'}
+                                </span>
+                                <span className="text-sm font-bold text-slate-800">{item.round}</span>
+                              </div>
+                              <div className="mt-0.5 text-[11px] text-slate-500">
+                                {item.interviewer ? `Evaluated by ${item.interviewer} · ` : ''}
+                                {new Date(item.when).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {typeof item.averageRating === 'number' && (
+                                <span className="text-xs font-bold text-amber-600">
+                                  ★ {item.averageRating.toFixed(1)} / 5.0
+                                </span>
+                              )}
+                              <span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-bold ${
+                                item.finalRecommendation === 'Strong Hire' || item.outcome === 'Strong Yes'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : item.finalRecommendation === 'Hire' || item.outcome === 'Yes'
+                                  ? 'bg-teal-100 text-teal-800'
+                                  : item.finalRecommendation === 'Hold' || item.outcome === 'Maybe'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-rose-100 text-rose-800'
+                              }`}>
+                                {item.finalRecommendation || item.outcome}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* 5 KPIs Breakdown */}
+                          {item.ratings && (
+                            <div className="space-y-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">KPI Breakdown</span>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                {[
+                                  { label: 'Technical knowledge', val: item.ratings.technicalKnowledge },
+                                  { label: 'Communication', val: item.ratings.communication },
+                                  { label: 'Problem-solving', val: item.ratings.problemSolving },
+                                  { label: 'Role-specific skills', val: item.ratings.roleSpecificSkills },
+                                  { label: 'Experience', val: item.ratings.experience },
+                                ].map(kpi => (
+                                  <div key={kpi.label} className="flex items-center justify-between rounded-xl bg-white border border-slate-200/80 px-2.5 py-1.5">
+                                    <span className="text-slate-600 text-[11px]">{kpi.label}</span>
+                                    <div className="flex items-center gap-1 font-bold text-slate-800">
+                                      <span className="text-amber-500">★</span>
+                                      <span>{kpi.val} / 5</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Comments */}
+                          {item.comments && (
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Interviewer Comments</span>
+                              <p className="mt-1 rounded-xl bg-white border border-slate-200/80 p-3 text-xs text-slate-700 italic">
+                                &ldquo;{item.comments}&rdquo;
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Scheduled Interviews for this candidate */}
+                {historyInterviews.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2.5">
+                      Scheduled Sessions ({historyInterviews.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {historyInterviews.map((interview, i) => (
+                        <div key={interview.id || i} className="rounded-xl border border-slate-200 bg-white p-3 text-xs flex items-center justify-between gap-3">
+                          <div>
+                            <span className="font-bold text-slate-800">{interview.round}</span>
+                            <div className="text-[11px] text-slate-500">
+                              {new Date(interview.startAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })} · Interviewer: {interview.interviewer}
+                            </div>
+                            {interview.meetingPlace && (
+                              <div className="text-[11px] text-blue-600 font-medium truncate max-w-sm mt-0.5">
+                                Link: {interview.meetingPlace}
+                              </div>
+                            )}
+                          </div>
+                          <span className={`rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase shrink-0 ${
+                            interview.status === 'completed'
+                              ? 'bg-slate-100 text-slate-600'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`}>
+                            {interview.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Pinned Footer */}
+              <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-6 py-3.5 sm:px-7 bg-white shrink-0">
+                <div className="text-xs text-slate-500">
+                  Total rounds evaluated: <span className="font-bold text-slate-800">{historyOutcomes.length}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cand = selectedHistoryCandidate;
+                      setSelectedHistoryCandidate(null);
+                      setFeedbackCandidate(cand);
+                      const targetRound = cand.stage === 'Round 2 Phase' ? 'Technical Interview (Round 2)' : 'Technical Interview (Round 1)';
+                      setFeedbackRound(targetRound);
+                      setFeedbackRatings(defaultFeedbackRatings);
+                      setFeedbackRecommendation('Hire');
+                      setFeedbackComments('');
+                    }}
+                    className="rounded-xl bg-[#FFF1EB] px-4 py-2 text-xs font-bold text-[#F26943] hover:bg-[#ffe5dc] transition"
+                  >
+                    + Add round feedback
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedHistoryCandidate(null)}
+                    className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 transition"
+                  >
+                    Close
                   </button>
                 </div>
               </div>

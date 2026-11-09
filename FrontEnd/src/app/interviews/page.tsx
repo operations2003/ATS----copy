@@ -3,7 +3,7 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import Header from '@/components/Header';
 
-type InterviewRound = 'Recruiter Screen' | 'Technical Interview' | 'HR Interview';
+type InterviewRound = 'Technical Interview (Round 1)' | 'Technical Interview (Round 2)' | 'Recruiter Screen' | 'Technical Interview' | 'HR Interview' | string;
 type InterviewStatus = 'scheduled' | 'feedback_due' | 'completed';
 
 interface QueueCandidate {
@@ -78,7 +78,13 @@ const PIPELINE_STORAGE_KEY = 'tasknera_recruitment_pipeline_v1';
 
 const demoQueue: QueueCandidate[] = [];
 
-const roundOptions: InterviewRound[] = ['Recruiter Screen', 'Technical Interview', 'HR Interview'];
+const roundOptions: InterviewRound[] = [
+  'Technical Interview (Round 1)',
+  'Technical Interview (Round 2)',
+  'Recruiter Screen',
+  'Technical Interview',
+  'HR Interview',
+];
 
 const emptyStore: InterviewStore = { interviews: [], outcomes: [], activity: [] };
 
@@ -672,6 +678,97 @@ export default function InterviewsPage() {
                 }}
                 onSubmit={saveFeedback}
               >
+                {/* Previous Round History Context (Round 1 -> Round 2 tracking) */}
+                {(() => {
+                  if (!activeInterview) return null;
+                  const priorEvaluations = store.outcomes.filter(
+                    o =>
+                      o.candidateName?.toLowerCase() === activeInterview.candidateName.toLowerCase() &&
+                      o.round !== activeInterview.round
+                  );
+
+                  if (priorEvaluations.length === 0) return null;
+
+                  return (
+                    <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/60 to-indigo-50/40 p-3.5 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                          <svg className="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Previous Round Evaluation History ({priorEvaluations.length})
+                        </span>
+                        <span className="text-[11px] font-medium text-blue-700">Multi-round context</span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {priorEvaluations.map(prev => (
+                          <div key={prev.id} className="rounded-xl border border-blue-200/80 bg-white/90 p-3 shadow-2xs space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <span className="text-xs font-bold text-slate-800">{prev.round}</span>
+                                <div className="text-[11px] text-slate-500">
+                                  {new Date(prev.when).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {typeof prev.averageRating === 'number' && (
+                                  <span className="text-xs font-bold text-amber-600">
+                                    ★ {prev.averageRating.toFixed(1)} / 5.0
+                                  </span>
+                                )}
+                                <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-bold ${
+                                  prev.finalRecommendation === 'Strong Hire' || prev.outcome === 'Strong Yes'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : prev.finalRecommendation === 'Hire' || prev.outcome === 'Yes'
+                                    ? 'bg-teal-100 text-teal-800'
+                                    : prev.finalRecommendation === 'Hold' || prev.outcome === 'Maybe'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-rose-100 text-rose-800'
+                                }`}>
+                                  {prev.finalRecommendation || prev.outcome}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* KPI chips */}
+                            {prev.ratings && (
+                              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-1 text-[11px]">
+                                <div className="rounded-lg bg-slate-50 px-2 py-1 border border-slate-100">
+                                  <span className="text-slate-500 block text-[10px]">Technical</span>
+                                  <span className="font-bold text-slate-800">{prev.ratings.technicalKnowledge}/5</span>
+                                </div>
+                                <div className="rounded-lg bg-slate-50 px-2 py-1 border border-slate-100">
+                                  <span className="text-slate-500 block text-[10px]">Communication</span>
+                                  <span className="font-bold text-slate-800">{prev.ratings.communication}/5</span>
+                                </div>
+                                <div className="rounded-lg bg-slate-50 px-2 py-1 border border-slate-100">
+                                  <span className="text-slate-500 block text-[10px]">Problem-solving</span>
+                                  <span className="font-bold text-slate-800">{prev.ratings.problemSolving}/5</span>
+                                </div>
+                                <div className="rounded-lg bg-slate-50 px-2 py-1 border border-slate-100">
+                                  <span className="text-slate-500 block text-[10px]">Role skills</span>
+                                  <span className="font-bold text-slate-800">{prev.ratings.roleSpecificSkills}/5</span>
+                                </div>
+                                <div className="rounded-lg bg-slate-50 px-2 py-1 border border-slate-100">
+                                  <span className="text-slate-500 block text-[10px]">Experience</span>
+                                  <span className="font-bold text-slate-800">{prev.ratings.experience}/5</span>
+                                </div>
+                              </div>
+                            )}
+
+                            {prev.comments && (
+                              <p className="text-xs text-slate-600 bg-slate-50 rounded-lg p-2 italic border border-slate-100">
+                                &ldquo;{prev.comments}&rdquo;
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* 1. KPIs Ratings Section */}
                 <div>
                   <div className="flex items-center justify-between mb-2.5">
