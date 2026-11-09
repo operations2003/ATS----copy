@@ -10,6 +10,23 @@ import { UserRole, OrganizationQuota } from '@/lib/api';
 import { atsStore, AuditEvent, RecruiterMetric, JobItem, CandidateItem } from '@/lib/atsStore';
 import RecruiterPerformancePipelineTracker from '@/components/admin/RecruiterPerformancePipelineTracker';
 
+interface RecruitmentTarget {
+  id: string;
+  recruiterId: string;
+  recruiterName: string;
+  metric: string;
+  period: string;
+  value: number;
+  updatedAt: string;
+}
+
+const TARGET_STORAGE_KEY = 'tasknera_recruitment_targets_v1';
+const TARGET_METRICS = [
+  { value: 'resumes_screened', label: 'Resumes screened' },
+  { value: 'jds_created', label: 'JDs created' },
+  { value: 'candidates_shortlisted', label: 'Candidates shortlisted' },
+];
+
 export default function AdminPage() {
   const router = useRouter();
   const { user, setRole, signin, isLoading: authLoading } = useAuth();
@@ -81,7 +98,56 @@ export default function AdminPage() {
     meanScore?: number | null;
   } | null>(null);
 
+  const [recruitmentTargets, setRecruitmentTargets] = useState<RecruitmentTarget[]>([]);
+  const [targetsLoaded, setTargetsLoaded] = useState(false);
+  const [targetMemberId, setTargetMemberId] = useState('');
+  const [targetMetric, setTargetMetric] = useState('resumes_screened');
+  const [targetPeriod, setTargetPeriod] = useState('Monthly');
+  const [targetValue, setTargetValue] = useState('50');
+  const [targetFeedback, setTargetFeedback] = useState('');
+
   const [loadingMembers, setLoadingMembers] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(TARGET_STORAGE_KEY) || '[]');
+      if (Array.isArray(stored)) setRecruitmentTargets(stored);
+    } catch {
+      setRecruitmentTargets([]);
+    } finally {
+      setTargetsLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (targetsLoaded) localStorage.setItem(TARGET_STORAGE_KEY, JSON.stringify(recruitmentTargets));
+  }, [recruitmentTargets, targetsLoaded]);
+
+  const handleSetTarget = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const member = recruiters.find(recruiter => recruiter.id === targetMemberId);
+    const value = Number(targetValue);
+    if (!member) {
+      setTargetFeedback('Choose a team member before setting a target.');
+      return;
+    }
+    if (!Number.isFinite(value) || value <= 0) {
+      setTargetFeedback('Enter a target greater than zero.');
+      return;
+    }
+    const metricLabel = TARGET_METRICS.find(metric => metric.value === targetMetric)?.label || targetMetric;
+    const target: RecruitmentTarget = {
+      id: `${member.id}:${targetMetric}:${targetPeriod}`,
+      recruiterId: member.id,
+      recruiterName: member.name,
+      metric: metricLabel,
+      period: targetPeriod,
+      value,
+      updatedAt: new Date().toISOString(),
+    };
+    setRecruitmentTargets(current => [target, ...current.filter(item => item.id !== target.id)]);
+    setTargetFeedback(`${metricLabel} target set for ${member.name}.`);
+  };
 
   const isPurgedMember = (email?: string, name?: string): boolean => {
     const e = String(email || '').toLowerCase().trim();
@@ -779,7 +845,7 @@ export default function AdminPage() {
         <Header />
         <main className="flex-1 flex items-center justify-center p-6">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-3 border-violet-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-3 border-[#54236C] border-t-transparent rounded-full animate-spin" />
             <p className="text-xs font-semibold text-slate-500">Redirecting to your workspace...</p>
           </div>
         </main>
@@ -794,54 +860,48 @@ export default function AdminPage() {
 
       <main className="max-w-screen-xl mx-auto px-6 pt-24 pb-16 flex-1 w-full">
 
-        {/* ── TOP EXECUTIVE BANNER ── */}
-        <div className="mb-8 p-6 rounded-3xl bg-gradient-to-r from-violet-950 via-slate-900 to-indigo-950 text-white shadow-xl border border-violet-800/40 relative overflow-hidden">
-          {/* Subtle decorative glow */}
-          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-violet-600/20 blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-24 -left-24 w-96 h-96 rounded-full bg-brand-orange/15 blur-3xl pointer-events-none" />
-
-          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-violet-500/25 border border-violet-400/30 rounded-full text-xs font-black text-violet-200 uppercase tracking-wider">
-                  <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
-                  Administrator &amp; Executive Oversight Hub
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-white/10 text-white/90 border border-white/10">
-                  Daily Engagement &amp; Performance Review
-                </span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                Talent Acquisition Team Performance &amp; Time Tracking
-              </h1>
-              <p className="text-sm text-violet-200/80 max-w-2xl leading-relaxed">
-                Track how much time each team member spends daily reviewing resumes, creating JDs, and shortlisting candidates.
-              </p>
-            </div>
-
-            <div className="flex-shrink-0">
-              <button
-                disabled={quota ? quota.availableSlots <= 0 : false}
-                onClick={() => {
-                  setAddMemberError('');
-                  setAddMemberSuccess('');
-                  setShowAddMemberModal(true);
-                }}
-                className={`px-5 py-3 text-xs font-black rounded-2xl transition-all flex items-center gap-2 ${
-                  quota && quota.availableSlots <= 0
-                    ? 'bg-slate-400 text-slate-200 cursor-not-allowed opacity-75'
-                    : 'bg-brand-orange hover:bg-brand-orange-hover active:scale-[0.98] text-white shadow-orange cursor-pointer'
-                }`}
-                title={
-                  quota && quota.availableSlots <= 0
-                    ? `User quota reached (${quota.totalLimit} accounts). Please contact platform administrator to increase limit.`
-                    : 'Provision new team member'
-                }
-              >
-                <span className="text-base leading-none font-black">+</span>
-                <span>{quota && quota.availableSlots <= 0 ? 'User Quota Reached' : 'Add Team Member'}</span>
-              </button>
-            </div>
+        {/* ── ADMIN HUB TITLE & PLAN ACTION ── */}
+        <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <span className="inline-flex items-center rounded-full border border-[#DDC6E7] bg-[#F4ECF8] px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#54236C]">
+              Administrator &amp; Executive Oversight Hub
+            </span>
+            <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Talent Acquisition Team Performance &amp; Time Tracking</h1>
+            <p className="mt-1 text-sm leading-relaxed text-slate-500">Track resume reviews, job creation, and shortlisting across your team.</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              disabled={quota ? quota.availableSlots <= 0 : false}
+              onClick={() => {
+                setAddMemberError('');
+                setAddMemberSuccess('');
+                setShowAddMemberModal(true);
+              }}
+              title={quota && quota.availableSlots <= 0
+                ? `User quota reached (${quota.totalLimit} accounts). Please contact platform administrator to increase limit.`
+                : 'Provision new team member'}
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold transition ${
+                quota && quota.availableSlots <= 0
+                  ? 'cursor-not-allowed bg-slate-300 text-slate-500'
+                  : 'cursor-pointer border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-[#DDC6E7] hover:bg-[#F4ECF8] hover:text-[#54236C]'
+              }`}
+            >
+              <span className="text-base leading-none font-black">+</span>
+              <span>{quota && quota.availableSlots <= 0 ? 'User Quota Reached' : 'Add Team Member'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPlanError('');
+                setPlanSuccess('');
+                setShowPlanModal(true);
+              }}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#54236C] px-4 py-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#431B58]"
+            >
+              <span aria-hidden="true">★</span>
+              <span>{isSuperAdmin ? 'Switch Plan' : quota?.subscriptionPlan === 'PROFESSIONAL' ? 'View Plan Quota' : 'Upgrade to Pro (2,500)'}</span>
+            </button>
           </div>
         </div>
 
@@ -849,7 +909,7 @@ export default function AdminPage() {
         {quota && (
           <div className="mb-8 p-5 bg-white border border-slate-200/90 rounded-3xl shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
             <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-violet-100 text-violet-700 flex items-center justify-center font-bold flex-shrink-0">
+              <div className="w-12 h-12 rounded-2xl bg-[#F4ECF8] text-[#54236C] flex items-center justify-center font-bold flex-shrink-0">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
@@ -857,7 +917,7 @@ export default function AdminPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-base font-black text-slate-900">{quota.organizationName || 'Client Organization'}</h3>
-                  <span className="px-2.5 py-0.5 rounded-full bg-violet-100 text-violet-800 text-[10px] font-black uppercase tracking-wider">
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#F4ECF8] text-[#54236C] text-[10px] font-black uppercase tracking-wider">
                     {quota.subscriptionPlan} Plan
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
@@ -909,27 +969,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
-
-              <div>
-                <button
-                  onClick={() => {
-                    setPlanError('');
-                    setPlanSuccess('');
-                    setShowPlanModal(true);
-                  }}
-                  className="px-3.5 py-2 text-xs font-bold rounded-xl bg-violet-600 hover:bg-violet-700 text-white transition-all cursor-pointer shadow-sm hover:-translate-y-0.5 flex items-center gap-1.5"
-                >
-                  <span>⭐</span>
-                  <span>
-                    {isSuperAdmin
-                      ? 'Switch Plan (Super Admin)'
-                      : quota.subscriptionPlan === 'STARTER'
-                      ? 'Upgrade to Pro (2,500)'
-                      : 'View Plan Quota'}
-                  </span>
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -940,7 +979,7 @@ export default function AdminPage() {
           <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">Active Team Members</span>
-              <span className="w-8 h-8 rounded-xl bg-violet-50 text-violet-600 border border-violet-200 flex items-center justify-center font-bold text-xs">
+              <span className="w-8 h-8 rounded-xl bg-[#F4ECF8] text-[#54236C] border border-[#DDC6E7] flex items-center justify-center font-bold text-xs">
                 👥
               </span>
             </div>
@@ -949,7 +988,7 @@ export default function AdminPage() {
               <span className="text-xs font-semibold text-slate-400">Recruiters</span>
             </div>
             <div className="flex items-center justify-between text-xs text-slate-500 mt-2.5 pt-2.5 border-t border-slate-100">
-              <span className="text-violet-600 font-bold">{recruiters.length} Active Member{recruiters.length === 1 ? '' : 's'}</span>
+              <span className="text-[#54236C] font-bold">{recruiters.length} Active Member{recruiters.length === 1 ? '' : 's'}</span>
               <span className="font-semibold text-slate-700">100% Tracked</span>
             </div>
           </div>
@@ -966,7 +1005,7 @@ export default function AdminPage() {
               {effectiveTotalResumes.toLocaleString()}
             </div>
             <div className="flex items-center justify-between text-xs text-slate-500 mt-2.5 pt-2.5 border-t border-slate-100">
-              <span className="text-blue-600 font-bold flex items-center gap-1">
+              <span className="text-[#54236C] font-bold flex items-center gap-1">
                 <span>↑ 18%</span>
                 <span className="text-slate-400 font-medium">vs last week</span>
               </span>
@@ -1075,7 +1114,7 @@ export default function AdminPage() {
                                   <span>{r.name}</span>
                                   {displayRole && (
                                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                                      r.role === 'ADMIN' ? 'bg-violet-100 text-violet-800' :
+                                      r.role === 'ADMIN' ? 'bg-[#F4ECF8] text-[#54236C]' :
                                       r.role === 'TEAM_LEAD' ? 'bg-amber-100 text-amber-800' :
                                       'bg-slate-100 text-slate-700'
                                     }`}>
@@ -1096,7 +1135,7 @@ export default function AdminPage() {
                             {r.tlApprovedCount}
                           </td>
 
-                          <td className="px-4 py-4 text-center font-black text-purple-700 text-sm whitespace-nowrap">
+                          <td className="px-4 py-4 text-center font-black text-[#54236C] text-sm whitespace-nowrap">
                             {Math.round((r.tlApprovedCount / (r.resumesSeen || 1)) * 100)}%
                           </td>
 
@@ -1138,6 +1177,81 @@ export default function AdminPage() {
               </div>
             </div>
 
+        {/* ── RECRUITMENT TARGETS ── */}
+        <section className="mb-8 overflow-hidden rounded-3xl border border-slate-200/90 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
+            <h2 className="text-base font-semibold text-[#172033]">Set a recruitment target</h2>
+            <p className="mt-1 text-sm text-slate-500">Targets are per person and per metric</p>
+          </div>
+          <div className="p-5 sm:p-6">
+            <form onSubmit={handleSetTarget} className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-[1.25fr_1.25fr_1.25fr_0.9fr_auto]">
+              <select
+                value={targetMemberId}
+                onChange={event => setTargetMemberId(event.target.value)}
+                required
+                className="min-w-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-[#54236C] focus:ring-2 focus:ring-[#54236C]/10"
+              >
+                <option value="" disabled>Choose member</option>
+                {recruiters.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}
+              </select>
+              <select
+                value={targetMetric}
+                onChange={event => setTargetMetric(event.target.value)}
+                className="min-w-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-[#54236C] focus:ring-2 focus:ring-[#54236C]/10"
+              >
+                {TARGET_METRICS.map(metric => <option key={metric.value} value={metric.value}>{metric.label}</option>)}
+              </select>
+              <select
+                value={targetPeriod}
+                onChange={event => setTargetPeriod(event.target.value)}
+                className="min-w-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-[#54236C] focus:ring-2 focus:ring-[#54236C]/10"
+              >
+                <option>Weekly</option>
+                <option>Monthly</option>
+                <option>Quarterly</option>
+              </select>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                required
+                value={targetValue}
+                onChange={event => setTargetValue(event.target.value)}
+                aria-label="Target amount"
+                className="min-w-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-[#54236C] focus:ring-2 focus:ring-[#54236C]/10"
+              />
+              <button type="submit" disabled={recruiters.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand-orange-hover disabled:cursor-not-allowed disabled:opacity-50">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="8.5" strokeWidth="2" /><circle cx="12" cy="12" r="3" strokeWidth="2" /><path strokeLinecap="round" strokeWidth="2" d="M12 2v2" /></svg>
+                Set
+              </button>
+            </form>
+            <p className="mt-3 text-sm text-slate-500">Team members appear here once they have signed up and been assigned to this workspace in Settings.</p>
+            {targetFeedback && <p role="status" className="mt-2 text-sm font-medium text-[#54236C]">{targetFeedback}</p>}
+            {recruitmentTargets.length > 0 && (
+              <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-100">
+                <table className="w-full min-w-[620px] text-left text-sm">
+                  <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    <tr><th className="px-4 py-3">Team member</th><th className="px-4 py-3">Metric</th><th className="px-4 py-3">Period</th><th className="px-4 py-3">Target</th><th className="px-4 py-3 text-right">Action</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {recruitmentTargets.map(target => (
+                      <tr key={target.id}>
+                        <td className="px-4 py-3 font-semibold text-slate-800">{target.recruiterName}</td>
+                        <td className="px-4 py-3">{target.metric}</td>
+                        <td className="px-4 py-3">{target.period}</td>
+                        <td className="px-4 py-3 font-bold text-[#54236C]">{target.value}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button type="button" aria-label={`Remove target for ${target.recruiterName}`} onClick={() => setRecruitmentTargets(current => current.filter(item => item.id !== target.id))} className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-400 transition hover:bg-rose-50 hover:text-rose-600">Remove</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+
         {/* ── MODAL: RECRUITER ACTIVITY & TIME DRILL-DOWN ── */}
         {showRecruiterModal && selectedRecruiter && (
           <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -1158,9 +1272,9 @@ export default function AdminPage() {
               <div className="space-y-5 text-xs">
                 {/* 4 Metric Stats */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-3 bg-purple-50 rounded-2xl border border-purple-200">
-                    <span className="text-[10px] text-purple-600 font-black uppercase block">TODAY&apos;S TIME</span>
-                    <span className="text-lg font-black text-purple-900">{(selectedRecruiter.todayHoursSpent ?? 0).toFixed(1)} Hours</span>
+                  <div className="p-3 bg-[#F4ECF8] rounded-2xl border border-[#DDC6E7]">
+                    <span className="text-[10px] text-[#54236C] font-black uppercase block">TODAY&apos;S TIME</span>
+                    <span className="text-lg font-black text-[#54236C]">{(selectedRecruiter.todayHoursSpent ?? 0).toFixed(1)} Hours</span>
                   </div>
                   <div className="p-3 bg-blue-50 rounded-2xl border border-blue-200">
                     <span className="text-[10px] text-blue-600 font-black uppercase block">RESUMES SEEN</span>
@@ -1181,10 +1295,10 @@ export default function AdminPage() {
                 </div>
 
                 {/* 🌟 AI Executive Performance & Sourcing Insights */}
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-violet-50 via-slate-50 to-indigo-50/50 border border-violet-200/80">
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-[#F4ECF8] via-slate-50 to-white border border-[#DDC6E7]">
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="text-base">💡</span>
-                    <h4 className="font-black text-violet-900 text-xs uppercase tracking-wider">
+                    <h4 className="font-black text-[#54236C] text-xs uppercase tracking-wider">
                       Executive Qualitative Analysis &amp; Sourcing Insights
                     </h4>
                   </div>
@@ -1402,7 +1516,7 @@ export default function AdminPage() {
                 <div className={`mb-4 p-3 rounded-xl border text-xs flex items-center justify-between ${
                   quota.availableSlots <= 0
                     ? 'bg-rose-50 border-rose-200 text-rose-800'
-                    : 'bg-violet-50 border-violet-200 text-violet-800'
+                    : 'bg-[#F4ECF8] border-[#DDC6E7] text-[#54236C]'
                 }`}>
                   <div className="flex items-center gap-2">
                     <span className="font-bold">{quota.availableSlots <= 0 ? '⚠️' : 'ℹ️'}</span>
@@ -1805,7 +1919,7 @@ export default function AdminPage() {
 
               <div className="mb-6">
                 <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
-                  isSuperAdmin ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-700'
+                  isSuperAdmin ? 'bg-[#F4ECF8] text-[#54236C]' : 'bg-slate-100 text-slate-700'
                 }`}>
                   {isSuperAdmin ? 'Super Admin Plan Manager' : 'Subscription & Quota Details'}
                 </span>
@@ -1892,10 +2006,10 @@ export default function AdminPage() {
                 {/* Professional Pack */}
                 <div className={`p-5 rounded-2xl border-2 transition-all relative ${
                   quota?.subscriptionPlan === 'PROFESSIONAL'
-                    ? 'border-violet-600 bg-violet-50/20 shadow-xs'
+                    ? 'border-[#54236C] bg-[#F4ECF8]/50 shadow-xs'
                     : 'border-slate-200 hover:border-slate-300 bg-white'
                 }`}>
-                  <span className="absolute -top-3 right-4 px-2.5 py-0.5 rounded-full bg-violet-600 text-white text-[10px] font-black uppercase">
+                  <span className="absolute -top-3 right-4 px-2.5 py-0.5 rounded-full bg-[#54236C] text-white text-[10px] font-black uppercase">
                     {quota?.subscriptionPlan === 'PROFESSIONAL' ? 'Current Plan' : 'Most Popular'}
                   </span>
                   <h4 className="text-base font-black text-slate-900">Professional Pack</h4>
@@ -1919,7 +2033,7 @@ export default function AdminPage() {
                       className={`w-full mt-5 py-2.5 text-xs font-bold rounded-xl transition-all ${
                         quota?.subscriptionPlan === 'PROFESSIONAL'
                           ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                          : 'bg-violet-600 hover:bg-violet-700 text-white cursor-pointer shadow-md'
+                          : 'bg-[#54236C] hover:bg-[#431B58] text-white cursor-pointer shadow-md'
                       }`}
                     >
                       {quota?.subscriptionPlan === 'PROFESSIONAL' ? 'Active Plan' : planUpdating ? 'Switching...' : 'Switch to Professional'}
@@ -1931,7 +2045,7 @@ export default function AdminPage() {
                       className={`w-full mt-5 py-2.5 text-xs font-bold rounded-xl transition-all ${
                         quota?.subscriptionPlan === 'PROFESSIONAL'
                           ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                          : 'bg-violet-600 hover:bg-violet-700 text-white cursor-pointer shadow-md'
+                          : 'bg-[#54236C] hover:bg-[#431B58] text-white cursor-pointer shadow-md'
                       }`}
                     >
                       {quota?.subscriptionPlan === 'PROFESSIONAL'

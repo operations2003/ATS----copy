@@ -6,6 +6,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { useAuth } from '@/context/AuthContext';
 import { computeComprehensiveMatchScore } from '@/utils/requirementUtils';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 interface JobItem {
   id: string;
@@ -27,7 +28,26 @@ interface CandidateEvaluationItem {
   decision: string;
   time: string;
   jobId?: string;
+  evaluatedAt?: string;
 }
+
+interface DashboardFunnelStage {
+  stage: string;
+  value: number;
+}
+
+const SCORE_BUCKETS = [
+  { label: '0–39', min: 0, max: 39, color: '#E83E63' },
+  { label: '40–54', min: 40, max: 54, color: '#9B8AFB' },
+  { label: '55–69', min: 55, max: 69, color: '#F8AC2D' },
+  { label: '70–84', min: 70, max: 84, color: '#2A9BD1' },
+  { label: '85–100', min: 85, max: 100, color: '#2BA783' },
+];
+
+const FUNNEL_STAGES = [
+  'Sourced', 'Screening', 'Shortlisted', 'Recruiter screen',
+  'Technical interview', 'HR interview', 'Selected', 'Offered', 'Joined',
+];
 
 const scoreColor = (n: number | null) => {
   if (n === null || n === undefined) return 'text-slate-400';
@@ -88,9 +108,72 @@ export default function DashboardPage() {
   const canUploadJd = isSuperAdmin || user?.allowJdUpload !== false;
   const [jobs, setJobs] = useState<JobItem[]>([]);
   const [recentEvaluations, setRecentEvaluations] = useState<CandidateEvaluationItem[]>([]);
+  const [dashboardFunnel, setDashboardFunnel] = useState<DashboardFunnelStage[]>(() => FUNNEL_STAGES.map(stage => ({ stage, value: 0 })));
   const [jobSearch, setJobSearch] = useState('');
   const [timeRange, setTimeRange] = useState<'today' | '7d' | '30d' | '90d'>('30d');
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const uniqueCandidates = new Map<string, any>();
+    const readArray = (key: string) => {
+      try {
+        const value = JSON.parse(localStorage.getItem(key) || '[]');
+        return Array.isArray(value) ? value : [];
+      } catch {
+        return [];
+      }
+    };
+
+    [...readArray('tasknera_ats_candidates'), ...readArray('tasknera_candidates_pool')].forEach(candidate => {
+      if (candidate?.id) uniqueCandidates.set(String(candidate.id), candidate);
+    });
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith('tasknera_candidates_') || key === 'tasknera_candidates_pool' || key.startsWith('tasknera_candidates_count_')) continue;
+      readArray(key).forEach(candidate => {
+        if (candidate?.id) uniqueCandidates.set(String(candidate.id), candidate);
+      });
+    }
+
+    const stageOverrides = new Map<string, string>();
+    readArray('tasknera_recruitment_pipeline_v1').forEach(candidate => {
+      if (candidate?.id && candidate?.stage) {
+        stageOverrides.set(String(candidate.id), String(candidate.stage));
+        uniqueCandidates.set(String(candidate.id), { ...uniqueCandidates.get(String(candidate.id)), ...candidate });
+      }
+    });
+
+    const stageMembers = new Map<string, Set<string>>(FUNNEL_STAGES.map(stage => [stage, new Set<string>()] as const));
+    uniqueCandidates.forEach((candidate, id) => {
+      const savedStage = stageOverrides.get(id) || String(candidate.stage || candidate.pipelineStage || '');
+      const status = String(candidate.stageStatus || candidate.status || '').toUpperCase();
+      const normalized = savedStage.toLowerCase();
+      let stage = '';
+      if (normalized === 'sourced' || status === 'SOURCED') stage = 'Sourced';
+      else if (normalized === 'screening' || status === 'SCREENED') stage = 'Screening';
+      else if (normalized === 'shortlisted' || ['SHORTLISTED', 'PENDING_TL_REVIEW', 'TL_APPROVED', 'OVERRIDDEN'].includes(status)) stage = 'Shortlisted';
+      else if (normalized === 'recruiter name' || normalized === 'recruiter screen') stage = 'Recruiter screen';
+      else if (normalized === 'round 1 phase' || normalized.includes('technical')) stage = 'Technical interview';
+      else if (normalized === 'round 2 phase' || normalized.includes('hr')) stage = 'HR interview';
+      else if (normalized === 'selected') stage = 'Selected';
+      else if (normalized === 'offered') stage = 'Offered';
+      else if (normalized === 'joined' || status === 'JOINED') stage = 'Joined';
+      if (stage) stageMembers.get(stage)?.add(id);
+    });
+
+    try {
+      const interviewStore = JSON.parse(localStorage.getItem('tasknera_interviews_frontend_v1') || '{}');
+      const interviews = Array.isArray(interviewStore?.interviews) ? interviewStore.interviews : [];
+      interviews.forEach((interview: any, index: number) => {
+        const round = String(interview?.round || '').toLowerCase();
+        const candidateId = String(interview?.candidateId || interview?.id || `interview-${index}`);
+        const stage = round.includes('hr') ? 'HR interview' : round.includes('technical') ? 'Technical interview' : round.includes('recruiter') ? 'Recruiter screen' : '';
+        if (stage && interview.status !== 'cancelled') stageMembers.get(stage)?.add(candidateId);
+      });
+    } catch {}
+
+    setDashboardFunnel(FUNNEL_STAGES.map(stage => ({ stage, value: stageMembers.get(stage)?.size || 0 })));
+  }, []);
 
   // Fetch real jobs and candidate evaluations for the authenticated user
   useEffect(() => {
@@ -163,7 +246,10 @@ export default function DashboardPage() {
                 status: j.status || 'Active',
                 created: j.created || 'Recent'
               }));
-              resolvedEvals = Array.isArray(sumData.recentEvaluations) ? sumData.recentEvaluations : [];
+              resolvedEvals = Array.isArray(sumData.recentEvaluations) ? sumData.recentEvaluations.map((evaluation: any) => ({
+                ...evaluation,
+                evaluatedAt: evaluation.evaluatedAt || evaluation.createdAt || evaluation.created_at || evaluation.date || '',
+              })) : [];
               summaryLoaded = true;
             }
           }
@@ -218,7 +304,8 @@ export default function DashboardPage() {
                     match: score,
                     decision: isSubmit ? 'SUBMIT' : 'DO NOT SUBMIT',
                     time: e.date || 'Recently',
-                    jobId: e.jobId
+                    jobId: e.jobId,
+                    evaluatedAt: e.evaluatedAt || e.createdAt || e.created_at || e.date || '',
                   });
                 }
               }
@@ -269,7 +356,8 @@ export default function DashboardPage() {
                     match: score,
                     decision: (c.decision || (score >= 65 ? 'SUBMIT' : 'DO NOT SUBMIT')).toUpperCase(),
                     time: c.uploadedAt ? new Date(c.uploadedAt).toLocaleDateString() : 'Recently',
-                    jobId: c.jobId
+                    jobId: c.jobId,
+                    evaluatedAt: c.evaluatedAt || c.scoredAt || c.uploadedAt || c.createdAt || '',
                   });
                 }
               }
@@ -292,7 +380,8 @@ export default function DashboardPage() {
                         match: score,
                         decision: (c.decision || (score >= 65 ? 'SUBMIT' : 'DO NOT SUBMIT')).toUpperCase(),
                         time: c.uploadedAt ? new Date(c.uploadedAt).toLocaleDateString() : 'Recently',
-                        jobId: c.jobId || jId
+                        jobId: c.jobId || jId,
+                        evaluatedAt: c.evaluatedAt || c.scoredAt || c.uploadedAt || c.createdAt || '',
                       });
                     }
                   }
@@ -454,6 +543,40 @@ export default function DashboardPage() {
     { stage: 'Needs Review',    value: reviewCount + rejectCount, color: 'bg-rose-400' },
   ];
 
+  const screeningVolume = useMemo(() => {
+    const today = new Date();
+    const firstDay = new Date(today);
+    firstDay.setDate(today.getDate() - 29);
+    firstDay.setHours(0, 0, 0, 0);
+    const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const counts = new Map<string, number>();
+    for (let offset = 0; offset < 30; offset++) {
+      const day = new Date(firstDay);
+      day.setDate(firstDay.getDate() + offset);
+      counts.set(localDateKey(day), 0);
+    }
+    recentEvaluations.forEach(evaluation => {
+      if (!evaluation.evaluatedAt) return;
+      const scoredAt = new Date(evaluation.evaluatedAt);
+      if (Number.isNaN(scoredAt.getTime())) return;
+      const key = localDateKey(scoredAt);
+      if (counts.has(key)) counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return Array.from(counts, ([key, count], index) => ({
+      date: key,
+      label: index === 29 ? 'Today' : new Date(`${key}T12:00:00`).toLocaleDateString('en-US', { day: '2-digit', month: 'short' }),
+      count,
+    }));
+  }, [recentEvaluations]);
+
+  const scoreDistribution = useMemo(() => SCORE_BUCKETS.map(bucket => ({
+    label: bucket.label,
+    count: recentEvaluations.filter(evaluation => evaluation.match >= bucket.min && evaluation.match <= bucket.max).length,
+    color: bucket.color,
+  })), [recentEvaluations]);
+
+  const maxFunnelValue = Math.max(1, ...dashboardFunnel.map(stage => stage.value));
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#1E293B] flex flex-col font-sans">
       <Header />
@@ -477,6 +600,71 @@ export default function DashboardPage() {
               <div className="text-slate-500 text-[11px] mt-0.5">{s.sub}</div>
             </div>
           ))}
+        </div>
+
+        {/* Dashboard analytics */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
+          <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-200/90 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-5 py-4">
+              <h2 className="text-base font-semibold text-[#172033]">Screening volume</h2>
+              <p className="mt-1 text-sm text-slate-500">Evaluations scored in the last 30 days</p>
+            </div>
+            <div className="h-[260px] px-3 pb-3 pt-4 sm:px-5">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={screeningVolume} margin={{ top: 6, right: 4, bottom: 0, left: -14 }}>
+                  <defs>
+                    <linearGradient id="screeningVolumeFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#FF5A36" stopOpacity={0.18} />
+                      <stop offset="100%" stopColor="#FF5A36" stopOpacity={0.01} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="#E2E8F0" strokeDasharray="3 5" />
+                  <XAxis dataKey="label" interval={4} tick={{ fill: '#64748B', fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} width={28} tick={{ fill: '#64748B', fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#E2E8F0', fontSize: 12 }} formatter={value => [value, 'Evaluations']} />
+                  <Area type="monotone" dataKey="count" stroke="#FF5A36" strokeWidth={2} fill="url(#screeningVolumeFill)" activeDot={{ r: 4 }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+
+          <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-200/90 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-5 py-4">
+              <h2 className="text-base font-semibold text-[#172033]">Score distribution</h2>
+              <p className="mt-1 text-sm text-slate-500">All stored evaluations</p>
+            </div>
+            <div className="h-[260px] px-3 pb-3 pt-4 sm:px-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={scoreDistribution} margin={{ top: 6, right: 0, bottom: 0, left: -16 }}>
+                  <CartesianGrid vertical={false} stroke="#E2E8F0" strokeDasharray="3 5" />
+                  <XAxis dataKey="label" tick={{ fill: '#64748B', fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} width={28} tick={{ fill: '#64748B', fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#E2E8F0', fontSize: 12 }} formatter={value => [value, 'Candidates']} />
+                  <Bar dataKey="count" radius={[7, 7, 0, 0]} maxBarSize={34}>
+                    {scoreDistribution.map(bucket => <Cell key={bucket.label} fill={bucket.color} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+
+          <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-200/90 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-5 py-4">
+              <h2 className="text-base font-semibold text-[#172033]">Funnel</h2>
+              <p className="mt-1 text-sm text-slate-500">Current pipeline state</p>
+            </div>
+            <div className="space-y-2.5 px-5 py-4">
+              {dashboardFunnel.map(item => (
+                <div key={item.stage} className="grid grid-cols-[minmax(95px,0.8fr)_minmax(0,1fr)_26px] items-center gap-3 text-xs">
+                  <span className="truncate text-slate-500">{item.stage}</span>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                    {item.value > 0 && <div className="h-full rounded-full bg-[#F07F67] transition-[width] duration-500" style={{ width: `${Math.max(3, (item.value / maxFunnelValue) * 100)}%` }} />}
+                  </div>
+                  <span className="text-right font-semibold text-slate-800">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
