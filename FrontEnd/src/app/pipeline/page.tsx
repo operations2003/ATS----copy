@@ -995,7 +995,7 @@ export default function PipelinePage() {
 
         return (
           <div
-            className="fixed inset-0 z-[320] flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4"
+            className="fixed inset-0 z-[320] flex items-center justify-center bg-slate-950/50 p-3 sm:p-4"
             onMouseDown={event => {
               if (event.target === event.currentTarget) {
                 setFeedbackCandidate(null);
@@ -1006,9 +1006,10 @@ export default function PipelinePage() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="pipeline-feedback-title"
-              className="my-auto w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-7"
+              className="flex flex-col w-full max-w-2xl max-h-[90vh] rounded-3xl bg-white shadow-2xl overflow-hidden"
             >
-              <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+              {/* Pinned Header */}
+              <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-4 sm:px-7 sm:py-4 bg-white shrink-0">
                 <div>
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF1EB] px-2.5 py-0.5 text-[11px] font-bold text-[#F26943]">
                     Interviewer Feedback Form
@@ -1030,7 +1031,16 @@ export default function PipelinePage() {
                 </button>
               </div>
 
-              <form className="mt-5 space-y-6" onSubmit={handleSavePipelineFeedback}>
+              {/* Scrollable Form Body with Visible Scrollbar */}
+              <form
+                id="pipeline-feedback-form"
+                className="flex-1 overflow-y-auto px-6 py-4 sm:px-7 space-y-4"
+                style={{
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: '#CBD5E1 #F8FAFC',
+                }}
+                onSubmit={handleSavePipelineFeedback}
+              >
                 {/* Round selection */}
                 <label className="block text-xs font-bold text-slate-700">
                   Interview Round
@@ -1048,22 +1058,22 @@ export default function PipelinePage() {
 
                 {/* 1. KPIs Section */}
                 <div>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-2.5">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Evaluation KPIs</h3>
-                    <span className="inline-flex items-center gap-1.5 rounded-xl bg-orange-50 px-3 py-1 text-xs font-bold text-[#F26943] border border-orange-100">
+                    <span className="inline-flex items-center gap-1.5 rounded-xl bg-orange-50 px-2.5 py-0.5 text-xs font-bold text-[#F26943] border border-orange-100">
                       Overall KPI Average: {avgScore.toFixed(1)} / 5.0
                     </span>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {kpis.map(kpi => {
                       const currentValue = feedbackRatings[kpi.key];
                       return (
-                        <div key={kpi.key} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-3.5 transition hover:border-slate-300">
+                        <div key={kpi.key} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-3 sm:py-2.5 sm:px-3.5 transition hover:border-slate-300">
                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                             <div className="min-w-0">
                               <label className="text-xs font-bold text-slate-800">{kpi.label}</label>
-                              <p className="text-[11px] text-slate-500">{kpi.desc}</p>
+                              <p className="text-[11px] text-slate-500 leading-tight">{kpi.desc}</p>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                               {[1, 2, 3, 4, 5].map(num => {
@@ -1100,20 +1110,20 @@ export default function PipelinePage() {
                     Comments &amp; interviewer notes
                   </label>
                   <textarea
-                    rows={4}
+                    rows={3}
                     value={feedbackComments}
                     onChange={event => setFeedbackComments(event.target.value)}
                     placeholder="Provide specific observations, candidate strengths, potential concerns, and next steps..."
-                    className="w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/15 placeholder:text-slate-400"
+                    className="w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/15 placeholder:text-slate-400"
                   />
                 </div>
 
                 {/* 3. Final Recommendation */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Final recommendation
                   </label>
-                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {[
                       { val: 'Strong Hire', label: 'Strong Hire', sub: 'Strong Yes', bg: 'border-emerald-300 bg-emerald-50/70 text-emerald-800' },
                       { val: 'Hire', label: 'Hire', sub: 'Yes / Meets Bar', bg: 'border-teal-300 bg-teal-50/70 text-teal-800' },
@@ -1126,7 +1136,7 @@ export default function PipelinePage() {
                           key={rec.val}
                           type="button"
                           onClick={() => setFeedbackRecommendation(rec.val as any)}
-                          className={`flex flex-col items-center justify-center rounded-2xl border p-3 text-center transition-all ${
+                          className={`flex flex-col items-center justify-center rounded-2xl border p-2.5 text-center transition-all ${
                             isSelected
                               ? `${rec.bg} ring-2 ring-brand-orange shadow-sm font-bold`
                               : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
@@ -1139,9 +1149,14 @@ export default function PipelinePage() {
                     })}
                   </div>
                 </div>
+              </form>
 
-                {/* Form Actions */}
-                <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+              {/* Pinned Footer */}
+              <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-6 py-3.5 sm:px-7 bg-white shrink-0 shadow-[0_-4px_16px_rgba(0,0,0,0.03)]">
+                <div className="text-xs font-semibold text-slate-500">
+                  Overall: <span className="text-sm font-bold text-[#F26943]">★ {avgScore.toFixed(1)}</span> <span className="text-[11px] text-slate-400">/ 5.0</span>
+                </div>
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setFeedbackCandidate(null)}
@@ -1151,12 +1166,13 @@ export default function PipelinePage() {
                   </button>
                   <button
                     type="submit"
+                    form="pipeline-feedback-form"
                     className="rounded-xl bg-[#F26943] px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#e95d38]"
                   >
                     Save round feedback
                   </button>
                 </div>
-              </form>
+              </div>
             </section>
           </div>
         );
