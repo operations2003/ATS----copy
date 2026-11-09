@@ -589,12 +589,11 @@ export default function AdminPage() {
                           (r.displayRole && r.displayRole.toLowerCase().includes(q)) ||
                           (r.topSkills && r.topSkills.some(s => s.toLowerCase().includes(q))) ||
                           (r.strengths && r.strengths.some(s => s.toLowerCase().includes(q)));
-    const matchesPod = podFilter === 'All' || r.team === podFilter || (!r.team && podFilter === 'General');
     const matchesStatus = statusFilter === 'All' || 
       (statusFilter === 'Active' && r.lastActive.includes('Active')) ||
       (statusFilter === 'Optimal' && r.capacity === 'Optimal') ||
       (statusFilter === 'Available' && r.capacity === 'Available');
-    return matchesSearch && matchesPod && matchesStatus;
+    return matchesSearch && matchesStatus;
   });
 
   const handleAddMember = async (e: React.FormEvent) => {
@@ -950,7 +949,7 @@ export default function AdminPage() {
               <span className="text-xs font-semibold text-slate-400">Recruiters</span>
             </div>
             <div className="flex items-center justify-between text-xs text-slate-500 mt-2.5 pt-2.5 border-t border-slate-100">
-              <span className="text-violet-600 font-bold">{existingDepartments.length + 1} Department{existingDepartments.length === 0 ? '' : 's'}</span>
+              <span className="text-violet-600 font-bold">{recruiters.length} Active Member{recruiters.length === 1 ? '' : 's'}</span>
               <span className="font-semibold text-slate-700">100% Tracked</span>
             </div>
           </div>
@@ -1018,38 +1017,20 @@ export default function AdminPage() {
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
                 <input
                   type="text"
-                  placeholder="Search by name, email, role, department..."
+                  placeholder="Search by name, email, or role..."
                   value={searchRecruiter}
                   onChange={e => setSearchRecruiter(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-orange/30"
                 />
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <label className="text-[11px] font-bold text-slate-500">Department:</label>
-                <select
-                  value={podFilter}
-                  onChange={e => setPodFilter(e.target.value)}
-                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-orange/30 cursor-pointer"
-                >
-                  <option value="All">All Departments</option>
-                  <option value="General">General</option>
-                  {existingDepartments.map(dept => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
-              </div>
-
-              {(searchRecruiter || podFilter !== 'All') && (
+              {searchRecruiter && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearchRecruiter('');
-                    setPodFilter('All');
-                  }}
+                  onClick={() => setSearchRecruiter('')}
                   className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                 >
-                  Clear Filters
+                  Clear Search
                 </button>
               )}
             </div>
@@ -1060,11 +1041,10 @@ export default function AdminPage() {
           </div>
 
           <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs min-w-[850px]">
+                <table className="w-full text-left text-xs min-w-[700px]">
                   <thead>
                     <tr className="border-b border-slate-200 bg-[#F1F5F9] text-[11px] font-black text-slate-500 uppercase tracking-wider">
                       <th className="px-6 py-4 min-w-[240px]">Recruiter / Member</th>
-                      <th className="px-4 py-4 min-w-[170px]">Assigned Department</th>
                       <th className="px-4 py-4 text-center whitespace-nowrap">Resumes Seen</th>
                       <th className="px-4 py-4 text-center whitespace-nowrap">Shortlists</th>
                       <th className="px-4 py-4 text-center whitespace-nowrap">Shortlist Rate</th>
@@ -1074,6 +1054,8 @@ export default function AdminPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredRecruiters.map(r => {
+                      const displayRole = r.role === 'ADMIN' ? 'Admin' : r.role === 'TEAM_LEAD' ? 'Team Lead' : (r.customRole && r.customRole.toLowerCase() !== 'general' ? r.customRole : null);
+
                       return (
                         <tr 
                           key={r.id} 
@@ -1091,20 +1073,20 @@ export default function AdminPage() {
                               <div>
                                 <div className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
                                   <span>{r.name}</span>
-                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                                    r.role === 'ADMIN' ? 'bg-violet-100 text-violet-800' :
-                                    r.role === 'TEAM_LEAD' ? 'bg-amber-100 text-amber-800' :
-                                    'bg-slate-100 text-slate-700'
-                                  }`}>
-                                    {r.displayRole || r.customRole || (r.role === 'ADMIN' ? 'Admin' : r.role === 'TEAM_LEAD' ? 'Team Lead' : 'General')}
-                                  </span>
+                                  {displayRole && (
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                      r.role === 'ADMIN' ? 'bg-violet-100 text-violet-800' :
+                                      r.role === 'TEAM_LEAD' ? 'bg-amber-100 text-amber-800' :
+                                      'bg-slate-100 text-slate-700'
+                                    }`}>
+                                      {displayRole}
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="text-slate-400 text-[11px] mt-0.5">{r.email} • {r.lastActive}</div>
                               </div>
                             </div>
                           </td>
-
-                          <td className="px-4 py-4 font-semibold text-slate-700 whitespace-nowrap">{r.team || 'General'}</td>
 
                           <td className="px-4 py-4 text-center font-black text-slate-800 text-sm whitespace-nowrap">
                             {r.resumesSeen} CVs
@@ -1167,7 +1149,7 @@ export default function AdminPage() {
                   </div>
                   <div>
                     <h3 className="text-base font-black text-slate-900">{selectedRecruiter.name} — Detailed Time &amp; Activity Log</h3>
-                    <p className="text-xs text-slate-500">{selectedRecruiter.email} • {selectedRecruiter.team}</p>
+                    <p className="text-xs text-slate-500">{selectedRecruiter.email}</p>
                   </div>
                 </div>
                 <button onClick={() => setShowRecruiterModal(false)} className="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
