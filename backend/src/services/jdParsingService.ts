@@ -697,8 +697,18 @@ const KNOWN_FIELD_LABELS = [
   "company / client",
   "client name",
   "company name",
+  "client company",
+  "client organization",
+  "client organisation",
+  "organization name",
+  "organisation name",
+  "employer name",
   "hiring company",
   "hiring organization",
+  "hiring organisation",
+  "about us",
+  "about our company",
+  "who we are",
   "position title",
   "job title",
   "work mode",
@@ -778,6 +788,12 @@ const GENERIC_COMPANY_STOP_WORDS = [
   "openings",
   "candidate profile",
   "verified organization",
+  "us",
+  "our company",
+  "our client",
+  "about us",
+  "about our company",
+  "who we are",
 ];
 
 export const cleanExtractedName = (
@@ -797,7 +813,11 @@ export const cleanExtractedName = (
       "",
     )
     .replace(
-      /\s*[•●*|]\s*(?:employment\s+type|work\s+mode|workplace\s+type|budget|salary|compensation|experience\s+required|experience)[\s\S]*/i,
+      /\s+[-–]\s*(?:employment\s+type|work\s+mode|workplace\s+type|budget|salary|compensation|experience\s+required|experience|locations?|city|position(?:\s+title)?|job\s+title|job\s+type|openings?)\s*[:\-–][\s\S]*$/i,
+      "",
+    )
+    .replace(
+      /\s*[•●*|;]\s*(?:employment\s+type|work\s+mode|workplace\s+type|budget|salary|compensation|experience\s+required|experience|locations?|city|position(?:\s+title)?|job\s+title|job\s+type|openings?)(?:\s*[:\-–])?[\s\S]*/i,
       "",
     )
     .replace(/\s+/g, " ")
@@ -807,9 +827,14 @@ export const cleanExtractedName = (
   cleaned = cleaned.replace(/^["'`“”‘’]+|["'`“”‘’]+$/g, "").trim();
 
   if (isCompany) {
+    const companyWordCount = cleaned.split(/\s+/).length;
     if (
       GENERIC_COMPANY_STOP_WORDS.includes(cleaned.toLowerCase()) ||
-      cleaned.length < 2
+      cleaned.length < 2 ||
+      cleaned.length > 80 ||
+      companyWordCount > 6 ||
+      /\b(?:is|are|was|were|has|have|offers|provides|seeks|looking\s+for|hiring)\b/i.test(cleaned) ||
+      /^(?:we\b|our\b|the\s+company\b|the\s+client\b|about\s+us\b|this\s+role\b)/i.test(cleaned)
     ) {
       return null;
     }
@@ -1463,7 +1488,7 @@ export const extractCompanyAndPosition = (
     // Explicit Company Label
 
     const compLabelMatch = line.match(
-      /^(?:client\s*(?:\/|&|and)\s*company|company\s*(?:\/|&|and)\s*client|client\s+name|company\s+name|hiring\s+company|hiring\s+organization|client|company|employer|organization)\b\s*[:\-–]?\s*(.*)$/i,
+      /^(?:client\s*(?:\/|&|and)\s*company|company\s*(?:\/|&|and)\s*client|client\s+name|company\s+name|client\s+company|client\s+organization|client\s+organisation|organization\s+name|organisation\s+name|employer\s+name|hiring\s+company|hiring\s+organization|hiring\s+organisation|client|company|employer|organization|organisation)\b\s*[:\-–]?\s*(.*)$/i,
     );
 
     if (compLabelMatch) {
@@ -1682,6 +1707,37 @@ export const extractCompanyAndPosition = (
     }
   }
 
+  // A number of JDs put only the company name in the document header without
+  // a "Company:" label. Recognize common legal/business suffixes there while
+  // excluding headings and role titles.
+  if (!headerCompany) {
+    const businessSuffix = /\b(?:incorporated|inc\.?|llc|ltd\.?|limited|corp\.?|corporation|technologies|technology|solutions|systems|services|group|industries|consulting|software|bank|university|foundation|labs|holdings|gmbh|plc|pvt\.?|private)\b/i;
+    for (const rawLine of lines.slice(0, 10)) {
+      const line = rawLine
+        .replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s•●*▪▫➢✓✔\-–—\d.]+/gu, "")
+        .trim();
+      if (
+        !line ||
+        line.length > 60 ||
+        line.split(/\s+/).length > 6 ||
+        /[.!?]$/.test(line) ||
+        /\b(?:we|our|the|a|an|is|are|you|role|position|seeking|looking|hiring|responsible|experience)\b/i.test(line) ||
+        line.includes(":") ||
+        detectHeading(line).isHeading ||
+        isKnownPositionTitle(line) ||
+        !businessSuffix.test(line)
+      ) {
+        continue;
+      }
+      const candidate = cleanExtractedName(line, true);
+      if (candidate) {
+        headerCompany = candidate;
+        candidates.add(candidate);
+        break;
+      }
+    }
+  }
+
   // PRIORITY 3: Job Summary / About Section Fallback
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i].trim();
@@ -1695,13 +1751,14 @@ export const extractCompanyAndPosition = (
       )
       .trim();
 
-    // Match "About <Company>" or "About: <Company>"
+    // Match company-specific About headings, but don't mistake the generic
+    // section title "About Us" for the company name "Us".
     const aboutMatch =
       cleanLine.match(
         /^(?:about\s+the\s+company|company\s+overview)\s*[:\-–]?\s*(.+)$/i,
       ) ||
       cleanLine.match(/^about\s*[:\-–]\s*(.+)$/i) ||
-      cleanLine.match(/^about\s+(.+)$/i);
+      cleanLine.match(/^about\s+(?!us\b|our\b|the\s+company\b|the\s+role\b)([^:,.]{2,60})$/i);
     if (aboutMatch) {
       const val = cleanExtractedName(aboutMatch[1], true);
       if (val && !summaryCompany) {
@@ -1711,7 +1768,8 @@ export const extractCompanyAndPosition = (
     }
 
     // Match "<Company> (an affiliate of ...) is a leader..." or "<Company> is a leader/provider/pioneer..."
-    const introMatch = cleanLine.match(
+    const companyIntroLine = cleanLine.replace(/^about\s+us\s*[:\-–]\s*/i, "");
+    const introMatch = companyIntroLine.match(
       /^([A-Z][A-Za-z0-9&.,'-]+(?:\s+[A-Z][A-Za-z0-9&.,'-]+){0,3}?)\s*(?:\([^)]*\))?\s+is\s+(?:a|an|the)\s+(?:leader|provider|platform|pioneer|global|leading|innovative|software|financial)/i,
     );
     if (introMatch) {
@@ -1723,7 +1781,7 @@ export const extractCompanyAndPosition = (
     }
 
     // Match "<Company> is looking for / seeking / hiring <Position>"
-    const hiringMatch = cleanLine.match(
+    const hiringMatch = companyIntroLine.match(
       /^([A-Z][A-Za-z0-9&.,'-]+(?:\s+[A-Z][A-Za-z0-9&.,'-]+){0,4}?)\s+(?:is\s+(?:looking\s+for|seeking|hiring|in\s+search\s+of)|invites\s+applications\s+for)\s+(?:an?\s+|experienced\s+)?([^.,;]+?)(?:\s+(?:to\s+join|in\s+our|with|for|at)\b|[.,;]|$)/i,
     );
     if (hiringMatch) {
@@ -1736,6 +1794,31 @@ export const extractCompanyAndPosition = (
       if (pos && !summaryPosition && isKnownPositionTitle(pos)) {
         summaryPosition = pos;
       }
+    }
+  }
+
+  // PRIORITY 4: Common company mentions in the opening copy (e.g. "Join Acme as...",
+  // "Work with Acme...", or "At Acme, we..."). Keep this below explicit labels and
+  // structured headers so incidental company references later in the JD do not win.
+  if (!explicitCompany && !headerCompany && !summaryCompany) {
+    const narrativeCompanyPatterns = [
+      /\b(?:[Jj]oin|[Ww]ork\s+[Aa]t|[Ww]ork\s+[Ww]ith|[Aa]t)\s+([A-Z][A-Za-z0-9&.'’()-]*(?:\s+[A-Z][A-Za-z0-9&.'’()-]*){0,4})(?=\s+(?:as\b|where\b|to\b|who\b|and\b)|[,!;.]|$)/,
+      /\b(?:our\s+client|the\s+client)\s+(?:named|called|known\s+as)\s+([A-Z][A-Za-z0-9&.'’()-]*(?:\s+[A-Z][A-Za-z0-9&.'’()-]*){0,4})(?=[,;.!]|$)/i,
+    ];
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line || line.length > 240) continue;
+      for (const pattern of narrativeCompanyPatterns) {
+        const match = line.match(pattern);
+        const candidate = cleanExtractedName(match?.[1] || null, true);
+        if (candidate && !isKnownPositionTitle(candidate)) {
+          summaryCompany = candidate;
+          candidates.add(candidate);
+          break;
+        }
+      }
+      if (summaryCompany) break;
     }
   }
 

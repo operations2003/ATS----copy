@@ -150,13 +150,7 @@ export default function HireIQHiringReality({
   };
 
   if (isLoading && !report) {
-    return (
-      <div className="p-8 bg-slate-900 border border-slate-800 rounded-3xl text-center space-y-3 animate-pulse">
-        <div className="w-10 h-10 border-3 border-brand-orange border-t-transparent rounded-full animate-spin mx-auto" />
-        <h4 className="text-white font-bold text-sm">HireIQ Hiring Reality Engine™</h4>
-        <p className="text-slate-400 text-xs">Simulating market talent density & requirement bottleneck impact...</p>
-      </div>
-    );
+    return null;
   }
 
   if (error && !report) {
@@ -188,47 +182,8 @@ export default function HireIQHiringReality({
     .replace(/^overview\s+/i, '')
     .trim();
 
-  const simulatedPool = 100 + report.simulatedPoolGainPercent;
-
   return (
     <div className="space-y-6">
-      {/* ── TOP BANNER: BRANDING ── */}
-      <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white rounded-3xl p-6 shadow-sm border border-slate-800 relative overflow-hidden">
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-radial from-brand-orange/20 to-transparent pointer-events-none" />
-
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-brand-orange text-white">
-                HireIQ Phase 2
-              </span>
-              <span className="text-[11px] font-bold text-slate-300">
-                Pre-Sourcing Role Feasibility Stress Test
-              </span>
-            </div>
-            <h2 className="text-xl font-extrabold text-white mt-1.5 tracking-tight flex items-center gap-2">
-              <span>Hiring Reality Engine™</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-slate-300 font-normal">
-                Market Talent Supply Simulation
-              </span>
-            </h2>
-            <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
-              Stress-test the Job Description <em>before</em> sourcing candidates. Identify which requirements compete for the same narrow candidate pool and simulate relaxation gains.
-            </p>
-          </div>
-
-          <div className="flex-shrink-0 flex items-center gap-2.5">
-            <button
-              onClick={() => fetchRealityAnalysis(activeAdjustments)}
-              className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl transition-all cursor-pointer border border-white/10"
-              title="Refresh reality calculation"
-            >
-              ↻ Re-Run Stress Test
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* ── SECTION 1: REALITY SCORE & TIME-TO-HIRE GAUGE ── */}
       <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-xs">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
@@ -430,70 +385,6 @@ export default function HireIQHiringReality({
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* ── SECTION 3: WHAT-IF SIMULATOR: "SHOW ME WHAT I GAIN" ── */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-3xl p-6 shadow-sm border border-slate-800 space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-slate-950">
-              Interactive Simulator
-            </span>
-            <h3 className="text-base font-extrabold text-white mt-1.5 tracking-tight">
-              “Show Me What I Gain” — Requirement Relaxation Simulator
-            </h3>
-            <p className="text-xs text-slate-300 mt-0.5">
-              Click the relaxation toggles above to observe compounding pool expansion:
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 bg-white/10 px-4 py-2.5 rounded-2xl border border-white/10">
-            <div className="text-right">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Current Pool Index</span>
-              <span className="text-base font-black font-mono text-white">100% baseline</span>
-            </div>
-            <div className="h-8 w-px bg-white/20" />
-            <div>
-              <span className="text-[10px] uppercase font-bold text-emerald-400 block">Simulated Pool</span>
-              <span className="text-xl font-black font-mono text-emerald-400">
-                {simulatedPool}% <span className="text-xs font-bold text-emerald-300">(+{report.simulatedPoolGainPercent}%)</span>
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Dynamic Visual Pool Bar */}
-        <div className="space-y-1.5">
-          <div className="flex justify-between text-xs font-bold text-slate-300">
-            <span>Baseline Sourcing Pool (100%)</span>
-            <span className="text-emerald-400">
-              {report.simulatedPoolGainPercent > 0
-                ? `Expanded Sourcing Pool: +${report.simulatedPoolGainPercent}% Wider Pool`
-                : 'Select requirements above to simulate pool expansion'}
-            </span>
-          </div>
-          <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden flex">
-            <div className="bg-slate-400 h-3" style={{ width: `${Math.round((100 / simulatedPool) * 100)}%` }} title="Baseline Pool" />
-            <div className="bg-emerald-400 h-3 animate-pulse transition-all duration-500" style={{ width: `${Math.round((report.simulatedPoolGainPercent / simulatedPool) * 100)}%` }} title="Simulated Expansion" />
-          </div>
-        </div>
-
-        {/* Actionable Advice Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-          {report.recommendations.map((rec, idx) => (
-            <div key={idx} className="p-3.5 bg-white/5 border border-white/10 rounded-2xl space-y-1">
-              <span className="text-[10px] font-black uppercase text-brand-orange tracking-wider block">
-                {rec.impact}
-              </span>
-              <h5 className="text-xs font-bold text-white leading-snug">
-                {rec.title}
-              </h5>
-              <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-2">
-                {rec.actionableText}
-              </p>
-            </div>
-          ))}
         </div>
       </div>
 

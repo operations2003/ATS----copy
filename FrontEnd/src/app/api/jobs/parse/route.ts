@@ -84,14 +84,20 @@ export async function POST(req: NextRequest) {
       positionTitle = lines[0]?.substring(0, 50) || 'Senior Technical Specialist';
     }
 
-    // Company / Client detection
-    let companyName = '';
-    const compMatch = rawText.match(/(?:company|client|organization|employer|at)\s*[:–-]?\s*([A-Za-z0-9\s&.,]{2,40})/i);
-    if (compMatch && compMatch[1]) {
-      companyName = compMatch[1].trim();
-    } else {
-      companyName = 'Hexaware Technologies';
-    }
+    // Company / Client detection: prefer explicitly labeled fields and avoid
+    // inventing a company when the JD doesn't identify one.
+    const explicitCompanyMatch = rawText.match(
+      /(?:^|[\r\n])\s*(?:client\s*(?:\/|&|and)\s*company|company\s*(?:\/|&|and)\s*client|client\s+name|company\s+name|client\s+company|client\s+organization|client\s+organisation|organization\s+name|organisation\s+name|employer\s+name|hiring\s+company|hiring\s+organization|hiring\s+organisation|client|company|employer|organization|organisation)\s*[:–-]\s*([^|\r\n]{2,80})/i,
+    );
+    const aboutCompanyMatch = rawText.match(
+      /(?:^|[\r\n])\s*about\s+(?!us\b|our\b|the\s+role\b)([A-Z][A-Za-z0-9&.'’()-]*(?:\s+[A-Z][A-Za-z0-9&.'’()-]*){0,4})\s*$/im,
+    );
+    const narrativeCompanyMatch = rawText.match(
+      /\b(?:[Jj]oin|[Ww]ork\s+[Aa]t|[Ww]ork\s+[Ww]ith|[Aa]t)\s+([A-Z][A-Za-z0-9&.'’()-]*(?:\s+[A-Z][A-Za-z0-9&.'’()-]*){0,4})(?=\s+(?:as\b|where\b|to\b|who\b|and\b)|[,!;.]|$)/,
+    );
+    const companyName = (
+      explicitCompanyMatch?.[1] || aboutCompanyMatch?.[1] || narrativeCompanyMatch?.[1] || ''
+    ).trim().replace(/[.;,|\s]+$/, '');
 
     // Location detection
     let location = 'Remote / Hybrid';
