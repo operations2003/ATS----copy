@@ -1440,27 +1440,11 @@ export default function CandidatesPage() {
                   </div>
                 </div>
 
-                {/* Quick Info Bar with Career Gaps */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-6 border-b border-slate-100 bg-white text-xs">
+                {/* Quick Info */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-6 border-b border-slate-100 bg-white text-xs">
                   <div>
                     <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Experience</span>
                     <span className="font-bold text-slate-800 mt-0.5 block">{selectedCandidate.exp}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Companies</span>
-                    <span className="font-bold text-blue-700 mt-0.5 block">{selectedCandidate.companyCount} unique</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Career Gaps</span>
-                    {selectedCandidate.gapAnalysis?.hasGap ? (
-                      <span className="font-bold text-amber-700 mt-0.5 block" title={selectedCandidate.gapAnalysis.statusText}>
-                        ⚠️ {selectedCandidate.gapAnalysis.totalGapMonths} mos ({selectedCandidate.gapAnalysis.gaps.length} {selectedCandidate.gapAnalysis.gaps.length === 1 ? 'gap' : 'gaps'})
-                      </span>
-                    ) : (
-                      <span className="font-bold text-emerald-700 mt-0.5 block">
-                        ✓ No gaps (Continuous)
-                      </span>
-                    )}
                   </div>
                   <div>
                     <span className="text-[10px] uppercase font-bold text-slate-400 block">Email</span>
@@ -1475,13 +1459,11 @@ export default function CandidatesPage() {
                 {/* Tab Switcher */}
                 <div className="px-6 pt-4 flex items-center gap-4 border-b border-slate-100 overflow-x-auto">
                   {[
-                    { id: 'decision', label: '⚡ Decision Intelligence' },
-                    { id: 'summary', label: '📄 Executive Summary' },
-                    { id: 'overview', label: 'Summary & Education' },
+                    { id: 'decision', label: 'Decision Intelligence' },
+                    { id: 'summary', label: 'Executive Summary' },
                     { id: 'history', label: `Job Evaluations (${candidateHistory.length})` },
                     { id: 'experience', label: `Work History (${selectedCandidate.experience.length})` },
                     { id: 'skills', label: `Skills (${selectedCandidate.skills.length})` },
-                    { id: 'resume', label: 'Extracted CV Text' },
                   ].map(tab => (
                     <button
                       key={tab.id}

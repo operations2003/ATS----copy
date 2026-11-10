@@ -474,7 +474,7 @@ export default function CandidateExecutiveSummary({
           <div className="flex items-center gap-4 text-xs text-slate-400 flex-wrap pt-1">
             <span>📍 {summary.overview.location}</span>
             <span>⏱️ {summary.overview.totalExperience} Experience</span>
-            <span>🎓 {summary.overview.highestQualification}</span>
+          <span>{summary.overview.highestQualification}</span>
             <span>✉️ {summary.overview.email}</span>
             <span>📞 {summary.overview.phone}</span>
           </div>

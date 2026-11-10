@@ -866,7 +866,7 @@ export default function AdminPage() {
             <span className="inline-flex items-center rounded-full border border-[#DDC6E7] bg-[#F4ECF8] px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#54236C]">
               Administrator &amp; Executive Oversight Hub
             </span>
-            <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Talent Acquisition Team Performance &amp; Time Tracking</h1>
+            <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Team Performance &amp; Tracking</h1>
             <p className="mt-1 text-sm leading-relaxed text-slate-500">Track resume reviews, job creation, and shortlisting across your team.</p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2.5">

@@ -2634,7 +2634,7 @@ export default function JobCandidatesPage() {
                           : 'text-slate-600 hover:text-slate-900 bg-white/50'
                       }`}
                     >
-                      <span>📄 Executive Summary</span>
+                      <span>Executive Summary</span>
                     </button>
                     <button
                       onClick={() => setActiveModalTab('match')}

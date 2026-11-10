@@ -30,6 +30,8 @@ const Header: React.FC = () => {
   const [profileOpen, setProfileOpen]   = useState(false);
   const [searchQuery, setSearchQuery]   = useState('');
   const [mounted, setMounted]           = useState(false);
+  const [cachedRole, setCachedRole] = useState<string | null>(null);
+  const [cachedEmail, setCachedEmail] = useState('');
   const [interviewNotifications, setInterviewNotifications] = useState<InterviewNotification[]>([]);
   const [quotaNotifications, setQuotaNotifications] = useState<InterviewNotification[]>([]);
   const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
@@ -50,6 +52,10 @@ const Header: React.FC = () => {
 
   useEffect(() => {
     setMounted(true);
+    // Read browser storage after hydration so role-dependent navigation has
+    // identical server and first-client markup.
+    setCachedRole(localStorage.getItem('tasknera_role'));
+    setCachedEmail(localStorage.getItem('tasknera_email') || '');
   }, []);
 
   useEffect(() => {
@@ -172,8 +178,6 @@ const Header: React.FC = () => {
     return () => { cancelled = true; window.clearInterval(poll); window.removeEventListener('focus', refreshQuotaNotifications); };
   }, [isAuthenticated, token, user?.organizationId]);
 
-  const cachedRole = typeof window !== 'undefined' ? (localStorage.getItem('tasknera_role') as any) : null;
-  const cachedEmail = typeof window !== 'undefined' ? (localStorage.getItem('tasknera_email') || '') : '';
   const currentRole = user?.role || cachedRole || 'RECRUITER_MEMBER';
 
   const isSuperAdmin = currentRole === 'SUPER_ADMIN' || (user?.email || cachedEmail)?.toLowerCase().trim() === 'operations@tasknera.com' || (user?.email || cachedEmail)?.toLowerCase().trim() === 'admin@gmail.com';
