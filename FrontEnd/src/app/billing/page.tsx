@@ -383,24 +383,11 @@ export default function BillingPage() {
 
         {/* Subscription Plans Section (According to our subscription plans) */}
         <div className="mt-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-5">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">TaskNera Subscription Plans</h2>
-              <p className="text-xs text-slate-500">
-                Select or inquire about plans configured for your agency or enterprise team.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedUpgradePlan('ENTERPRISE');
-                setInquiryModalOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white hover:bg-slate-800 shadow-xs transition"
-            >
-              <span>Contact Sales / Custom Plan</span>
-              <span>→</span>
-            </button>
+          <div className="mb-5">
+            <h2 className="text-lg font-bold text-slate-900">TaskNera Subscription Plans</h2>
+            <p className="text-xs text-slate-500">
+              Select or inquire about plans configured for your agency or enterprise team.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
