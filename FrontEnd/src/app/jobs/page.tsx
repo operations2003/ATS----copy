@@ -578,12 +578,12 @@ export default function JobsPage() {
 
           {canUploadJd && (
             <div className="flex flex-wrap items-center gap-3">
-            <Link href="/jobs/generate" className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-orange-200 bg-white hover:bg-orange-50 text-[#E04826] text-xs font-bold shadow-xs transition-all duration-200 whitespace-nowrap active:scale-95">
+            <Link href="/jobs/generate" className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold shadow-xs transition-all duration-200 whitespace-nowrap active:scale-95">
               <span aria-hidden="true">✦</span><span>Create JD with AI</span>
             </Link>
             <Link
               href="/jobs/create"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#FF5A36] hover:bg-[#E04826] text-white text-xs font-bold shadow-xs transition-all duration-200 whitespace-nowrap active:scale-95"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold shadow-xs transition-all duration-200 whitespace-nowrap active:scale-95"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />

@@ -15,8 +15,8 @@ const Logo: React.FC<LogoProps> = ({ href = '/home', size = 'md', variant = 'dar
   const iconSize  = size === 'sm' ? 'w-8 h-8' : size === 'lg' ? 'w-12 h-12' : 'w-9 h-9';
   const textSize  = size === 'sm' ? 'text-lg sm:text-xl'  : size === 'lg' ? 'text-3xl'  : 'text-2xl';
   const tagSize   = size === 'sm' ? 'text-[8px]' : size === 'lg' ? 'text-[10px]' : 'text-[8.5px]';
-  const taskColor = variant === 'light' ? 'text-white' : 'text-[#0F172A]';
-  const tagColor  = variant === 'light' ? 'text-slate-400' : 'text-slate-500';
+  const taskColor = variant === 'light' ? 'text-white' : 'text-[#101828]';
+  const tagColor  = variant === 'light' ? 'text-[#98A2B3]' : 'text-[#667085]';
 
   const mark = (
     <div className="flex items-center gap-3 select-none group">
@@ -35,7 +35,7 @@ const Logo: React.FC<LogoProps> = ({ href = '/home', size = 'md', variant = 'dar
         {/* Brand Name */}
         <div className={`font-black tracking-tight ${textSize} leading-none flex items-center`}>
           <span className={taskColor}>Hire</span>
-          <span className="text-[#FF6E38]">IQ</span>
+          <span className="text-[#3563E9]">IQ</span>
         </div>
 
         {/* Tagline */}

@@ -825,7 +825,7 @@ export default function AdminPage() {
   // Loading state while verifying authentication / hydration
   if (!mounted || authLoading) {
     return (
-      <div className="min-h-screen bg-[#EEF2F6] flex flex-col justify-between selection:bg-brand-orange-pale selection:text-brand-orange">
+      <div className="min-h-screen bg-[#F7F8FC] flex flex-col justify-between selection:bg-brand-orange-pale selection:text-brand-orange">
         <Header />
         <main className="flex-1 flex items-center justify-center p-6">
           <div className="flex flex-col items-center gap-3">
@@ -841,7 +841,7 @@ export default function AdminPage() {
   // If a recruiter or unauthenticated visitor lands here, redirect seamlessly without showing the old admin login portal
   if (!isAuthorizedAdmin) {
     return (
-      <div className="min-h-screen bg-[#EEF2F6] flex flex-col justify-between selection:bg-brand-orange-pale selection:text-brand-orange">
+      <div className="min-h-screen bg-[#F7F8FC] flex flex-col justify-between selection:bg-brand-orange-pale selection:text-brand-orange">
         <Header />
         <main className="flex-1 flex items-center justify-center p-6">
           <div className="flex flex-col items-center gap-3">
@@ -855,7 +855,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#EEF2F6] text-[#1E293B] flex flex-col selection:bg-brand-orange-pale selection:text-brand-orange">
+    <div className="min-h-screen bg-[#F7F8FC] text-[#1E293B] flex flex-col selection:bg-brand-orange-pale selection:text-brand-orange">
       <Header />
 
       <main className="max-w-screen-xl mx-auto px-6 pt-24 pb-16 flex-1 w-full">
@@ -1151,7 +1151,7 @@ export default function AdminPage() {
                                 type="button"
                                 onClick={() => handleInitiateEdit(r)}
                                 title={`Edit ${r.name}'s profile and access`}
-                                className="p-2 text-slate-400 hover:text-brand-orange hover:bg-orange-50 rounded-lg transition-colors border border-transparent hover:border-orange-200 cursor-pointer"
+                                className="p-2 text-slate-400 hover:text-brand-orange hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-200 cursor-pointer"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -1280,7 +1280,7 @@ export default function AdminPage() {
                     <span className="text-[10px] text-blue-600 font-black uppercase block">RESUMES SEEN</span>
                     <span className="text-lg font-black text-blue-900">{selectedRecruiter.resumesSeen} CVs</span>
                   </div>
-                  <div className="p-3 bg-orange-50 rounded-2xl border border-orange-200">
+                  <div className="p-3 bg-blue-50/60 rounded-2xl border border-blue-200/80">
                     <span className="text-[10px] text-brand-orange font-black uppercase block">JDs UPLOADED</span>
                     <span className="text-lg font-black text-slate-900">{selectedRecruiter.jdsUploaded} Positions</span>
                   </div>
@@ -1454,7 +1454,7 @@ export default function AdminPage() {
                         setShowRecruiterModal(false);
                         handleInitiateEdit(rec);
                       }}
-                      className="px-3.5 py-2 text-brand-orange hover:text-white hover:bg-brand-orange border border-orange-200 hover:border-brand-orange text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+                      className="px-3.5 py-2 text-brand-orange hover:text-white hover:bg-brand-orange border border-blue-200 hover:border-brand-orange text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -1960,7 +1960,7 @@ export default function AdminPage() {
                 {/* Starter Pack */}
                 <div className={`p-5 rounded-2xl border-2 transition-all relative ${
                   quota?.subscriptionPlan === 'STARTER'
-                    ? 'border-brand-orange bg-orange-50/20 shadow-xs'
+                    ? 'border-brand-orange bg-blue-50/20 shadow-xs'
                     : 'border-slate-200 hover:border-slate-300 bg-white'
                 }`}>
                   {quota?.subscriptionPlan === 'STARTER' && (

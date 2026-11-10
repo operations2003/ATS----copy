@@ -578,7 +578,7 @@ export default function DashboardPage() {
   const maxFunnelValue = Math.max(1, ...dashboardFunnel.map(stage => stage.value));
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#1E293B] flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F7F8FC] text-[#1E293B] flex flex-col font-sans">
       <Header />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 flex-1 w-full">
@@ -614,15 +614,15 @@ export default function DashboardPage() {
                 <AreaChart data={screeningVolume} margin={{ top: 6, right: 4, bottom: 0, left: -14 }}>
                   <defs>
                     <linearGradient id="screeningVolumeFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#FF5A36" stopOpacity={0.18} />
-                      <stop offset="100%" stopColor="#FF5A36" stopOpacity={0.01} />
+                      <stop offset="0%" stopColor="#3563E9" stopOpacity={0.18} />
+                      <stop offset="100%" stopColor="#3563E9" stopOpacity={0.01} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid vertical={false} stroke="#E2E8F0" strokeDasharray="3 5" />
                   <XAxis dataKey="label" interval={4} tick={{ fill: '#64748B', fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis allowDecimals={false} width={28} tick={{ fill: '#64748B', fontSize: 10 }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#E2E8F0', fontSize: 12 }} formatter={value => [value, 'Evaluations']} />
-                  <Area type="monotone" dataKey="count" stroke="#FF5A36" strokeWidth={2} fill="url(#screeningVolumeFill)" activeDot={{ r: 4 }} />
+                  <Area type="monotone" dataKey="count" stroke="#3563E9" strokeWidth={2} fill="url(#screeningVolumeFill)" activeDot={{ r: 4 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -658,7 +658,7 @@ export default function DashboardPage() {
                 <div key={item.stage} className="grid grid-cols-[minmax(95px,0.8fr)_minmax(0,1fr)_26px] items-center gap-3 text-xs">
                   <span className="truncate text-slate-500">{item.stage}</span>
                   <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-                    {item.value > 0 && <div className="h-full rounded-full bg-[#F07F67] transition-[width] duration-500" style={{ width: `${Math.max(3, (item.value / maxFunnelValue) * 100)}%` }} />}
+                    {item.value > 0 && <div className="h-full rounded-full bg-[#3563E9] transition-[width] duration-500" style={{ width: `${Math.max(3, (item.value / maxFunnelValue) * 100)}%` }} />}
                   </div>
                   <span className="text-right font-semibold text-slate-800">{item.value}</span>
                 </div>
@@ -683,7 +683,7 @@ export default function DashboardPage() {
                   placeholder="Filter positions..."
                   value={jobSearch}
                   onChange={e => setJobSearch(e.target.value)}
-                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#FF5A36] w-44"
+                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#3563E9] w-44"
                 />
               )}
             </div>

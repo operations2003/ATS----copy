@@ -408,7 +408,7 @@ const Header: React.FC = () => {
         >
           <div className="flex items-center gap-2 min-w-0">
             <span className={`text-[9.5px] font-extrabold tracking-wider uppercase transition-colors truncate ${
-              hasActiveItem ? 'text-[#FF5A36]' : 'text-slate-400/90 group-hover:text-slate-200'
+              hasActiveItem ? 'text-[#3563E9]' : 'text-slate-400/90 group-hover:text-slate-200'
             }`}>
               {title}
             </span>
@@ -440,12 +440,12 @@ const Header: React.FC = () => {
                   onClick={() => setMobileOpen(false)}
                   className={`group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
                     isItemActive
-                      ? 'border border-[#FF5A36] bg-[#1E293B] text-white shadow-xs font-semibold'
-                      : 'border border-transparent text-slate-300 hover:text-white hover:bg-slate-800/60'
+                      ? 'bg-[#3563E9] text-white shadow-xs font-semibold'
+                      : 'text-[#98A2B3] hover:text-white hover:bg-[#1D2939]/70'
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className={`transition-colors ${isItemActive ? 'text-[#FF5A36]' : 'text-slate-400 group-hover:text-slate-200'}`}>
+                    <div className={`transition-colors ${isItemActive ? 'text-white' : 'text-[#98A2B3] group-hover:text-white'}`}>
                       {item.icon}
                     </div>
                     <span className="truncate">{item.label}</span>
@@ -453,8 +453,8 @@ const Header: React.FC = () => {
                   {item.badge && (
                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
                       isItemActive
-                        ? 'bg-[#FF5A36]/20 text-[#FF5A36] border border-[#FF5A36]/30'
-                        : 'bg-slate-800 text-slate-400 border border-slate-700'
+                        ? 'bg-white/20 text-white border border-white/30'
+                        : 'bg-[#1D2939] text-[#98A2B3] border border-[#344054]'
                     }`}>
                       {item.badge}
                     </span>
@@ -469,14 +469,14 @@ const Header: React.FC = () => {
   };
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Clean Sidebar Component (HIRE IQ Proposed Structure)
+  // Clean Sidebar Component (HIRE IQ Enterprise SaaS System)
   // ───────────────────────────────────────────────────────────────────────────
   const SidebarContent = () => (
     <div
-      className="flex flex-col h-full bg-[#0F172A] text-slate-300 font-sans select-none overflow-y-auto"
+      className="flex flex-col h-full bg-[#101828] text-slate-300 font-sans select-none overflow-y-auto border-r border-[#1D2939]"
       style={{
         scrollbarWidth: 'thin',
-        scrollbarColor: '#334155 #0F172A',
+        scrollbarColor: '#344054 #101828',
       }}
     >
       {/* Brand Header */}
@@ -493,9 +493,9 @@ const Header: React.FC = () => {
           <div className="min-w-0">
             <div className="flex items-center gap-1 leading-tight">
               <span className="text-white font-black text-base tracking-tight">HIRE</span>
-              <span className="text-[#FF5722] font-black text-base tracking-tight">IQ</span>
+              <span className="text-[#3563E9] font-black text-base tracking-tight">IQ</span>
             </div>
-            <span className="text-[7.5px] uppercase tracking-[0.2em] font-semibold text-slate-400 block mt-0.5">
+            <span className="text-[7.5px] uppercase tracking-[0.2em] font-semibold text-[#98A2B3] block mt-0.5">
               RECRUITMENT INTELLIGENCE
             </span>
           </div>
@@ -503,11 +503,11 @@ const Header: React.FC = () => {
       </div>
 
       {/* Workspace Indicator */}
-      <div className="mx-3.5 mb-3 px-3 py-2 rounded-xl bg-[#182238] border border-slate-700/60">
+      <div className="mx-3.5 mb-3 px-3 py-2 rounded-xl bg-[#1D2939] border border-[#344054]/80">
         <div suppressHydrationWarning className="text-xs font-semibold text-white truncate">
           {(user as any)?.organizationName || 'TaskNera Demo Workspace'}
         </div>
-        <div suppressHydrationWarning className="text-[9px] uppercase font-bold text-slate-400 tracking-wider mt-0.5">
+        <div suppressHydrationWarning className="text-[9px] uppercase font-bold text-[#98A2B3] tracking-wider mt-0.5">
           {isSuperAdmin ? 'SUPER ADMIN' : isClientAdmin ? 'ORG ADMIN' : 'RECRUITER'}
         </div>
       </div>
@@ -520,8 +520,8 @@ const Header: React.FC = () => {
       </div>
 
       {/* Profile & Logout Pinned to Bottom */}
-      <div className="mt-auto p-3.5 border-t border-slate-800/90 bg-[#0B132B] shrink-0">
-        <div className="flex items-center justify-between gap-2 p-1.5 rounded-xl hover:bg-slate-800/60 transition-colors">
+      <div className="mt-auto p-3.5 border-t border-[#1D2939] bg-[#0C111D] shrink-0">
+        <div className="flex items-center justify-between gap-2 p-1.5 rounded-xl hover:bg-[#1D2939]/70 transition-colors">
           <button
             type="button"
             onClick={() => {
@@ -531,14 +531,14 @@ const Header: React.FC = () => {
             className="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer group"
             title="View Profile & Credentials"
           >
-            <div suppressHydrationWarning className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 text-white font-bold text-xs flex items-center justify-center flex-shrink-0 group-hover:border-[#FF5A36] transition-colors">
+            <div suppressHydrationWarning className="w-8 h-8 rounded-full bg-[#1D2939] border border-[#344054] text-white font-bold text-xs flex items-center justify-center flex-shrink-0 group-hover:border-[#3563E9] transition-colors">
               {getInitials(user?.name, user?.email)}
             </div>
             <div className="min-w-0 flex-1">
-              <span suppressHydrationWarning className="text-xs font-semibold text-white block truncate leading-tight group-hover:text-[#FF5A36] transition-colors">
+              <span suppressHydrationWarning className="text-xs font-semibold text-white block truncate leading-tight group-hover:text-[#3563E9] transition-colors">
                 {user?.name || user?.email?.split('@')[0] || 'User Profile'}
               </span>
-              <span suppressHydrationWarning className="text-[10px] text-slate-400 block truncate mt-0.5">
+              <span suppressHydrationWarning className="text-[10px] text-[#98A2B3] block truncate mt-0.5">
                 {user?.email || 'user@tasknera.com'}
               </span>
             </div>
@@ -647,7 +647,7 @@ const Header: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search candidates or jobs..."
-              className="w-full pl-9 pr-3 py-1.5 bg-[#F8FAFC] hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FF5A36]/30 focus:border-[#FF5A36] transition-all"
+              className="w-full pl-9 pr-3 py-1.5 bg-[#F8FAFC] hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3563E9]/20 focus:border-[#3563E9] transition-all"
             />
           </form>
         </div>

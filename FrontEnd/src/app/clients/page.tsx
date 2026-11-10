@@ -213,7 +213,7 @@ export default function ClientProfilesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#EEF2F6] text-[#1E293B] flex flex-col selection:bg-brand-orange-pale selection:text-brand-orange">
+    <div className="min-h-screen bg-[#F7F8FC] text-[#1E293B] flex flex-col selection:bg-brand-orange-pale selection:text-brand-orange">
       <Header />
       <main className="max-w-screen-xl mx-auto px-6 pt-24 pb-16 flex-1 w-full">
 
@@ -439,7 +439,7 @@ export default function ClientProfilesPage() {
             <div className="my-auto w-full max-w-xl rounded-3xl bg-white p-6 sm:p-7 shadow-2xl">
               <div className="flex items-start justify-between border-b border-slate-100 pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-brand-orange">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#EFF4FF] text-[#3563E9]">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                     </svg>

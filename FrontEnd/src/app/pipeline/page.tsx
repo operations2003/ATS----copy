@@ -156,7 +156,7 @@ export default function PipelinePage() {
   const [schedulingTargetStage, setSchedulingTargetStage] = useState<PipelineStage>('Round 1 Phase');
   const [scheduleError, setScheduleError] = useState('');
   const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({
-    round: 'Technical Interview (Round 1)',
+    round: 'Round 1 Phase',
     startAt: getDefaultStartAt(),
     interviewer: '',
     meetingPlace: '',
@@ -165,7 +165,7 @@ export default function PipelinePage() {
 
   // Interviewer Feedback & Multi-Round History State (Round 1 & Round 2 tracking)
   const [feedbackCandidate, setFeedbackCandidate] = useState<PipelineCandidate | null>(null);
-  const [feedbackRound, setFeedbackRound] = useState<string>('Technical Interview (Round 1)');
+  const [feedbackRound, setFeedbackRound] = useState<string>('Round 1 Phase');
   const [feedbackRatings, setFeedbackRatings] = useState<InterviewFeedbackRatings>(defaultFeedbackRatings);
   const [feedbackRecommendation, setFeedbackRecommendation] = useState<'Strong Hire' | 'Hire' | 'Hold' | 'Do Not Hire'>('Hire');
   const [feedbackComments, setFeedbackComments] = useState('');
@@ -549,7 +549,7 @@ export default function PipelinePage() {
       setSchedulingTargetStage(nextStage);
       setScheduleError('');
       setScheduleForm({
-        round: nextStage === 'Round 2 Phase' ? 'Technical Interview (Round 2)' : 'Technical Interview (Round 1)',
+        round: nextStage === 'Round 2 Phase' ? 'Round 2 Phase' : 'Round 1 Phase',
         startAt: getDefaultStartAt(),
         interviewer: user?.name || user?.email || '',
         meetingPlace: '',
@@ -848,7 +848,7 @@ export default function PipelinePage() {
                                       <button
                                         type="button"
                                         onClick={() => setSelectedHistoryCandidate(candidate)}
-                                        className="text-[10px] font-bold text-[#F26943] hover:underline inline-flex items-center gap-0.5"
+                                        className="text-[10px] font-bold text-[#3563E9] hover:underline inline-flex items-center gap-0.5"
                                       >
                                         <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -924,7 +924,7 @@ export default function PipelinePage() {
                                         type="button"
                                         onClick={() => {
                                           setFeedbackCandidate(candidate);
-                                          const targetRound = stage === 'Round 2 Phase' ? 'Technical Interview (Round 2)' : 'Technical Interview (Round 1)';
+                                          const targetRound = stage === 'Round 2 Phase' ? 'Round 2 Phase' : 'Round 1 Phase';
                                           setFeedbackRound(targetRound);
                                           setFeedbackRatings(defaultFeedbackRatings);
                                           const currOutcome = stage === 'Round 2 Phase' ? r2Outcome : r1Outcome;
@@ -933,7 +933,7 @@ export default function PipelinePage() {
                                         }}
                                         className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition shadow-2xs"
                                       >
-                                        <svg className="h-3 w-3 text-[#F26943]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <svg className="h-3 w-3 text-[#3563E9]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                         </svg>
                                         {(stage === 'Round 1 Phase' ? r1Outcome : r2Outcome) ? 'Edit feedback' : 'Record feedback'}
@@ -1043,20 +1043,12 @@ export default function PipelinePage() {
                         round: event.target.value as InterviewRound,
                       }))
                     }
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/15"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/15"
                   >
                     {schedulingTargetStage === 'Round 2 Phase' ? (
-                      <>
-                        <option value="Technical Interview (Round 2)">Technical Interview (Round 2)</option>
-                        <option value="Managerial / System Design">Managerial / System Design</option>
-                        <option value="Leadership / HR Round">Leadership / HR Round</option>
-                      </>
+                      <option value="Round 2 Phase">Round 2 Phase</option>
                     ) : (
-                      <>
-                        <option value="Technical Interview (Round 1)">Technical Interview (Round 1)</option>
-                        <option value="Recruiter Screen">Recruiter Screen</option>
-                        <option value="HR Interview">HR Interview</option>
-                      </>
+                      <option value="Round 1 Phase">Round 1 Phase</option>
                     )}
                   </select>
                 </label>
@@ -1149,7 +1141,7 @@ export default function PipelinePage() {
                   </button>
                   <button
                     type="submit"
-                    className="rounded-xl bg-[#F26943] px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#e95d38]"
+                    className="rounded-xl bg-[#3563E9] px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#2851D6]"
                   >
                     {schedulingTargetStage === 'Round 2 Phase' ? 'Confirm Round 2 interview' : 'Confirm interview'}
                   </button>
@@ -1195,7 +1187,7 @@ export default function PipelinePage() {
               {/* Pinned Header */}
               <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-4 sm:px-7 sm:py-4 bg-white shrink-0">
                 <div>
-                  <div className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF1EB] px-2.5 py-0.5 text-[11px] font-bold text-[#F26943]">
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-[#EFF4FF] px-2.5 py-0.5 text-[11px] font-bold text-[#3563E9]">
                     Interviewer Feedback Form
                   </div>
                   <h2 id="pipeline-feedback-title" className="mt-1 text-xl font-bold text-[#172033]">
@@ -1321,12 +1313,10 @@ export default function PipelinePage() {
                   <select
                     value={feedbackRound}
                     onChange={e => setFeedbackRound(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/15"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/15"
                   >
-                    <option value="Technical Interview (Round 1)">Round 1: Technical Interview (Round 1)</option>
-                    <option value="Technical Interview (Round 2)">Round 2: Technical Interview (Round 2)</option>
-                    <option value="Managerial / System Design">Round 2: Managerial / System Design</option>
-                    <option value="Leadership / HR Round">Leadership / HR Round</option>
+                    <option value="Round 1 Phase">Round 1 Phase</option>
+                    <option value="Round 2 Phase">Round 2 Phase</option>
                   </select>
                 </label>
 
@@ -1334,7 +1324,7 @@ export default function PipelinePage() {
                 <div>
                   <div className="flex items-center justify-between mb-2.5">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Evaluation KPIs</h3>
-                    <span className="inline-flex items-center gap-1.5 rounded-xl bg-orange-50 px-2.5 py-0.5 text-xs font-bold text-[#F26943] border border-orange-100">
+                    <span className="inline-flex items-center gap-1.5 rounded-xl bg-[#EFF4FF] px-2.5 py-0.5 text-xs font-bold text-[#3563E9] border border-[#D1E0FF]">
                       Overall KPI Average: {avgScore.toFixed(1)} / 5.0
                     </span>
                   </div>
@@ -1359,7 +1349,7 @@ export default function PipelinePage() {
                                     onClick={() => setFeedbackRatings(prev => ({ ...prev, [kpi.key]: num }))}
                                     className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs font-bold transition-all ${
                                       isSelected
-                                        ? 'bg-[#F26943] text-white shadow-sm ring-2 ring-[#F26943]/20 scale-105'
+                                        ? 'bg-[#3563E9] text-white shadow-sm ring-2 ring-[#3563E9]/20 scale-105'
                                         : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                                     }`}
                                   >
@@ -1428,7 +1418,7 @@ export default function PipelinePage() {
               {/* Pinned Footer */}
               <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-6 py-3.5 sm:px-7 bg-white shrink-0 shadow-[0_-4px_16px_rgba(0,0,0,0.03)]">
                 <div className="text-xs font-semibold text-slate-500">
-                  Overall: <span className="text-sm font-bold text-[#F26943]">★ {avgScore.toFixed(1)}</span> <span className="text-[11px] text-slate-400">/ 5.0</span>
+                  Overall: <span className="text-sm font-bold text-[#3563E9]">★ {avgScore.toFixed(1)}</span> <span className="text-[11px] text-slate-400">/ 5.0</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1441,7 +1431,7 @@ export default function PipelinePage() {
                   <button
                     type="submit"
                     form="pipeline-feedback-form"
-                    className="rounded-xl bg-[#F26943] px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#e95d38]"
+                    className="rounded-xl bg-[#3563E9] px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#2851D6]"
                   >
                     Save round feedback
                   </button>
@@ -1485,7 +1475,7 @@ export default function PipelinePage() {
               <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-4 sm:px-7 sm:py-4 bg-white shrink-0">
                 <div>
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-slate-700">
-                    <svg className="h-3.5 w-3.5 text-[#F26943]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-3.5 w-3.5 text-[#3563E9]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     Candidate Progress &amp; Round History
@@ -1600,7 +1590,7 @@ export default function PipelinePage() {
                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200/60 pb-2.5">
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="inline-flex rounded-md bg-[#FFF1EB] px-2 py-0.5 text-[11px] font-bold text-[#F26943]">
+                                <span className="inline-flex rounded-md bg-[#EFF4FF] px-2 py-0.5 text-[11px] font-bold text-[#3563E9]">
                                   {isRound1(item.round) ? 'Round 1' : isRound2(item.round) ? 'Round 2' : 'Interview Round'}
                                 </span>
                                 <span className="text-sm font-bold text-slate-800">{item.round}</span>
@@ -1715,13 +1705,13 @@ export default function PipelinePage() {
                       const cand = selectedHistoryCandidate;
                       setSelectedHistoryCandidate(null);
                       setFeedbackCandidate(cand);
-                      const targetRound = cand.stage === 'Round 2 Phase' ? 'Technical Interview (Round 2)' : 'Technical Interview (Round 1)';
+                      const targetRound = cand.stage === 'Round 2 Phase' ? 'Round 2 Phase' : 'Round 1 Phase';
                       setFeedbackRound(targetRound);
                       setFeedbackRatings(defaultFeedbackRatings);
                       setFeedbackRecommendation('Hire');
                       setFeedbackComments('');
                     }}
-                    className="rounded-xl bg-[#FFF1EB] px-4 py-2 text-xs font-bold text-[#F26943] hover:bg-[#ffe5dc] transition"
+                    className="rounded-xl bg-[#EFF4FF] px-4 py-2 text-xs font-bold text-[#3563E9] hover:bg-[#D1E0FF] transition"
                   >
                     + Add round feedback
                   </button>
