@@ -512,7 +512,7 @@ const Header: React.FC = () => {
       <div className="px-3 space-y-4 flex-1 pb-4">
         {renderNavSection('RECRUITMENT WORKSPACE', recruitmentWorkspaceItems)}
         {renderNavSection('ANALYTICS & AUTOMATION', analyticsAutomationItems)}
-        {renderNavSection('ADMINISTRATION', administrationItems)}
+        {isAdmin && renderNavSection('ADMINISTRATION', administrationItems)}
       </div>
 
       {/* Profile & Logout Pinned to Bottom */}
