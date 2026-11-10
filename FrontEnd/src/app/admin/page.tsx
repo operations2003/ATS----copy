@@ -897,7 +897,7 @@ export default function AdminPage() {
                 setPlanSuccess('');
                 setShowPlanModal(true);
               }}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#54236C] px-4 py-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#431B58]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#54236C] px-4 py-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#54236C]/90"
             >
               <span aria-hidden="true">★</span>
               <span>{isSuperAdmin ? 'Switch Plan' : quota?.subscriptionPlan === 'PROFESSIONAL' ? 'View Plan Quota' : 'Upgrade to Pro (2,500)'}</span>
@@ -2033,7 +2033,7 @@ export default function AdminPage() {
                       className={`w-full mt-5 py-2.5 text-xs font-bold rounded-xl transition-all ${
                         quota?.subscriptionPlan === 'PROFESSIONAL'
                           ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                          : 'bg-[#54236C] hover:bg-[#431B58] text-white cursor-pointer shadow-md'
+                          : 'bg-[#54236C] hover:bg-[#54236C]/90 text-white cursor-pointer shadow-md'
                       }`}
                     >
                       {quota?.subscriptionPlan === 'PROFESSIONAL' ? 'Active Plan' : planUpdating ? 'Switching...' : 'Switch to Professional'}
@@ -2045,7 +2045,7 @@ export default function AdminPage() {
                       className={`w-full mt-5 py-2.5 text-xs font-bold rounded-xl transition-all ${
                         quota?.subscriptionPlan === 'PROFESSIONAL'
                           ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                          : 'bg-[#54236C] hover:bg-[#431B58] text-white cursor-pointer shadow-md'
+                          : 'bg-[#54236C] hover:bg-[#54236C]/90 text-white cursor-pointer shadow-md'
                       }`}
                     >
                       {quota?.subscriptionPlan === 'PROFESSIONAL'
