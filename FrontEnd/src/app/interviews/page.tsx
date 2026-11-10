@@ -466,21 +466,11 @@ export default function InterviewsPage() {
               Book rounds, keep interviewers aligned and close the loop on feedback. Every change is written to the candidate timeline.
             </p>
           </div>
-          <div className="flex w-full flex-col gap-2 sm:flex-row xl:w-auto">
-            <label className="block min-w-0 flex-1 xl:w-[280px]">
-              <span className="sr-only">Filter by requisition</span>
-              <select
-                value={requisitionFilter}
-                onChange={event => setRequisitionFilter(event.target.value)}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/15"
-              >
-                {requisitionOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-              </select>
-            </label>
+          <div className="flex w-full flex-wrap items-center gap-2.5 sm:w-auto">
             <button
               type="button"
               onClick={() => setSyncCalendarOpen(true)}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:border-slate-300"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:border-slate-300 cursor-pointer"
             >
               <svg className="h-4 w-4 text-[#F26943]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -490,7 +480,7 @@ export default function InterviewsPage() {
             <button
               type="button"
               onClick={() => openSchedule()}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#F26943] px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#e95d38]"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#F26943] px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#e95d38] cursor-pointer"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 3v3m8-3v3M4 9h16M5.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12A1.5 1.5 0 015.5 5zM12 12v5m-2.5-2.5h5" />
