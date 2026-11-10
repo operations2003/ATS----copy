@@ -577,6 +577,10 @@ export default function JobsPage() {
           </div>
 
           {canUploadJd && (
+            <div className="flex flex-wrap items-center gap-3">
+            <Link href="/jobs/generate" className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-orange-200 bg-white hover:bg-orange-50 text-[#E04826] text-xs font-bold shadow-xs transition-all duration-200 whitespace-nowrap active:scale-95">
+              <span aria-hidden="true">✦</span><span>Create JD with AI</span>
+            </Link>
             <Link
               href="/jobs/create"
               className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#FF5A36] hover:bg-[#E04826] text-white text-xs font-bold shadow-xs transition-all duration-200 whitespace-nowrap active:scale-95"
@@ -586,6 +590,7 @@ export default function JobsPage() {
               </svg>
               <span>New Job</span>
             </Link>
+            </div>
           )}
         </div>
 

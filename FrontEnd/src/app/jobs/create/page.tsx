@@ -89,6 +89,31 @@ function CreateJobContent() {
   const [newReqText, setNewReqText] = useState('');
   const [newReqMandatory, setNewReqMandatory] = useState(true);
 
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || searchParams.get('fromGenerated') !== '1') return;
+    try {
+      const raw = sessionStorage.getItem('tasknera_generated_jd');
+      if (!raw) return;
+      const generated = JSON.parse(raw);
+      setPosition(generated.position || '');
+      setLocation(generated.location || '');
+      setWorkMode(['Remote', 'Hybrid', 'Onsite'].includes(generated.workMode) ? generated.workMode : 'Hybrid');
+      setSalary(generated.salary || '');
+      setJdText(generated.jdText || '');
+      if (generated.client) setClient(generated.client);
+      setRequirements((generated.requirements || []).map((item: any, index: number) => ({
+        id: `generated-${index + 1}`,
+        requirement: item.requirement || '',
+        category: 'Role Requirement',
+        mandatory: Boolean(item.mandatory),
+        weight: item.mandatory ? 2 : 1,
+        type: 'SKILL',
+      })).filter((item: ExtractedRequirement) => item.requirement));
+      setActiveTab('text');
+      sessionStorage.removeItem('tasknera_generated_jd');
+    } catch { /* Keep the standard create form available if the saved draft is malformed. */ }
+  }, [searchParams]);
+
   // UI States
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
