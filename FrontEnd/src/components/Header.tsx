@@ -477,20 +477,25 @@ const Header: React.FC = () => {
     >
       {/* Brand Header */}
       <div className="px-5 pt-5 pb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-[#FF5722] text-white font-black text-base flex items-center justify-center shadow-md flex-shrink-0">
-            H
+        <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0 group cursor-pointer">
+          <div className="w-8 h-8 rounded-xl bg-white p-1 flex items-center justify-center shadow-md flex-shrink-0 transition-transform group-hover:scale-105">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/tasknera-logo-symbol.png"
+              alt="TaskNera Logo"
+              className="w-full h-full object-contain"
+            />
           </div>
           <div className="min-w-0">
-            <span className="text-white font-black text-base tracking-tight block leading-tight">HIRE IQ</span>
-            <span className="text-[8px] uppercase tracking-[0.2em] font-semibold text-slate-400 block mt-0.5">
+            <div className="flex items-center gap-1 leading-tight">
+              <span className="text-white font-black text-base tracking-tight">HIRE</span>
+              <span className="text-[#FF5722] font-black text-base tracking-tight">IQ</span>
+            </div>
+            <span className="text-[7.5px] uppercase tracking-[0.2em] font-semibold text-slate-400 block mt-0.5">
               RECRUITMENT INTELLIGENCE
             </span>
           </div>
-        </div>
-        <span className="rounded-full bg-[#FF5722]/15 px-2 py-0.5 text-[10px] font-bold text-[#FF5722] border border-[#FF5722]/25 tracking-wide shrink-0">
-          Proposed
-        </span>
+        </Link>
       </div>
 
       {/* Workspace Indicator */}
