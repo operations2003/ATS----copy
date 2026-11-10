@@ -599,7 +599,7 @@ export default function JobsPage() {
           {[
             { label: 'Total Jobs / JDs', value: counts.All, color: 'text-slate-900', badge: 'bg-slate-100 text-slate-700 border-slate-200', icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
             { label: 'Active Pipeline', value: counts.Active, color: 'text-emerald-600', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
-            { label: 'Draft Criteria', value: counts.Draft, color: 'text-amber-600', badge: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
+            { label: 'Draft', value: counts.Draft, color: 'text-amber-600', badge: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
             { label: 'Closed / Filled', value: counts.Closed, color: 'text-slate-500', badge: 'bg-slate-50 text-slate-600 border-slate-200', icon: 'M5 13l4 4L19 7' },
           ].map(stat => (
             <div key={stat.label} className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-sm">
