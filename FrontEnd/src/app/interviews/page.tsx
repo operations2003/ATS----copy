@@ -3,7 +3,7 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import Header from '@/components/Header';
 
-type InterviewRound = 'Technical Interview (Round 1)' | 'Technical Interview (Round 2)' | 'Recruiter Screen' | 'Technical Interview' | 'HR Interview' | string;
+type InterviewRound = 'Round 1 Phase' | 'Round 2 Phase' | string;
 type InterviewStatus = 'scheduled' | 'feedback_due' | 'completed';
 
 interface QueueCandidate {
@@ -79,11 +79,8 @@ const PIPELINE_STORAGE_KEY = 'tasknera_recruitment_pipeline_v1';
 const demoQueue: QueueCandidate[] = [];
 
 const roundOptions: InterviewRound[] = [
-  'Technical Interview (Round 1)',
-  'Technical Interview (Round 2)',
-  'Recruiter Screen',
-  'Technical Interview',
-  'HR Interview',
+  'Round 1 Phase',
+  'Round 2 Phase',
 ];
 
 const emptyStore: InterviewStore = { interviews: [], outcomes: [], activity: [] };
@@ -155,7 +152,7 @@ export default function InterviewsPage() {
   const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null);
   const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({
     candidateId: '',
-    round: 'Recruiter Screen',
+    round: 'Round 1 Phase',
     startAt: '',
     interviewer: '',
     meetingPlace: '',
@@ -260,7 +257,7 @@ export default function InterviewsPage() {
     setScheduleError('');
     setScheduleForm({
       candidateId: interview?.candidateId || candidate?.id || '',
-      round: interview?.round || (candidate?.stage === 'Technical interview' ? 'Technical Interview' : 'Recruiter Screen'),
+      round: interview?.round || (candidate?.stage === 'Round 2 Phase' ? 'Round 2 Phase' : 'Round 1 Phase'),
       startAt: interview?.startAt ? toLocalInputValue(new Date(interview.startAt)) : toLocalInputValue(defaultStart),
       interviewer: interview?.interviewer || '',
       meetingPlace: interview?.meetingPlace || '',
