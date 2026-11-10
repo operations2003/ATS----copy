@@ -1,12 +1,23 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { useAuth } from '@/context/AuthContext';
 
+const alertOptions = [
+  { label: 'Evaluation Batch Complete', desc: 'Receive instant ping when multi-CV batch finishes scoring' },
+  { label: 'Mandatory Requirement Failure Alert', desc: 'Instant flag when a top-tier candidate fails a hard constraint' },
+  { label: 'High Match Candidate Discovered (90%+)', desc: 'Highlight top 1% candidates directly to hiring manager' },
+  { label: 'Weekly EEOC & Bias Guard Report', desc: 'Aggregated statistical parity audit emailed every Monday' },
+  { label: 'Recruiter Decision Override Log', desc: 'Alert when a recruiter changes automated SUBMIT/REJECT status' },
+];
+
+const defaultAlerts = alertOptions.map(() => true);
+
 export default function SettingsPage() {
   const { user, getUserPassword, updatePassword } = useAuth();
+  const settingsKey = `tasknera_settings_${user?.organizationId || user?.email || 'default'}`;
   const [activeTab, setActiveTab] = useState<'scoring' | 'account' | 'notifications'>('scoring');
   const [showPassword, setShowPassword] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -15,6 +26,7 @@ export default function SettingsPage() {
   const [accountStatus, setAccountStatus] = useState('');
   const [accountError, setAccountError] = useState('');
   const [isUpdatingAccount, setIsUpdatingAccount] = useState(false);
+  const [alerts, setAlerts] = useState<boolean[]>(defaultAlerts);
 
   const [scoring, setScoring] = useState({
     mandatoryWeight: 50,
@@ -31,7 +43,44 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const totalWeight = scoring.mandatoryWeight + scoring.skillsWeight + scoring.experienceWeight + scoring.responsibilitiesWeight + scoring.preferredWeight;
 
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(settingsKey);
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      if (parsed.scoring) setScoring(current => ({ ...current, ...parsed.scoring }));
+      if (Array.isArray(parsed.alerts)) setAlerts(defaultAlerts.map((_, index) => parsed.alerts[index] !== false));
+    } catch { /* Use the defaults when stored settings are unreadable. */ }
+  }, [settingsKey]);
+
+  const persistSettings = (nextScoring = scoring, nextAlerts = alerts) => {
+    try { localStorage.setItem(settingsKey, JSON.stringify({ scoring: nextScoring, alerts: nextAlerts })); } catch { /* Keep the in-memory controls usable if storage is unavailable. */ }
+  };
+
+  const toggleScoring = (key: 'strictMandatory' | 'autoRejectOnFailure' | 'semanticMatching') => {
+    setScoring(current => {
+      const next = { ...current, [key]: !current[key] };
+      persistSettings(next, alerts);
+      return next;
+    });
+  };
+
+  const toggleAlert = (index: number) => {
+    setAlerts(current => {
+      const next = current.map((enabled, i) => i === index ? !enabled : enabled);
+      persistSettings(scoring, next);
+      return next;
+    });
+  };
+
   const handleSave = () => {
+    persistSettings();
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleSaveAlerts = () => {
+    persistSettings();
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -58,12 +107,12 @@ export default function SettingsPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-2 bg-white border border-brand-border rounded-2xl p-1.5 w-fit mb-8 shadow-xs">
+        <div className="flex max-w-full items-center gap-2 overflow-x-auto bg-white border border-brand-border rounded-2xl p-1.5 w-fit mb-8 shadow-xs">
           {tabs.map(t => (
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === t.id
                   ? 'bg-brand-orange text-white shadow-orange'
                   : 'text-brand-charcoal-2 hover:text-brand-charcoal hover:bg-brand-bg'
@@ -138,33 +187,37 @@ export default function SettingsPage() {
                   { label: 'Auto-Disqualify on Mandatory Failure', key: 'autoRejectOnFailure', desc: 'Automatically set candidate decision to DO NOT SUBMIT' },
                   { label: 'Contextual Semantic Matching', key: 'semanticMatching', desc: 'Resolve synonyms (e.g., "GCP" = "Google Cloud Platform", "K8s" = "Kubernetes")' },
                 ].map(row => (
-                  <div key={row.key} className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-brand-bg/70 border border-brand-border/60">
-                    <div>
-                      <p className="text-brand-charcoal text-xs font-bold">{row.label}</p>
-                      <p className="text-brand-charcoal-3 text-[11px] mt-0.5">{row.desc}</p>
+                  <div key={row.key} className="flex min-w-0 items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl bg-brand-bg/70 border border-brand-border/60">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-brand-charcoal text-xs font-bold break-words">{row.label}</p>
+                      <p className="text-brand-charcoal-3 text-[11px] mt-0.5 break-words">{row.desc}</p>
                     </div>
                     <button
-                      onClick={() => setScoring({ ...scoring, [row.key]: !scoring[row.key as keyof typeof scoring] })}
-                      className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors cursor-pointer ${
+                      type="button"
+                      role="switch"
+                      aria-checked={Boolean(scoring[row.key as keyof typeof scoring])}
+                      aria-label={row.label}
+                      onClick={() => toggleScoring(row.key as 'strictMandatory' | 'autoRejectOnFailure' | 'semanticMatching')}
+                      className={`relative block flex-none w-11 h-6 min-w-11 p-0 border-0 rounded-full transition-colors cursor-pointer overflow-hidden ${
                         scoring[row.key as keyof typeof scoring] ? 'bg-brand-orange' : 'bg-slate-300'
                       }`}
                     >
-                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-xs ${
+                      <span className={`absolute left-0.5 top-0.5 block w-5 h-5 bg-white rounded-full transition-transform shadow-xs ${
                         scoring[row.key as keyof typeof scoring] ? 'translate-x-5' : 'translate-x-0.5'
                       }`} />
                     </button>
                   </div>
                 ))}
 
-                <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-brand-bg/70 border border-brand-border/60">
-                  <div>
-                    <p className="text-brand-charcoal text-xs font-bold">Evidence Minimum Confidence Filter</p>
-                    <p className="text-brand-charcoal-3 text-[11px] mt-0.5">Extracted citations below this threshold will require human recruiter confirmation</p>
+                <div className="flex min-w-0 flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl bg-brand-bg/70 border border-brand-border/60">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-brand-charcoal text-xs font-bold break-words">Evidence Minimum Confidence Filter</p>
+                    <p className="text-brand-charcoal-3 text-[11px] mt-0.5 break-words">Extracted citations below this threshold will require human recruiter confirmation</p>
                   </div>
                   <select
                     value={scoring.minConfidence}
-                    onChange={e => setScoring({ ...scoring, minConfidence: e.target.value as any })}
-                    className="bg-white border border-brand-border text-brand-charcoal font-bold text-xs rounded-xl px-3.5 py-2 focus:outline-none focus:ring-2 focus:ring-brand-orange/30 cursor-pointer shadow-xs"
+                    onChange={e => setScoring(current => ({ ...current, minConfidence: e.target.value as any }))}
+                    className="w-full min-w-0 max-w-full sm:w-64 sm:flex-none bg-white border border-brand-border text-brand-charcoal font-bold text-xs rounded-xl px-3.5 py-2 focus:outline-none focus:ring-2 focus:ring-brand-orange/30 cursor-pointer shadow-xs"
                   >
                     <option value="HIGH">High Confidence Only (90%+)</option>
                     <option value="MEDIUM">Medium & Above (75%+)</option>
@@ -421,30 +474,24 @@ export default function SettingsPage() {
 
         {/* NOTIFICATIONS TAB */}
         {activeTab === 'notifications' && (
-          <div className="bg-white border border-brand-border rounded-3xl p-7 shadow-sm">
+          <div className="bg-white border border-brand-border rounded-3xl p-4 sm:p-7 shadow-sm overflow-hidden">
             <h2 className="text-brand-charcoal font-bold text-base mb-5">Automated Alert Dispatch Rules</h2>
             <div className="space-y-4">
-              {[
-                { label: 'Evaluation Batch Complete', desc: 'Receive instant ping when multi-CV batch finishes scoring' },
-                { label: 'Mandatory Requirement Failure Alert', desc: 'Instant flag when a top-tier candidate fails a hard constraint' },
-                { label: 'High Match Candidate Discovered (90%+)', desc: 'Highlight top 1% candidates directly to hiring manager' },
-                { label: 'Weekly EEOC & Bias Guard Report', desc: 'Aggregated statistical parity audit emailed every Monday' },
-                { label: 'Recruiter Decision Override Log', desc: 'Alert when a recruiter changes automated SUBMIT/REJECT status' },
-              ].map((n, i) => (
-                <div key={i} className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-brand-bg/70 border border-brand-border/60">
-                  <div>
-                    <p className="text-brand-charcoal text-xs font-bold">{n.label}</p>
-                    <p className="text-brand-charcoal-3 text-[11px] mt-0.5">{n.desc}</p>
+              {alertOptions.map((n, i) => (
+                <div key={n.label} className="flex min-w-0 items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl bg-brand-bg/70 border border-brand-border/60">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-brand-charcoal text-xs font-bold break-words">{n.label}</p>
+                    <p className="text-brand-charcoal-3 text-[11px] mt-0.5 break-words">{n.desc}</p>
                   </div>
-                  <button className="relative flex-shrink-0 w-11 h-6 rounded-full bg-brand-orange cursor-pointer">
-                    <span className="absolute top-0.5 translate-x-5 w-5 h-5 bg-white rounded-full shadow-xs" />
+                  <button type="button" role="switch" aria-checked={alerts[i]} aria-label={n.label} onClick={() => toggleAlert(i)} className={`relative block flex-none w-11 h-6 min-w-11 p-0 border-0 rounded-full transition-colors cursor-pointer overflow-hidden ${alerts[i] ? 'bg-brand-orange' : 'bg-slate-300'}`}>
+                    <span className={`absolute left-0.5 top-0.5 block w-5 h-5 bg-white rounded-full shadow-xs transition-transform ${alerts[i] ? 'translate-x-5' : 'translate-x-0.5'}`} />
                   </button>
                 </div>
               ))}
             </div>
             <div className="flex justify-end mt-6">
-              <button className="px-6 py-3 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-bold rounded-xl transition-all shadow-orange cursor-pointer">
-                Save Alert Settings
+              <button type="button" onClick={handleSaveAlerts} className="px-6 py-3 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-bold rounded-xl transition-all shadow-orange cursor-pointer">
+                {saved ? 'Alert Settings Saved' : 'Save Alert Settings'}
               </button>
             </div>
           </div>
