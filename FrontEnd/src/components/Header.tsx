@@ -11,12 +11,12 @@ import Logo from './Logo';
 
 interface InterviewNotification {
   id: string;
-  interviewId: string;
-  kind: 'today' | 'reminder';
+  interviewId?: string;
+  kind: 'today' | 'reminder' | 'quota';
   title: string;
   description: string;
   timeLabel: string;
-  startAt: string;
+  startAt?: string;
 }
 
 const INTERVIEW_STORAGE_KEY = 'tasknera_interviews_frontend_v1';
@@ -31,6 +31,7 @@ const Header: React.FC = () => {
   const [searchQuery, setSearchQuery]   = useState('');
   const [mounted, setMounted]           = useState(false);
   const [interviewNotifications, setInterviewNotifications] = useState<InterviewNotification[]>([]);
+  const [quotaNotifications, setQuotaNotifications] = useState<InterviewNotification[]>([]);
   const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationPanelRef = useRef<HTMLDivElement>(null);
@@ -111,7 +112,7 @@ const Header: React.FC = () => {
         }
       });
 
-      notifications.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime() || (a.kind === 'reminder' ? -1 : 1));
+      notifications.sort((a, b) => new Date(a.startAt || 0).getTime() - new Date(b.startAt || 0).getTime() || (a.kind === 'reminder' ? -1 : 1));
       setInterviewNotifications(notifications);
     };
 
@@ -137,7 +138,39 @@ const Header: React.FC = () => {
 
   const pathname = usePathname();
   const router   = useRouter();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, token, isAuthenticated, logout } = useAuth();
+
+  useEffect(() => {
+    if (!isAuthenticated || !token) {
+      setQuotaNotifications([]);
+      return;
+    }
+    let cancelled = false;
+    const refreshQuotaNotifications = async () => {
+      try {
+        const api = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
+        const response = await fetch(`${api}/users/quota`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!response.ok) return;
+        const payload = await response.json();
+        const quota = payload?.quota;
+        if (!quota || cancelled) return;
+        const next: InterviewNotification[] = [];
+        const availableJds = Number(quota.availableJobSlots);
+        const availableCvs = Number(quota.availableResumes);
+        if (Number.isFinite(availableJds) && availableJds <= 5) {
+          next.push({ id: 'quota:jds:low', kind: 'quota', title: availableJds === 0 ? 'Job description limit reached' : 'Job description quota reminder', description: `Only ${availableJds} ${availableJds === 1 ? 'JD' : 'JDs'} remaining in your plan.`, timeLabel: 'Workspace quota' });
+        }
+        if (Number.isFinite(availableCvs) && availableCvs <= 20) {
+          next.push({ id: 'quota:cvs:low', kind: 'quota', title: availableCvs === 0 ? 'CV upload limit reached' : 'CV upload quota reminder', description: `Only ${availableCvs} more ${availableCvs === 1 ? 'CV' : 'CVs'} can be uploaded${quota.resetsOn ? ` before ${quota.resetsOn}` : ' this month'}.`, timeLabel: 'Monthly resume quota' });
+        }
+        setQuotaNotifications(next);
+      } catch { /* Quota reminders are supplementary; leave interview reminders available on failure. */ }
+    };
+    refreshQuotaNotifications();
+    const poll = window.setInterval(refreshQuotaNotifications, 60_000);
+    window.addEventListener('focus', refreshQuotaNotifications);
+    return () => { cancelled = true; window.clearInterval(poll); window.removeEventListener('focus', refreshQuotaNotifications); };
+  }, [isAuthenticated, token, user?.organizationId]);
 
   const cachedRole = typeof window !== 'undefined' ? (localStorage.getItem('tasknera_role') as any) : null;
   const cachedEmail = typeof window !== 'undefined' ? (localStorage.getItem('tasknera_email') || '') : '';
@@ -217,11 +250,12 @@ const Header: React.FC = () => {
     }
   };
 
-  const unreadNotificationCount = interviewNotifications.filter(notification => !readNotificationIds.has(notification.id)).length;
+  const allNotifications = [...interviewNotifications, ...quotaNotifications];
+  const unreadNotificationCount = allNotifications.filter(notification => !readNotificationIds.has(notification.id)).length;
 
   const markNotificationsRead = () => {
     const nextReadIds = new Set(readNotificationIds);
-    interviewNotifications.forEach(notification => nextReadIds.add(notification.id));
+    allNotifications.forEach(notification => nextReadIds.add(notification.id));
     setReadNotificationIds(nextReadIds);
     try {
       localStorage.setItem(NOTIFICATION_READ_STORAGE_KEY, JSON.stringify(Array.from(nextReadIds)));
@@ -335,7 +369,7 @@ const Header: React.FC = () => {
     },
     {
       label: 'Security & Audit Logs',
-      href: isSuperAdmin ? '/super-admin?tab=audit' : '/admin?tab=audit',
+      href: '/audit',
       icon: (
         <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -645,7 +679,7 @@ const Header: React.FC = () => {
                 </div>
 
                 <div className="max-h-[min(60vh,420px)] overflow-y-auto">
-                  {interviewNotifications.length === 0 ? (
+              {allNotifications.length === 0 ? (
                     <div className="px-5 py-10 text-center">
                       <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-400">
                         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
@@ -653,32 +687,35 @@ const Header: React.FC = () => {
                       <p className="text-xs font-semibold text-slate-700">No interview reminders right now</p>
                       <p className="mt-1 text-[11px] text-slate-400">Today&apos;s interviews and one-hour reminders will appear here.</p>
                     </div>
-                  ) : interviewNotifications.map(notification => {
+              ) : allNotifications.map(notification => {
                     const isRead = readNotificationIds.has(notification.id);
                     return (
                       <div key={notification.id} className={`flex gap-3 border-b border-slate-100 px-4 py-3.5 last:border-b-0 ${isRead ? 'bg-white' : 'bg-[#FCFBFF]'}`}>
-                        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F7F2FB] text-[#62347B]">
-                          {notification.kind === 'reminder' ? (
+                    <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${notification.kind === 'quota' ? 'bg-amber-50 text-amber-600' : 'bg-[#F7F2FB] text-[#62347B]'}`}>
+                      {notification.kind === 'quota' ? (
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M10.3 3.9 2.5 17.4A1.8 1.8 0 0 0 4 20h16a1.8 1.8 0 0 0 1.5-2.6L13.7 3.9a2 2 0 0 0-3.4 0Z" /></svg>
+                      ) : notification.kind === 'reminder' ? (
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="8.5" strokeWidth="1.8" /><path strokeLinecap="round" strokeWidth="1.8" d="M12 7v5l3 2" /></svg>
                           ) : (
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3.5" y="5" width="17" height="16" rx="2" strokeWidth="1.8" /><path strokeLinecap="round" strokeWidth="1.8" d="M7.5 3.5v3M16.5 3.5v3M3.5 9h17M8 13h2m4 0h2" /></svg>
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-xs font-bold leading-5 text-slate-800">{notification.title}</p>
-                            {!isRead && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#5436C8]" aria-label="Unread" />}
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-xs font-bold leading-5 text-slate-800">{notification.title}</p>
+                          {!isRead && <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${notification.kind === 'quota' ? 'bg-amber-500' : 'bg-[#5436C8]'}`} aria-label="Unread" />}
                           </div>
                           <p className="mt-0.5 text-[11px] leading-[1.45] text-slate-500">{notification.description}</p>
                           <p className="mt-1 text-[10px] font-medium text-slate-400">{notification.timeLabel}</p>
+                        {notification.kind === 'quota' && <Link href="/billing" onClick={() => setNotificationsOpen(false)} className="mt-1 inline-block text-[10px] font-bold text-amber-700 hover:text-amber-800">Review plan and usage →</Link>}
                         </div>
                       </div>
                     );
                   })}
                 </div>
 
-                <Link href="/interviews" onClick={() => setNotificationsOpen(false)} className="flex items-center justify-center gap-1 border-t border-slate-100 px-4 py-3 text-xs font-bold text-[#5436C8] transition hover:bg-slate-50">
-                  View interviews <span aria-hidden="true">›</span>
+              <Link href={quotaNotifications.length > 0 ? '/billing' : '/interviews'} onClick={() => setNotificationsOpen(false)} className="flex items-center justify-center gap-1 border-t border-slate-100 px-4 py-3 text-xs font-bold text-[#5436C8] transition hover:bg-slate-50">
+                {quotaNotifications.length > 0 ? 'Manage subscription' : 'View interviews'} <span aria-hidden="true">›</span>
                 </Link>
               </div>
             )}

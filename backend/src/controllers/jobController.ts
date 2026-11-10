@@ -907,6 +907,24 @@ export const createJob = async (
       GLOBAL_JOB_STORE.set(job.id, job);
     }
 
+    // Keep an immutable organization audit entry for every persisted requisition.
+    if (job?.id && UUID_REGEX.test(String(job.id)) && UUID_REGEX.test(String(targetOrgId))) {
+      try {
+        await (prisma as any).auditLog.create({
+          data: {
+            organizationId: targetOrgId,
+            userId: UUID_REGEX.test(String(req.user.userId)) ? req.user.userId : null,
+            action: 'CREATE_JD',
+            targetType: 'Job',
+            targetId: String(job.id),
+            details: { position: position.trim(), client: client.trim(), status: jobStatus },
+          },
+        });
+      } catch (auditError: any) {
+        console.warn('[Create Job] Could not record audit event:', auditError?.message || auditError);
+      }
+    }
+
     res.status(201).json({
       message: "Job created successfully",
       job,
@@ -1837,7 +1855,6 @@ export const updateJob = async (
 
     // Enforce Tenant Isolation & RBAC
     if (!isSuperAdmin) {
-      const jobOrg = existingJob.organizationId || "org-tasknera";
       if (jobOrg !== userOrgId) {
         res.status(403).json({
           error:
@@ -1935,10 +1952,10 @@ export const deleteJob = async (
       res.status(404).json({ error: `Job with ID "${jobId}" not found` });
       return;
     }
+    const jobOrg = existingJob.organizationId || "org-tasknera";
 
     // Enforce Tenant Isolation & RBAC
     if (!isSuperAdmin) {
-      const jobOrg = existingJob.organizationId || "org-tasknera";
       if (jobOrg !== userOrgId) {
         res.status(403).json({
           error:
@@ -1974,6 +1991,27 @@ export const deleteJob = async (
           candidateCount: existingJob._count?.candidates || 0,
         }
       );
+    }
+    if (UUID_REGEX.test(String(jobOrg))) {
+      try {
+        await (prisma as any).auditLog.create({
+          data: {
+            organizationId: jobOrg,
+            userId: UUID_REGEX.test(String(req.user?.userId)) ? req.user?.userId : null,
+            action: 'DELETE_JD',
+            targetType: 'Job',
+            targetId: jobId,
+            details: {
+              position: existingJob.position,
+              client: existingJob.client,
+              hadEvaluations: hasBeenEvaluated,
+              candidateCount: existingJob._count?.candidates || 0,
+            },
+          },
+        });
+      } catch (auditError: any) {
+        console.warn('[Delete Job] Could not record audit event:', auditError?.message || auditError);
+      }
     }
     // Note: If hasBeenEvaluated is false (0 CVs uploaded/evaluated), markJdAsConsumed is NOT called.
     // Deleting the empty JD leaves the consumed JD counter untouched (it does not increase).

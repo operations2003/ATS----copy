@@ -5,6 +5,8 @@ import { AuthRequest, UserRole } from '../middleware/authMiddleware';
 import { checkUserQuota, getOrganizationQuota, changeSubscriptionPlan } from '../services/organizationService';
 import { getRecruiterPerformance, getAllRecruitersPerformance } from '../services/recruiterPerformanceService';
 
+const AUDIT_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // @desc    Create a new member (Admin / Client Admin only)
 // @route   POST /api/users/create-member
 // @route   POST /api/users
@@ -1016,6 +1018,21 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
       data: { userId: null }
     }).catch(() => null);
 
+    if (AUDIT_UUID_REGEX.test(String(targetUser.organizationId || ''))) {
+      await (prisma as any).auditLog?.create({
+        data: {
+          organizationId: targetUser.organizationId,
+          userId: AUDIT_UUID_REGEX.test(String(req.user.userId || '')) ? req.user.userId : null,
+          action: 'DELETE_USER',
+          targetType: 'User',
+          targetId: String(userId),
+          details: { deletedUserName: targetUser.name, deletedUserEmail: targetUser.email, role: targetUser.role },
+        }
+      }).catch((auditError: any) => {
+        console.warn('[User Controller] Could not record user deletion audit event:', auditError?.message || auditError);
+      });
+    }
+
     // Delete member user account safely
     await prisma.user.delete({ where: { id: userId } });
 
@@ -1026,6 +1043,39 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
   } catch (error: any) {
     console.error('[User Controller] Error deleting user and associated data:', error);
     res.status(500).json({ error: error.message || 'Failed to delete user and associated data' });
+  }
+};
+
+// @desc    Get audit events for the caller's organization (or all events for platform admins)
+// @route   GET /api/users/audit-logs
+// @access  Private
+export const getOrganizationAuditLogs = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN' ||
+      ['operations@tasknera.com', 'admin@gmail.com'].includes(String(req.user?.email || '').toLowerCase().trim());
+    const organizationId = req.user?.organizationId;
+    const where: any = {};
+    if (!isSuperAdmin) {
+      if (!organizationId || !AUDIT_UUID_REGEX.test(String(organizationId))) {
+        res.status(200).json({ success: true, logs: [] });
+        return;
+      }
+      where.organizationId = organizationId;
+    }
+
+    const logs = await (prisma as any).auditLog.findMany({
+      where,
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        organization: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    res.status(200).json({ success: true, count: logs.length, logs });
+  } catch (error: any) {
+    console.error('[User Controller] Failed to fetch organization audit events:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch audit logs' });
   }
 };
 

@@ -198,20 +198,22 @@ export default function ClientProfilesPage() {
               <div className="bg-[#F8FAFC] border border-slate-200 rounded-2xl p-5">
                 <h3 className="text-[#1E293B] text-xs font-bold uppercase tracking-wider mb-4">Mandatory Compliance Rules</h3>
                 <div className="space-y-4">
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <span className="text-slate-700 text-xs font-semibold">Strict mandatory enforcement</span>
-                    <button onClick={() => setForm({ ...form, strictMandatory: !form.strictMandatory })}
-                      className={`relative w-11 h-6 rounded-full transition-colors ${form.strictMandatory ? 'bg-brand-orange' : 'bg-slate-300'}`}>
-                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform ${form.strictMandatory ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  <div className="flex items-center justify-between gap-4">
+                    <span id="strict-mandatory-label" className="min-w-0 text-slate-700 text-xs font-semibold">Strict mandatory enforcement</span>
+                    <button type="button" role="switch" aria-labelledby="strict-mandatory-label" aria-checked={form.strictMandatory}
+                      onClick={() => setForm(current => ({ ...current, strictMandatory: !current.strictMandatory }))}
+                      className={`relative block h-6 w-11 min-w-11 flex-none overflow-hidden rounded-full border-0 p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange/50 focus-visible:ring-offset-2 ${form.strictMandatory ? 'bg-brand-orange' : 'bg-slate-300'}`}>
+                      <span className={`absolute left-0.5 top-0.5 block h-5 w-5 rounded-full bg-white shadow-xs transition-transform ${form.strictMandatory ? 'translate-x-5' : 'translate-x-0'}`} />
                     </button>
-                  </label>
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <span className="text-slate-700 text-xs font-semibold">Auto-disqualify candidate on mandatory failure</span>
-                    <button onClick={() => setForm({ ...form, autoReject: !form.autoReject })}
-                      className={`relative w-11 h-6 rounded-full transition-colors ${form.autoReject ? 'bg-brand-orange' : 'bg-slate-300'}`}>
-                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform ${form.autoReject ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span id="auto-reject-label" className="min-w-0 text-slate-700 text-xs font-semibold">Auto-disqualify candidate on mandatory failure</span>
+                    <button type="button" role="switch" aria-labelledby="auto-reject-label" aria-checked={form.autoReject}
+                      onClick={() => setForm(current => ({ ...current, autoReject: !current.autoReject }))}
+                      className={`relative block h-6 w-11 min-w-11 flex-none overflow-hidden rounded-full border-0 p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange/50 focus-visible:ring-offset-2 ${form.autoReject ? 'bg-brand-orange' : 'bg-slate-300'}`}>
+                      <span className={`absolute left-0.5 top-0.5 block h-5 w-5 rounded-full bg-white shadow-xs transition-transform ${form.autoReject ? 'translate-x-5' : 'translate-x-0'}`} />
                     </button>
-                  </label>
+                  </div>
                 </div>
               </div>
 
