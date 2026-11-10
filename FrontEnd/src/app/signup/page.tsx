@@ -31,14 +31,8 @@ export default function SignUpPage() {
 
     setIsSubmitting(true);
     try {
-      const assignedRole = await signup(fullName, workEmail, password, companyName, role);
-      if (assignedRole === 'SUPER_ADMIN') {
-        router.push('/super-admin');
-      } else if (assignedRole === 'CLIENT_ADMIN' || assignedRole === 'ADMIN') {
-        router.push('/admin');
-      } else {
-        router.push('/dashboard');
-      }
+      await signup(fullName, workEmail, password, companyName, role);
+      router.push('/dashboard');
     } catch (err: any) {
       setError(err?.message || 'Failed to create your account. Please try again or contact support.');
     } finally {

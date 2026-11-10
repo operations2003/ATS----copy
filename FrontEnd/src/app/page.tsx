@@ -11,18 +11,12 @@ export default function RootPage() {
   useEffect(() => {
     if (!isLoading) {
       if (isAuthenticated) {
-        if (user?.role === 'SUPER_ADMIN') {
-          router.push('/super-admin');
-        } else if (user?.role === 'CLIENT_ADMIN' || user?.role === 'ADMIN') {
-          router.push('/admin');
-        } else {
-          router.push('/dashboard');
-        }
+        router.push('/dashboard');
       } else {
         router.push('/home');
       }
     }
-  }, [router, isAuthenticated, isLoading, user]);
+  }, [router, isAuthenticated, isLoading]);
 
   return (
     <div className="min-h-screen bg-brand-bg flex items-center justify-center">

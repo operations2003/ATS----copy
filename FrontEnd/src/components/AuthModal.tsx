@@ -32,15 +32,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setError('');
     setIsLoading(true);
     try {
-      const roleResult = await signin(email, password);
+      await signin(email, password);
       onClose();
-      if (roleResult === 'SUPER_ADMIN') {
-        router.push('/super-admin');
-      } else if (roleResult === 'CLIENT_ADMIN' || roleResult === 'ADMIN') {
-        router.push('/admin');
-      } else {
-        router.push('/dashboard');
-      }
+      router.push('/dashboard');
     } catch (err: any) {
       setError(err?.message || 'Authentication failed. Please verify your email and password.');
     } finally {

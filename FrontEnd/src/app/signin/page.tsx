@@ -23,14 +23,8 @@ export default function SignInPage() {
     setError('');
     setIsLoading(true);
     try {
-      const roleResult = await signin(email, password);
-      if (roleResult === 'SUPER_ADMIN') {
-        router.push('/super-admin');
-      } else if (roleResult === 'CLIENT_ADMIN' || roleResult === 'ADMIN') {
-        router.push('/admin');
-      } else {
-        router.push('/dashboard');
-      }
+      await signin(email, password);
+      router.push('/dashboard');
     } catch (err: any) {
       setError(err?.message || 'Invalid email or password. Please verify your credentials.');
     } finally {
