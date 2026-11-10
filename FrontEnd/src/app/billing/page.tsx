@@ -159,6 +159,19 @@ export default function BillingPage() {
   // Storage usage calculation (approx 2.5 MB per candidate resume)
   const storageUsedMB = Math.round(candidatesCount * 2.5);
 
+  const orgName = (user as any)?.organizationName || 'TaskNera Demo Workspace';
+  const userEmail = user?.email || '';
+  const userName = user?.name || userEmail.split('@')[0] || 'User';
+
+  const getMailtoUrl = (planName?: string) => {
+    const targetPlan = planName || 'Enterprise';
+    const subject = encodeURIComponent(`TaskNera Plan Upgrade Request - ${orgName} (${targetPlan} Plan)`);
+    const body = encodeURIComponent(
+      `Hello TaskNera Operations Team,\n\nI would like to request an upgrade for our workspace subscription plan.\n\nWorkspace: ${orgName}\nContact: ${userName} (${userEmail})\nCurrent Plan: ${activePlan.name}\nRequested Plan: ${targetPlan}\n\nPlease reach out with details on pricing, invoice, and next steps to activate this upgrade.\n\nThank you,\n${userName}`
+    );
+    return `mailto:operations@tasknera.com?subject=${subject}&body=${body}`;
+  };
+
   const handleInquirySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setInquirySubmitted(true);
@@ -175,16 +188,28 @@ export default function BillingPage() {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
         {/* Header Section */}
-        <div className="mb-6">
-          <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
-            ACCOUNT
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
+              ACCOUNT
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#172033] tracking-tight">
+              Subscription &amp; Billing
+            </h1>
+            <p className="mt-1 text-xs sm:text-sm text-slate-500">
+              Your current plan and usage, calculated from stored records in this workspace.
+            </p>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#172033] tracking-tight">
-            Subscription &amp; Billing
-          </h1>
-          <p className="mt-1 text-xs sm:text-sm text-slate-500">
-            Your current plan and usage, calculated from stored records in this workspace.
-          </p>
+          <a
+            href={getMailtoUrl(activePlan.name === 'Enterprise' ? 'Enterprise' : 'Professional')}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#FF5722] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#e04a1b] shadow-xs transition shrink-0"
+            title="Open email to operations@tasknera.com"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span>Email operations@tasknera.com to Upgrade</span>
+          </a>
         </div>
 
         {/* 2 Main Top Cards (Matches UI Screenshot) */}
@@ -240,9 +265,23 @@ export default function BillingPage() {
               </div>
             </div>
 
-            {/* Gray Notice Banner */}
-            <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-[11px] text-slate-500 leading-relaxed">
-              Plan changes are handled by TaskNera. Nothing is charged from this screen — no payment provider is connected to this app yet.
+            {/* Gray Notice Banner with direct Upgrade email button */}
+            <div className="rounded-xl bg-slate-50 border border-slate-100 p-3.5 text-[11px] text-slate-500 leading-relaxed space-y-2.5">
+              <p>
+                Plan changes are handled by TaskNera. Nothing is charged from this screen — no payment provider is connected to this app yet.
+              </p>
+              <div className="pt-2 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold text-slate-700">Need to upgrade or change seats?</span>
+                <a
+                  href={getMailtoUrl()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs font-bold text-[#FF5722] hover:bg-orange-50/60 hover:border-orange-200 shadow-2xs transition"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <span>Email operations@tasknera.com</span>
+                </a>
+              </div>
             </div>
           </div>
 
@@ -417,20 +456,34 @@ export default function BillingPage() {
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedUpgradePlan(plan.id);
-                      setInquiryModalOpen(true);
-                    }}
-                    className={`w-full py-2.5 rounded-xl text-xs font-bold transition ${
-                      isCurrent
-                        ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer'
-                        : 'bg-[#FF5722] text-white hover:bg-[#e04a1b] shadow-xs cursor-pointer'
-                    }`}
-                  >
-                    {isCurrent ? 'Active Plan' : `Upgrade to ${plan.name}`}
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedUpgradePlan(plan.id);
+                        setInquiryModalOpen(true);
+                      }}
+                      className={`w-full py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        isCurrent
+                          ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          : 'bg-[#FF5722] text-white hover:bg-[#e04a1b] shadow-xs'
+                      }`}
+                    >
+                      {isCurrent ? 'Active Plan' : `Upgrade to ${plan.name}`}
+                    </button>
+                    {!isCurrent && (
+                      <a
+                        href={getMailtoUrl(plan.name)}
+                        className="w-full flex items-center justify-center gap-1.5 py-1 rounded-lg text-[11px] font-semibold text-slate-500 hover:text-[#FF5722] transition"
+                        title={`Email operations@tasknera.com to upgrade to ${plan.name}`}
+                      >
+                        <svg className="w-3.5 h-3.5 text-[#FF5722]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <span>Email operations@tasknera.com</span>
+                      </a>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -505,20 +558,32 @@ export default function BillingPage() {
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setInquiryModalOpen(false)}
-                    className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 transition"
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                  <a
+                    href={getMailtoUrl(selectedUpgradePlan)}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#FF5722] hover:underline"
+                    title="Send pre-filled email from your mail client"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="rounded-xl bg-[#FF5722] px-5 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#e04a1b] transition"
-                  >
-                    Submit Request
-                  </button>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <span>Or email operations@tasknera.com</span>
+                  </a>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInquiryModalOpen(false)}
+                      className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="rounded-xl bg-[#FF5722] px-5 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#e04a1b] transition"
+                    >
+                      Submit Request
+                    </button>
+                  </div>
                 </div>
               </form>
             )}
