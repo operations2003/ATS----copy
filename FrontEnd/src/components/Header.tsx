@@ -325,7 +325,7 @@ const Header: React.FC = () => {
     },
     {
       label: 'Subscription & Billing',
-      href: isSuperAdmin ? '/super-admin?tab=subscription' : '/admin?view=subscription',
+      href: '/billing',
       icon: (
         <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <rect x="2" y="5" width="20" height="14" rx="2" strokeWidth={2} />
