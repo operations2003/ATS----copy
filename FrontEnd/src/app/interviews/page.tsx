@@ -11,7 +11,7 @@ interface QueueCandidate {
   name: string;
   role: string;
   score: number;
-  stage: 'Shortlisted' | 'Technical interview';
+  stage: 'Shortlisted' | 'Round 1 Phase' | 'Round 2 Phase' | string;
   requisitionId: string;
 }
 
