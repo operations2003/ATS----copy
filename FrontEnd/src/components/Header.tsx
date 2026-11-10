@@ -478,7 +478,7 @@ const Header: React.FC = () => {
       {/* Brand Header */}
       <div className="px-5 pt-5 pb-3 flex items-center justify-between">
         <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0 group cursor-pointer">
-          <div className="w-8 h-8 rounded-xl bg-white p-1 flex items-center justify-center shadow-md flex-shrink-0 transition-transform group-hover:scale-105">
+          <div className="w-9 h-9 flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/tasknera-logo-symbol.png"
