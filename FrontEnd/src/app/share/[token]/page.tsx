@@ -40,6 +40,8 @@ interface CandidateItem {
   screeningEvidence?: { requirement: string; status: 'MET' | 'PARTIAL' | 'MISSING'; evidence: string }[];
   jobId?: string;
   jobTitle?: string;
+  decision?: 'SUBMIT' | 'REVIEW' | 'DO NOT SUBMIT' | string;
+  clientRating?: number;
 }
 
 interface ClientPortalJob {
@@ -213,7 +215,41 @@ function ClientSharePortalContent() {
         } catch {}
       }
 
-      // Merge Store Jobs + Client Uploaded JDs
+      // Merge Store Jobs + Client Uploaded JDs + Created Jobs
+      let createdJobsForClient: ClientPortalJob[] = [];
+      if (typeof window !== 'undefined') {
+        try {
+          const rawCreated = localStorage.getItem('tasknera_created_jobs');
+          if (rawCreated) {
+            const list = JSON.parse(rawCreated);
+            if (Array.isArray(list)) {
+              for (const cj of list) {
+                const cjClient = String(cj.client || cj.company || '').toLowerCase().trim();
+                const resClient = resolvedClient.toLowerCase().trim();
+                if (cjClient === resClient || cjClient.includes(resClient) || resClient.includes(cjClient)) {
+                  createdJobsForClient.push({
+                    id: cj.id,
+                    title: cj.position || cj.title || 'Requisition Role',
+                    client: cj.client || cj.company || resolvedClient,
+                    location: cj.location || 'Remote / Hybrid',
+                    workMode: cj.work_mode || cj.workMode || cj.mode || 'Hybrid',
+                    salary: cj.salary || 'Competitive',
+                    status: cj.status === 'Active' ? 'Active Screening' : 'Shortlist Delivered',
+                    sourcedCount: 0,
+                    screenedCount: 0,
+                    submittedCount: 0,
+                    createdAt: cj.created_at || cj.createdAt || 'Recently',
+                    description: cj.description || `Job Requisition for ${cj.position || cj.title}`,
+                    priority: 'High',
+                    assignedRecruiter: cj.assignedRecruiter || cj.assignedTo,
+                  });
+                }
+              }
+            }
+          }
+        } catch {}
+      }
+
       const mappedStoreJobs: ClientPortalJob[] = clientStoreJobs.map(sj => ({
         id: sj.id,
         title: sj.title,
@@ -233,58 +269,285 @@ function ClientSharePortalContent() {
       // Combined unique jobs
       const combinedJobsMap = new Map<string, ClientPortalJob>();
       mappedStoreJobs.forEach(j => combinedJobsMap.set(j.id, j));
+      createdJobsForClient.forEach(j => {
+        if (!combinedJobsMap.has(j.id)) combinedJobsMap.set(j.id, j);
+      });
       uploadedJds.forEach(j => combinedJobsMap.set(j.id, j));
 
       const finalJobs = Array.from(combinedJobsMap.values());
+
+      // Update real screened/sourced counts from job-specific candidate storage
+      if (typeof window !== 'undefined') {
+        for (const j of finalJobs) {
+          try {
+            const rawCands = localStorage.getItem(`tasknera_candidates_${j.id}`);
+            if (rawCands) {
+              const parsed = JSON.parse(rawCands);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                j.screenedCount = Math.max(j.screenedCount || 0, parsed.length);
+                j.sourcedCount = Math.max(j.sourcedCount || 0, parsed.length * 2);
+              }
+            }
+          } catch {}
+        }
+      }
+
       setJobs(finalJobs);
 
-      // Load Screened & Submitted Candidates
-      let portalCandidates: CandidateItem[] = [];
+      const finalJobIds = new Set(finalJobs.map(j => j.id));
+      const finalJobTitles = new Set(finalJobs.map(j => j.title.toLowerCase().trim()));
+      const portalCandidatesMap = new Map<string, CandidateItem>();
+
+      // A. Load existing candidates stored in tasknera_portal_cands_${clientKey}
       if (typeof window !== 'undefined') {
         try {
           const storedCandsRaw = localStorage.getItem(`tasknera_portal_cands_${resolvedClient.replace(/\s+/g, '_')}`);
           if (storedCandsRaw) {
-            portalCandidates = JSON.parse(storedCandsRaw);
+            const parsed = JSON.parse(storedCandsRaw);
+            if (Array.isArray(parsed)) {
+              for (const c of parsed) {
+                if (c && c.id) {
+                  portalCandidatesMap.set(c.id, c);
+                }
+              }
+            }
           }
         } catch {}
       }
 
-      // Check ATS Store for real candidates associated with this client's requisitions
-      if (portalCandidates.length === 0 && finalJobs.length > 0) {
+      // Helper to find full candidate info across storage keys
+      const findFullCandidateInfo = (candidateId: string, candJobId?: string): any => {
+        if (typeof window === 'undefined') return null;
+        if (candJobId && candJobId !== 'all') {
+          try {
+            const raw = localStorage.getItem(`tasknera_candidates_${candJobId}`);
+            if (raw) {
+              const list = JSON.parse(raw);
+              const found = Array.isArray(list) ? list.find((c: any) => c.id === candidateId || c.name === candidateId) : null;
+              if (found) return found;
+            }
+          } catch {}
+        }
+        for (const j of finalJobs) {
+          try {
+            const raw = localStorage.getItem(`tasknera_candidates_${j.id}`);
+            if (raw) {
+              const list = JSON.parse(raw);
+              const found = Array.isArray(list) ? list.find((c: any) => c.id === candidateId || c.name === candidateId) : null;
+              if (found) return found;
+            }
+          } catch {}
+        }
         try {
-          const storeCands = atsStore.getCandidates().filter(c => 
-            c.client?.toLowerCase().trim() === resolvedClient.toLowerCase().trim() ||
-            finalJobs.some(j => j.id === c.jobId)
-          );
-          if (storeCands.length > 0) {
-            portalCandidates = storeCands.map(sc => ({
+          const sc = atsStore.getCandidate(candidateId);
+          if (sc) return sc;
+        } catch {}
+        try {
+          const poolRaw = localStorage.getItem('tasknera_candidates_pool');
+          if (poolRaw) {
+            const list = JSON.parse(poolRaw);
+            const found = Array.isArray(list) ? list.find((c: any) => c.id === candidateId || c.name === candidateId) : null;
+            if (found) return found;
+          }
+        } catch {}
+        return null;
+      };
+
+      // B. Dynamically ingest and synchronize candidates from the Recruiter Pipeline
+      if (typeof window !== 'undefined') {
+        try {
+          const pipelineRaw = localStorage.getItem('tasknera_recruitment_pipeline_v1');
+          if (pipelineRaw) {
+            const pipelineList = JSON.parse(pipelineRaw);
+            if (Array.isArray(pipelineList)) {
+              for (const pc of pipelineList) {
+                if (!pc || !pc.id) continue;
+                const reqId = pc.requisitionId || '';
+                const reqTitle = (pc.requisitionTitle || '').toLowerCase().trim();
+                const isClientRequisition =
+                  finalJobIds.has(reqId) ||
+                  (reqTitle && finalJobTitles.has(reqTitle)) ||
+                  (pc.client && pc.client.toLowerCase().trim() === resolvedClient.toLowerCase().trim());
+
+                if (!isClientRequisition) continue;
+
+                // Check pipeline stage
+                const isShortlisted = [
+                  'Shortlisted',
+                  'Recruiter Name',
+                  'Round 1 Phase',
+                  'Round 2 Phase',
+                  'Selected',
+                  'Offered',
+                  'Joined',
+                ].includes(pc.stage);
+
+                let targetStatus = 'Active Screening';
+                if (pc.stage === 'Shortlisted' || pc.stage === 'Recruiter Name') {
+                  targetStatus = 'Shared with Client';
+                } else if (pc.stage === 'Round 1 Phase') {
+                  targetStatus = 'Interview Scheduled (Round 1)';
+                } else if (pc.stage === 'Round 2 Phase') {
+                  targetStatus = 'Interview Scheduled (Round 2)';
+                } else if (pc.stage === 'Selected') {
+                  targetStatus = 'Selected';
+                } else if (pc.stage === 'Offered') {
+                  targetStatus = 'Offered';
+                } else if (pc.stage === 'Joined') {
+                  targetStatus = 'Joined';
+                }
+
+                if (isShortlisted) {
+                  const existing = portalCandidatesMap.get(pc.id);
+                  const full = findFullCandidateInfo(pc.id, pc.requisitionId);
+                  const score = typeof pc.score === 'number' ? pc.score : (full?.atsScore || 85);
+                  const candidateJobTitle =
+                    pc.requisitionTitle ||
+                    full?.jobTitle ||
+                    finalJobs.find(j => j.id === pc.requisitionId)?.title ||
+                    'Requisition Role';
+
+                  const item: CandidateItem = {
+                    id: pc.id,
+                    name: pc.name,
+                    email: full?.email || existing?.email || `${pc.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@candidate-profile.com`,
+                    phone: full?.phone || existing?.phone || '+1 (555) 234-5678',
+                    currentTitle: pc.role || full?.currentTitle || full?.current_title || existing?.currentTitle || 'Software Engineer',
+                    currentCompany: full?.currentCompany || full?.current_company || existing?.currentCompany || 'Verified Candidate',
+                    totalExperience: full?.exp || full?.totalExperience || full?.total_experience || existing?.totalExperience || '5+ Years',
+                    location: full?.location || existing?.location || 'Remote / Hybrid',
+                    summary: full?.summary || full?.profile_summary || existing?.summary || `Screened and evaluated for ${candidateJobTitle}. Evaluated deterministic score: ${score}%. Shortlisted by ${pc.recruiterName || 'Agency Recruiter'}.`,
+                    skills: (full?.skills && Array.isArray(full?.skills) && full.skills.length > 0)
+                      ? full.skills
+                      : (existing?.skills && existing.skills.length > 0 ? existing.skills : ['Technical Proficiency', 'Deterministic Sourcing', 'Core Domain Skills']),
+                    atsScore: score,
+                    matchLevel: score >= 85 ? 'EXCELLENT MATCH' : (score >= 70 ? 'STRONG MATCH' : 'MATCH'),
+                    mandatoryPassed: full?.mandatoryFailed !== undefined ? !full.mandatoryFailed : true,
+                    currentStatus: targetStatus,
+                    lastUpdatedDate: 'Just now',
+                    hasResume: true,
+                    resumeFileName: full?.fileName || full?.resumeFileName || existing?.resumeFileName || `${pc.name.replace(/\s+/g, '_')}_CV.pdf`,
+                    screeningNote: full?.screeningInfo?.notes || existing?.screeningNote || `Agency Screening Verdict: Mandatory requirements verified. Shortlisted by ${pc.recruiterName || 'Agency Recruiter'}.`,
+                    jobId: pc.requisitionId || (finalJobs[0]?.id || 'client-job'),
+                    jobTitle: candidateJobTitle,
+                    decision: 'SUBMIT',
+                    screeningEvidence: full?.evidenceSnippets || full?.screeningEvidence || existing?.screeningEvidence || [],
+                  };
+
+                  portalCandidatesMap.set(pc.id, item);
+                } else if (pc.stage === 'Screening') {
+                  // Candidate is in internal agency screening - not yet shortlisted
+                  if (portalCandidatesMap.has(pc.id)) {
+                    const existing = portalCandidatesMap.get(pc.id)!;
+                    portalCandidatesMap.set(pc.id, {
+                      ...existing,
+                      currentStatus: 'Active Screening',
+                    });
+                  }
+                }
+              }
+            }
+          }
+        } catch {}
+      }
+
+      // C. Ingest candidates from atsStore matching this client or client's jobs
+      try {
+        const storeCands = atsStore.getCandidates().filter(c =>
+          c.client?.toLowerCase().trim() === resolvedClient.toLowerCase().trim() ||
+          finalJobs.some(j => j.id === c.jobId)
+        );
+        for (const sc of storeCands) {
+          if (!portalCandidatesMap.has(sc.id) && (sc.decision === 'SUBMIT' || sc.stageStatus === 'SHORTLISTED' || sc.stageStatus === 'TL_APPROVED')) {
+            const score = sc.calibratedScore || sc.match || 85;
+            portalCandidatesMap.set(sc.id, {
               id: sc.id,
               name: sc.name,
               email: sc.email,
-              phone: sc.phone,
+              phone: sc.phone || '+1 (555) 234-5678',
               currentTitle: sc.role,
               currentCompany: sc.currentCompany || 'Verified Candidate',
               totalExperience: sc.exp,
               location: sc.location,
-              summary: `Profile screened for ${sc.jobTitle}. Evaluated deterministic score: ${sc.calibratedScore || sc.match}%.`,
+              summary: `Profile screened for ${sc.jobTitle}. Evaluated deterministic score: ${score}%.`,
               skills: sc.skills || [],
-              atsScore: sc.calibratedScore || sc.match,
-              matchLevel: (sc.calibratedScore || sc.match) >= 90 ? 'EXCELLENT MATCH' : 'STRONG MATCH',
+              atsScore: score,
+              matchLevel: score >= 90 ? 'EXCELLENT MATCH' : 'STRONG MATCH',
               mandatoryPassed: !sc.mandatoryFailed,
-              currentStatus: sc.decision === 'SUBMIT' ? 'Shared with Client' : 'Active Screening',
+              currentStatus: 'Shared with Client',
               lastUpdatedDate: 'Recently',
               hasResume: true,
               resumeFileName: `${sc.name.replace(/\s+/g, '_')}_CV.pdf`,
               screeningNote: `Agency Screening Verdict: Mandatory requirement compliance: ${sc.mandatoryMatch}. Evaluated by ${sc.assignedRecruiter}.`,
               jobId: sc.jobId,
               jobTitle: sc.jobTitle,
-              screeningEvidence: sc.evidenceSnippets || []
-            }));
+              screeningEvidence: sc.evidenceSnippets || [],
+              decision: 'SUBMIT',
+            });
           }
-        } catch {}
+        }
+      } catch {}
+
+      // D. Ingest candidates directly saved under tasknera_candidates_${jobId} with shortlist/submit decision
+      if (typeof window !== 'undefined') {
+        for (const j of finalJobs) {
+          try {
+            const rawCands = localStorage.getItem(`tasknera_candidates_${j.id}`);
+            if (rawCands) {
+              const list = JSON.parse(rawCands);
+              if (Array.isArray(list)) {
+                for (const cand of list) {
+                  if (!cand || !cand.id) continue;
+                  const isSubmitted = cand.decision === 'SUBMIT' || cand.stage === 'Shortlisted';
+                  if (isSubmitted && !portalCandidatesMap.has(cand.id)) {
+                    const score = cand.atsScore || cand.score || cand.matchScore || 80;
+                    portalCandidatesMap.set(cand.id, {
+                      id: cand.id,
+                      name: cand.name || 'Candidate',
+                      email: cand.email || `${(cand.name || 'candidate').toLowerCase().replace(/[^a-z0-9]/g, '.')}@candidate-profile.com`,
+                      phone: cand.phone || '+1 (555) 234-5678',
+                      currentTitle: cand.role || cand.currentTitle || cand.current_title || 'Software Engineer',
+                      currentCompany: cand.currentCompany || cand.current_company || 'Verified Candidate',
+                      totalExperience: cand.exp || cand.totalExperience || cand.total_experience || '5+ Years',
+                      location: cand.location || 'Remote / Hybrid',
+                      summary: cand.summary || cand.profile_summary || `Screened and shortlisted for ${j.title}. ATS score: ${score}%.`,
+                      skills: cand.skills || ['Technical Proficiency', 'Domain Skills'],
+                      atsScore: score,
+                      matchLevel: score >= 85 ? 'EXCELLENT MATCH' : (score >= 70 ? 'STRONG MATCH' : 'MATCH'),
+                      mandatoryPassed: cand.mandatoryFailed !== undefined ? !cand.mandatoryFailed : true,
+                      currentStatus: 'Shared with Client',
+                      lastUpdatedDate: 'Recently',
+                      hasResume: true,
+                      resumeFileName: cand.fileName || `${(cand.name || 'candidate').replace(/\s+/g, '_')}_CV.pdf`,
+                      screeningNote: `Agency Screening Verdict: Shortlisted for client review.`,
+                      jobId: j.id,
+                      jobTitle: j.title,
+                      decision: 'SUBMIT',
+                      screeningEvidence: cand.evidenceSnippets || cand.screeningEvidence || []
+                    });
+                  }
+                }
+              }
+            }
+          } catch {}
+        }
       }
 
-      setCandidates(portalCandidates);
+      // E. Filter out candidates still in internal 'Active Screening' so client only sees shortlisted candidates
+      const allCandidatesArray = Array.from(portalCandidatesMap.values());
+      const clientVisibleCandidates = allCandidatesArray.filter(c => c.currentStatus !== 'Active Screening');
+
+      setCandidates(clientVisibleCandidates);
+
+      // Persist client portal candidates
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(
+            `tasknera_portal_cands_${resolvedClient.replace(/\s+/g, '_')}`,
+            JSON.stringify(allCandidatesArray)
+          );
+        } catch {}
+      }
 
       // Load Activities
       let portalActivities: TransparencyActivityItem[] = [];
@@ -321,6 +584,19 @@ function ClientSharePortalContent() {
 
   useEffect(() => {
     loadPortalData();
+  }, [loadPortalData]);
+
+  // Real-time live listener: automatically reload portal when recruiter moves candidates in pipeline
+  useEffect(() => {
+    const handleSync = () => {
+      loadPortalData();
+    };
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('tasknera_portal_sync', handleSync);
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('tasknera_portal_sync', handleSync);
+    };
   }, [loadPortalData]);
 
   // Prompt the client to upload their JD when entering the portal if no JDs exist yet
@@ -526,6 +802,26 @@ function ClientSharePortalContent() {
         localStorage.setItem(`tasknera_portal_cands_${clientName.replace(/\s+/g, '_')}`, JSON.stringify(updatedCandidateList));
       }
 
+      // Two-way sync back into the Recruiter Pipeline
+      if (typeof window !== 'undefined') {
+        try {
+          const rawPipe = localStorage.getItem('tasknera_recruitment_pipeline_v1');
+          if (rawPipe) {
+            const list = JSON.parse(rawPipe);
+            if (Array.isArray(list)) {
+              const targetStage = interviewRound === 'Round 2 Phase' ? 'Round 2 Phase' : 'Round 1 Phase';
+              const updatedPipe = list.map((c: any) => {
+                if (c.id === interviewCandidate.id || c.name === interviewCandidate.name) {
+                  return { ...c, stage: targetStage };
+                }
+                return c;
+              });
+              localStorage.setItem('tasknera_recruitment_pipeline_v1', JSON.stringify(updatedPipe));
+            }
+          }
+        } catch {}
+      }
+
       // Add to Transparency Activity Feed
       const newActivity: TransparencyActivityItem = {
         id: `act-${Date.now()}`,
@@ -584,6 +880,35 @@ function ClientSharePortalContent() {
       setCandidates(updatedCandidateList);
       if (typeof window !== 'undefined') {
         localStorage.setItem(`tasknera_portal_cands_${clientName.replace(/\s+/g, '_')}`, JSON.stringify(updatedCandidateList));
+      }
+
+      // Two-way sync back into the Recruiter Pipeline
+      if (typeof window !== 'undefined') {
+        try {
+          const rawPipe = localStorage.getItem('tasknera_recruitment_pipeline_v1');
+          if (rawPipe) {
+            const list = JSON.parse(rawPipe);
+            if (Array.isArray(list)) {
+              let targetStage: string | null = null;
+              if (feedbackStatus === 'Selected' || feedbackStatus === 'Selected / Offer') targetStage = 'Selected';
+              else if (feedbackStatus === 'Offered') targetStage = 'Offered';
+              else if (feedbackStatus === 'Joined') targetStage = 'Joined';
+
+              const updatedPipe = list.map((c: any) => {
+                if (c.id === feedbackCandidate.id || c.name === feedbackCandidate.name) {
+                  const isReject = feedbackStatus === 'Not a Fit' || feedbackStatus === 'Rejected';
+                  return {
+                    ...c,
+                    ...(targetStage ? { stage: targetStage } : {}),
+                    ...(isReject ? { decision: 'DO NOT SUBMIT' } : {})
+                  };
+                }
+                return c;
+              });
+              localStorage.setItem('tasknera_recruitment_pipeline_v1', JSON.stringify(updatedPipe));
+            }
+          }
+        } catch {}
       }
 
       // Add to Activity Feed
@@ -664,8 +989,8 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
         return false;
       }
       // Status filter
-      if (statusFilter === 'submitted' && cand.currentStatus !== 'Shared with Client') return false;
-      if (statusFilter === 'scheduled' && !cand.currentStatus.includes('Scheduled') && !cand.currentStatus.includes('Interview')) return false;
+      if (statusFilter === 'submitted' && !['Shared with Client', 'Shortlisted & Submitted', 'Shortlisted', 'Ready for Review'].includes(cand.currentStatus)) return false;
+      if (statusFilter === 'scheduled' && !cand.currentStatus.includes('Scheduled') && !cand.currentStatus.includes('Interview') && !cand.currentStatus.includes('Round')) return false;
       if (statusFilter === 'selected' && !['Selected', 'Selected / Offer', 'Offered', 'Joined'].includes(cand.currentStatus)) return false;
       if (statusFilter === 'not_fit' && cand.currentStatus !== 'Not a Fit' && cand.currentStatus !== 'Rejected') return false;
 
@@ -687,7 +1012,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
   }, [jobs]);
 
   const totalProfilesSubmitted = candidates.length;
-  const inInterviewCount = candidates.filter(c => c.currentStatus.includes('Scheduled') || c.currentStatus.includes('Interview')).length;
+  const inInterviewCount = candidates.filter(c => c.currentStatus.includes('Scheduled') || c.currentStatus.includes('Interview') || c.currentStatus.includes('Round')).length;
 
   if (isLoading) {
     return (
@@ -1137,10 +1462,12 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                               <span className="text-xs text-slate-400">•</span>
                               <span className="text-xs font-semibold text-[#3563E9]">{cand.jobTitle || 'Requisition Role'}</span>
                               <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
-                                cand.currentStatus.includes('Selected') || cand.currentStatus.includes('Offer')
+                                cand.currentStatus.includes('Selected') || cand.currentStatus.includes('Offer') || cand.currentStatus.includes('Joined')
                                   ? 'bg-[#ECFDF3] text-[#15966A] border-[#D1FADF]'
-                                  : cand.currentStatus.includes('Scheduled')
+                                  : cand.currentStatus.includes('Scheduled') || cand.currentStatus.includes('Round')
                                   ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : cand.currentStatus.includes('Shortlisted') || cand.currentStatus === 'Shared with Client'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                   : 'bg-slate-100 text-slate-700 border-slate-200'
                               }`}>
                                 {cand.currentStatus}

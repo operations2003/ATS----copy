@@ -577,7 +577,7 @@ const statusBadge = (status: string) => {
 export default function JobCandidatesPage() {
   const params = useParams();
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const jobId = (params?.id as string) || 'jd-1';
 
   const [job, setJob] = useState<JobInfo | null>(null);
@@ -741,7 +741,109 @@ export default function JobCandidatesPage() {
       try {
         localStorage.setItem(`tasknera_decision_${jobId}_${candidateId}`, newDecision);
         localStorage.setItem(`tasknera_decision_${candidateId}`, newDecision);
-      } catch {}
+
+        // Synchronize with recruitment pipeline and client portal
+        const targetCand = candidates.find(c => c.id === candidateId);
+        const resolvedClient = job?.client || (job as any)?.company || localStorage.getItem(`tasknera_company_${jobId}`) || '';
+
+        // Update pipeline stage
+        const rawPipe = localStorage.getItem('tasknera_recruitment_pipeline_v1');
+        let pipeList: any[] = [];
+        if (rawPipe) {
+          try {
+            pipeList = JSON.parse(rawPipe);
+          } catch {}
+        }
+        if (Array.isArray(pipeList)) {
+          const newStage = newDecision === 'SUBMIT' ? 'Shortlisted' : 'Screening';
+          const existingIdx = pipeList.findIndex(c => c.id === candidateId || (targetCand?.name && c.name === targetCand.name));
+          if (existingIdx >= 0) {
+            pipeList[existingIdx] = { ...pipeList[existingIdx], stage: newStage, decision: newDecision };
+          } else if (targetCand) {
+            pipeList.unshift({
+              id: candidateId,
+              name: targetCand.name || 'Candidate',
+              role: targetCand.currentTitle || (targetCand as any).role || job?.position || 'Software Engineer',
+              score: targetCand.atsScore || targetCand.matchScore || 80,
+              stage: newStage,
+              requisitionId: jobId,
+              requisitionTitle: job?.position || 'Requisition Role',
+              decision: newDecision,
+              recruiterName: user?.name || user?.email || 'Recruiter',
+            });
+          }
+          localStorage.setItem('tasknera_recruitment_pipeline_v1', JSON.stringify(pipeList));
+        }
+
+        // Update client portal candidates
+        if (resolvedClient && targetCand) {
+          const clientKey = resolvedClient.trim().replace(/\s+/g, '_');
+          const portalStorageKey = `tasknera_portal_cands_${clientKey}`;
+          const rawPortal = localStorage.getItem(portalStorageKey);
+          let portalCands = rawPortal ? JSON.parse(rawPortal) : [];
+          if (!Array.isArray(portalCands)) portalCands = [];
+
+          const existingPortalIdx = portalCands.findIndex((c: any) => c.id === candidateId || c.name === targetCand.name);
+          if (newDecision === 'SUBMIT') {
+            const score = targetCand.atsScore || targetCand.matchScore || 80;
+            const newPortalCand = {
+              id: candidateId,
+              name: targetCand.name || 'Candidate',
+              email: targetCand.email || `${(targetCand.name || 'cand').toLowerCase().replace(/[^a-z0-9]/g, '.')}@candidate-profile.com`,
+              phone: targetCand.phone || '+1 (555) 234-5678',
+              currentTitle: targetCand.currentTitle || 'Software Engineer',
+              currentCompany: targetCand.currentCompany || 'Verified Candidate',
+              totalExperience: targetCand.totalExperience || '5+ Years',
+              location: targetCand.location || 'Remote / Hybrid',
+              summary: targetCand.summary || `Candidate screened and shortlisted for ${job?.position || 'role'}. Deterministic score: ${score}%.`,
+              skills: targetCand.skills || ['Technical Proficiency'],
+              atsScore: score,
+              matchLevel: score >= 85 ? 'EXCELLENT MATCH' : 'STRONG MATCH',
+              mandatoryPassed: true,
+              currentStatus: 'Shared with Client',
+              lastUpdatedDate: 'Just now',
+              hasResume: true,
+              resumeFileName: targetCand.fileName || `${(targetCand.name || 'candidate').replace(/\s+/g, '_')}_CV.pdf`,
+              screeningNote: `Agency Screening Verdict: Mandatory requirements satisfied. Shortlisted by recruiter.`,
+              jobId: jobId,
+              jobTitle: job?.position || 'Requisition Role',
+              decision: 'SUBMIT',
+              screeningEvidence: (targetCand as any).evidenceSnippets || (targetCand as any).evaluation?.evidence || [],
+            };
+
+            if (existingPortalIdx >= 0) {
+              portalCands[existingPortalIdx] = { ...portalCands[existingPortalIdx], ...newPortalCand, currentStatus: 'Shared with Client' };
+            } else {
+              portalCands.unshift(newPortalCand);
+            }
+
+            // Log activity
+            const actStorageKey = `tasknera_portal_activities_${clientKey}`;
+            const rawActs = localStorage.getItem(actStorageKey);
+            let portalActs = rawActs ? JSON.parse(rawActs) : [];
+            if (!Array.isArray(portalActs)) portalActs = [];
+            portalActs.unshift({
+              id: `act-${Date.now()}`,
+              title: `Candidate Shortlisted: ${targetCand.name}`,
+              detail: `${user?.name || 'Agency Recruiter'} shortlisted ${targetCand.name} for ${job?.position || 'open position'} with ATS Score ${score}%. Profile submitted for client review.`,
+              actor: user?.name || 'Agency Recruiter',
+              actorRole: 'AGENCY',
+              timestamp: 'Just now',
+              badge: 'Shortlisted',
+            });
+            localStorage.setItem(actStorageKey, JSON.stringify(portalActs.slice(0, 40)));
+          } else {
+            if (existingPortalIdx >= 0) {
+              portalCands[existingPortalIdx] = { ...portalCands[existingPortalIdx], currentStatus: 'Active Screening' };
+            }
+          }
+          localStorage.setItem(portalStorageKey, JSON.stringify(portalCands));
+        }
+
+        window.dispatchEvent(new CustomEvent('tasknera_portal_sync', { detail: { candidateId, decision: newDecision } }));
+      } catch (err) {
+        console.warn('Sync error in handleUpdateDecision:', err);
+      }
     }
 
     try {

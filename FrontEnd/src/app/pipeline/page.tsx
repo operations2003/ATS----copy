@@ -514,12 +514,382 @@ export default function PipelinePage() {
     [candidates, requisitionFilter]
   );
 
-  // Core helper to commit a stage move to state and localStorage
-  const applyStageMove = (candidateId: string, newStage: PipelineStage) => {
+  // Helper to synchronize candidate stage transitions with the client portal
+  const syncCandidateToClientPortal = (
+    candidate: PipelineCandidate,
+    newStage: PipelineStage,
+    recruiterName?: string,
+    extraInterviewInfo?: { round?: string; startAt?: string; interviewer?: string; meetingPlace?: string }
+  ) => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      // 1. Resolve client name and requisition details
+      let clientName = '';
+      let requisitionTitle = candidate.requisitionTitle || '';
+      let jobId = candidate.requisitionId || '';
+
+      // Check atsStore jobs
+      try {
+        const atsJobs = atsStore.getJobs();
+        const match = atsJobs.find(j =>
+          (jobId && jobId !== 'all' && j.id === jobId) ||
+          (requisitionTitle && j.title?.toLowerCase().trim() === requisitionTitle.toLowerCase().trim())
+        );
+        if (match && match.client?.trim()) {
+          clientName = match.client.trim();
+          if (!requisitionTitle) requisitionTitle = match.title;
+          if (!jobId || jobId === 'all') jobId = match.id;
+        }
+      } catch {}
+
+      // Check tasknera_created_jobs
+      if (!clientName) {
+        try {
+          const rawCreated = localStorage.getItem('tasknera_created_jobs');
+          if (rawCreated) {
+            const parsed = JSON.parse(rawCreated);
+            if (Array.isArray(parsed)) {
+              const match = parsed.find((j: any) =>
+                (jobId && jobId !== 'all' && j.id === jobId) ||
+                (requisitionTitle && (
+                  j.title?.toLowerCase().trim() === requisitionTitle.toLowerCase().trim() ||
+                  j.position?.toLowerCase().trim() === requisitionTitle.toLowerCase().trim()
+                ))
+              );
+              if (match && (match.client || match.company)) {
+                clientName = (match.client || match.company).trim();
+                if (!requisitionTitle) requisitionTitle = match.title || match.position;
+                if (!jobId || jobId === 'all') jobId = match.id;
+              }
+            }
+          }
+        } catch {}
+      }
+
+      // Check tasknera_client_portal_shares_v1
+      if (!clientName) {
+        try {
+          const sharesRaw = localStorage.getItem('tasknera_client_portal_shares_v1');
+          if (sharesRaw) {
+            const shares = JSON.parse(sharesRaw);
+            if (Array.isArray(shares)) {
+              for (const s of shares) {
+                if (!s.clientName) continue;
+                const rawClientJds = localStorage.getItem(`tasknera_client_jds_${s.clientName.replace(/\s+/g, '_')}`);
+                if (rawClientJds) {
+                  const jds = JSON.parse(rawClientJds);
+                  if (Array.isArray(jds)) {
+                    const match = jds.find((j: any) =>
+                      (jobId && jobId !== 'all' && j.id === jobId) ||
+                      (requisitionTitle && j.title?.toLowerCase().trim() === requisitionTitle.toLowerCase().trim())
+                    );
+                    if (match) {
+                      clientName = s.clientName.trim();
+                      if (!requisitionTitle) requisitionTitle = match.title;
+                      if (!jobId || jobId === 'all') jobId = match.id;
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch {}
+      }
+
+      // Check atsStore.getCandidate
+      if (!clientName) {
+        try {
+          const sc = atsStore.getCandidate(candidate.id);
+          if (sc && sc.client?.trim()) {
+            clientName = sc.client.trim();
+            if (!requisitionTitle) requisitionTitle = sc.jobTitle;
+            if (!jobId || jobId === 'all') jobId = sc.jobId;
+          }
+        } catch {}
+      }
+
+      // Check candidate pool or job-specific candidates
+      if (!clientName && jobId && jobId !== 'all') {
+        try {
+          const rawCands = localStorage.getItem(`tasknera_candidates_${jobId}`);
+          if (rawCands) {
+            const cands = JSON.parse(rawCands);
+            const found = Array.isArray(cands) ? cands.find((c: any) => c.id === candidate.id) : null;
+            if (found && (found.client || found.company)) {
+              clientName = (found.client || found.company).trim();
+            }
+          }
+        } catch {}
+      }
+
+      // If still no client resolved, check active shares for single client fallback
+      if (!clientName) {
+        try {
+          const sharesRaw = localStorage.getItem('tasknera_client_portal_shares_v1');
+          if (sharesRaw) {
+            const shares = JSON.parse(sharesRaw);
+            if (Array.isArray(shares) && shares.length > 0) {
+              const matchedShare = shares.find(s =>
+                requisitionTitle && s.clientName && requisitionTitle.toLowerCase().includes(s.clientName.toLowerCase())
+              );
+              if (matchedShare?.clientName) {
+                clientName = matchedShare.clientName.trim();
+              } else if (shares.length === 1 && shares[0].clientName) {
+                clientName = shares[0].clientName.trim();
+              }
+            }
+          }
+        } catch {}
+      }
+
+      if (!clientName) {
+        return;
+      }
+
+      const clientKey = clientName.replace(/\s+/g, '_');
+      const portalCandsStorageKey = `tasknera_portal_cands_${clientKey}`;
+      const portalActsStorageKey = `tasknera_portal_activities_${clientKey}`;
+
+      // 2. Fetch full candidate details for richest presentation
+      let fullCand: any = null;
+      if (jobId && jobId !== 'all') {
+        try {
+          const raw = localStorage.getItem(`tasknera_candidates_${jobId}`);
+          if (raw) {
+            const list = JSON.parse(raw);
+            fullCand = Array.isArray(list) ? list.find((c: any) => c.id === candidate.id || c.name === candidate.name) : null;
+          }
+        } catch {}
+      }
+      if (!fullCand) {
+        try {
+          fullCand = atsStore.getCandidate(candidate.id);
+        } catch {}
+      }
+      if (!fullCand) {
+        try {
+          const rawPool = localStorage.getItem('tasknera_candidates_pool');
+          if (rawPool) {
+            const list = JSON.parse(rawPool);
+            fullCand = Array.isArray(list) ? list.find((c: any) => c.id === candidate.id || c.name === candidate.name) : null;
+          }
+        } catch {}
+      }
+
+      // 3. Determine client portal status based on newStage
+      const isShortlisted = [
+        'Shortlisted',
+        'Recruiter Name',
+        'Round 1 Phase',
+        'Round 2 Phase',
+        'Selected',
+        'Offered',
+        'Joined',
+      ].includes(newStage);
+
+      let portalStatus = 'Active Screening';
+      if (newStage === 'Shortlisted' || newStage === 'Recruiter Name') {
+        portalStatus = 'Shared with Client';
+      } else if (newStage === 'Round 1 Phase') {
+        portalStatus = 'Interview Scheduled (Round 1)';
+      } else if (newStage === 'Round 2 Phase') {
+        portalStatus = 'Interview Scheduled (Round 2)';
+      } else if (newStage === 'Selected') {
+        portalStatus = 'Selected';
+      } else if (newStage === 'Offered') {
+        portalStatus = 'Offered';
+      } else if (newStage === 'Joined') {
+        portalStatus = 'Joined';
+      }
+
+      // 4. Update tasknera_portal_cands_${clientKey}
+      let portalCands: any[] = [];
+      try {
+        const rawStored = localStorage.getItem(portalCandsStorageKey);
+        if (rawStored) {
+          portalCands = JSON.parse(rawStored);
+          if (!Array.isArray(portalCands)) portalCands = [];
+        }
+      } catch {}
+
+      const existingIndex = portalCands.findIndex(
+        c => c.id === candidate.id || c.name?.toLowerCase().trim() === candidate.name?.toLowerCase().trim()
+      );
+
+      if (isShortlisted) {
+        const candidateEntry = {
+          id: candidate.id,
+          name: candidate.name,
+          email: fullCand?.email || `${candidate.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@candidate-profile.com`,
+          phone: fullCand?.phone || '+1 (555) 234-5678',
+          currentTitle: candidate.role || fullCand?.currentTitle || fullCand?.current_title || 'Software Engineer',
+          currentCompany: fullCand?.currentCompany || fullCand?.current_company || 'Verified Candidate',
+          totalExperience: fullCand?.exp || fullCand?.totalExperience || fullCand?.total_experience || '5+ Years',
+          location: fullCand?.location || 'Remote / Hybrid',
+          summary: fullCand?.summary || fullCand?.profile_summary || `Screened and evaluated for ${requisitionTitle || 'Position'}. Deterministic ATS match score: ${candidate.score}%. Shortlisted by ${recruiterName || candidate.recruiterName || 'Agency Recruiter'}.`,
+          skills: (fullCand?.skills && Array.isArray(fullCand.skills) && fullCand.skills.length > 0)
+            ? fullCand.skills
+            : ['Technical Proficiency', 'Problem Solving', 'Domain Expertise'],
+          atsScore: candidate.score,
+          matchLevel: candidate.score >= 85 ? 'EXCELLENT MATCH' : (candidate.score >= 70 ? 'STRONG MATCH' : 'MATCH'),
+          mandatoryPassed: fullCand?.mandatoryFailed !== undefined ? !fullCand.mandatoryFailed : true,
+          currentStatus: portalStatus,
+          lastUpdatedDate: 'Just now',
+          hasResume: true,
+          resumeFileName: fullCand?.fileName || fullCand?.resumeFileName || `${candidate.name.replace(/\s+/g, '_')}_CV.pdf`,
+          screeningNote: fullCand?.screeningInfo?.notes || `Agency Screening Verdict: Mandatory requirements compliance verified. Shortlisted by ${recruiterName || candidate.recruiterName || 'Agency Recruiter'}.`,
+          jobId: jobId || 'client-job',
+          jobTitle: requisitionTitle || 'Requisition Role',
+          decision: 'SUBMIT',
+          screeningEvidence: fullCand?.evidenceSnippets || fullCand?.screeningEvidence || []
+        };
+
+        if (existingIndex >= 0) {
+          portalCands[existingIndex] = {
+            ...portalCands[existingIndex],
+            ...candidateEntry,
+            currentStatus: portalStatus,
+            lastUpdatedDate: 'Just now',
+          };
+        } else {
+          portalCands.unshift(candidateEntry);
+        }
+      } else {
+        // If candidate moved back to Screening, mark as Active Screening so client only sees shortlisted candidates
+        if (existingIndex >= 0) {
+          portalCands[existingIndex] = {
+            ...portalCands[existingIndex],
+            currentStatus: 'Active Screening',
+            lastUpdatedDate: 'Just now',
+          };
+        }
+      }
+
+      localStorage.setItem(portalCandsStorageKey, JSON.stringify(portalCands));
+
+      // 5. Add Transparency Activity Feed Item for Client Portal
+      let portalActivities: any[] = [];
+      try {
+        const rawActs = localStorage.getItem(portalActsStorageKey);
+        if (rawActs) {
+          portalActivities = JSON.parse(rawActs);
+          if (!Array.isArray(portalActivities)) portalActivities = [];
+        }
+      } catch {}
+
+      const actor = recruiterName || candidate.recruiterName || 'Agency Recruiter';
+      let activityTitle = '';
+      let activityDetail = '';
+      let activityBadge = '';
+
+      if (newStage === 'Shortlisted') {
+        activityTitle = `Candidate Shortlisted: ${candidate.name}`;
+        activityDetail = `${actor} shortlisted ${candidate.name} (${candidate.role}) for ${requisitionTitle || 'requisition'} with ATS Score ${candidate.score}%. Profile and deterministic scorecard submitted for client review.`;
+        activityBadge = 'Shortlisted';
+      } else if (newStage === 'Round 1 Phase') {
+        activityTitle = `Round 1 Interview Initiated: ${candidate.name}`;
+        activityDetail = extraInterviewInfo?.startAt
+          ? `Round 1 interview scheduled for ${new Date(extraInterviewInfo.startAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} with ${extraInterviewInfo.interviewer || actor}.`
+          : `Candidate ${candidate.name} advanced to Round 1 Phase for ${requisitionTitle || 'position'}.`;
+        activityBadge = 'Round 1 Phase';
+      } else if (newStage === 'Round 2 Phase') {
+        activityTitle = `Round 2 Interview Initiated: ${candidate.name}`;
+        activityDetail = extraInterviewInfo?.startAt
+          ? `Round 2 interview scheduled for ${new Date(extraInterviewInfo.startAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} with ${extraInterviewInfo.interviewer || actor}.`
+          : `Candidate ${candidate.name} advanced to Round 2 Phase for ${requisitionTitle || 'position'}.`;
+        activityBadge = 'Round 2 Phase';
+      } else if (newStage === 'Selected') {
+        activityTitle = `Candidate Selected: ${candidate.name}`;
+        activityDetail = `${candidate.name} marked as Selected for ${requisitionTitle || 'position'}. Final hiring steps initiated.`;
+        activityBadge = 'Selected';
+      } else if (newStage === 'Offered') {
+        activityTitle = `Offer Extended: ${candidate.name}`;
+        activityDetail = `Offer package extended to ${candidate.name} for ${requisitionTitle || 'position'}.`;
+        activityBadge = 'Offered';
+      } else if (newStage === 'Joined') {
+        activityTitle = `Candidate Joined: ${candidate.name}`;
+        activityDetail = `${candidate.name} confirmed as Joined the team. Requisition successfully fulfilled.`;
+        activityBadge = 'Joined';
+      }
+
+      if (activityTitle) {
+        const newAct = {
+          id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          title: activityTitle,
+          detail: activityDetail,
+          actor: actor,
+          actorRole: 'AGENCY',
+          timestamp: 'Just now',
+          badge: activityBadge,
+        };
+        portalActivities = [newAct, ...portalActivities].slice(0, 40);
+        localStorage.setItem(portalActsStorageKey, JSON.stringify(portalActivities));
+      }
+
+      // 6. Update atsStore
+      try {
+        if (newStage === 'Shortlisted') {
+          atsStore.shortlistCandidate(candidate.id, actor);
+        }
+      } catch {}
+
+      // 7. Update tasknera_candidates_${jobId}
+      if (jobId && jobId !== 'all') {
+        try {
+          const raw = localStorage.getItem(`tasknera_candidates_${jobId}`);
+          if (raw) {
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+              const updatedJobCands = list.map((c: any) => {
+                if (c.id === candidate.id || c.name === candidate.name) {
+                  return {
+                    ...c,
+                    stage: newStage,
+                    decision: isShortlisted ? 'SUBMIT' : c.decision,
+                    decisionTag: isShortlisted ? 'SHORTLIST' : c.decisionTag,
+                  };
+                }
+                return c;
+              });
+              localStorage.setItem(`tasknera_candidates_${jobId}`, JSON.stringify(updatedJobCands));
+            }
+          }
+        } catch {}
+      }
+
+      // 8. Dispatch real-time live sync events across tabs/windows
+      try {
+        window.dispatchEvent(
+          new CustomEvent('tasknera_portal_sync', {
+            detail: { candidateId: candidate.id, stage: newStage, client: clientName },
+          })
+        );
+        localStorage.setItem('tasknera_portal_last_sync', String(Date.now()));
+      } catch {}
+    } catch (err) {
+      console.warn('[Pipeline] Error syncing candidate to client portal:', err);
+    }
+  };
+
+  // Core helper to commit a stage move to state and localStorage, and sync to client portal
+  const applyStageMove = (
+    candidateId: string,
+    newStage: PipelineStage,
+    extraInterviewInfo?: { round?: string; startAt?: string; interviewer?: string; meetingPlace?: string }
+  ) => {
+    let movedCandidate: PipelineCandidate | undefined;
+
     setCandidates(current => {
       const updated = current.map(candidate => {
         if (candidate.id !== candidateId) return candidate;
-        return { ...candidate, stage: newStage };
+        const newDecision: 'SUBMIT' | 'REVIEW' | 'DO NOT SUBMIT' =
+          ['Shortlisted', 'Recruiter Name', 'Round 1 Phase', 'Round 2 Phase', 'Selected', 'Offered', 'Joined'].includes(newStage)
+            ? 'SUBMIT'
+            : (candidate.decision || 'REVIEW');
+        movedCandidate = { ...candidate, stage: newStage, decision: newDecision };
+        return movedCandidate;
       });
 
       try {
@@ -532,6 +902,16 @@ export default function PipelinePage() {
 
       return updated;
     });
+
+    // Synchronize to Client Portal and ATS Store
+    if (movedCandidate) {
+      syncCandidateToClientPortal(
+        movedCandidate,
+        newStage,
+        user?.name || user?.email || 'Recruiter',
+        extraInterviewInfo
+      );
+    }
   };
 
   // Move candidate between stages
@@ -636,7 +1016,12 @@ export default function PipelinePage() {
     }
 
     // 3. Move candidate to targeted stage (Round 1 Phase or Round 2 Phase)
-    applyStageMove(schedulingCandidate.id, schedulingTargetStage);
+    applyStageMove(schedulingCandidate.id, schedulingTargetStage, {
+      round: scheduleForm.round,
+      startAt: scheduleForm.startAt,
+      interviewer: scheduleForm.interviewer,
+      meetingPlace: scheduleForm.meetingPlace,
+    });
 
     // 4. Close modal
     setIsScheduleOpen(false);
