@@ -69,138 +69,6 @@ interface TransparencyActivityItem {
   badge?: string;
 }
 
-// Fallback high-fidelity verified candidate profiles for demonstration & initial share state
-const getDemoCandidatesForClient = (clientName: string, activeJobs: ClientPortalJob[]): CandidateItem[] => {
-  const primaryJob = activeJobs[0]?.title || 'SAP CO Consultant';
-  const primaryJobId = activeJobs[0]?.id || 'jd-1';
-
-  return [
-    {
-      id: `cand-${Date.now()}-1`,
-      name: 'Marcus Vance',
-      email: 'm.vance@candidate-preview.com',
-      phone: '+1 (555) 382-9011',
-      currentTitle: 'Senior SAP S/4HANA CO Lead',
-      currentCompany: 'Deloitte Consulting',
-      totalExperience: '8.5 Years',
-      location: 'New York, NY (Relocation Ready)',
-      summary: 'Experienced SAP Finance & Controlling architect with 3 global S/4HANA manufacturing implementations. Expert in product costing, profitability analysis (CO-PA), and automated period-end closing.',
-      skills: ['SAP CO', 'SAP S/4HANA', 'Product Costing (CO-PC)', 'CO-PA', 'Manufacturing Finance', 'Material Ledger', 'BAPI Integration'],
-      atsScore: 95,
-      matchLevel: 'EXCELLENT MATCH',
-      mandatoryPassed: true,
-      currentStatus: 'Shared with Client',
-      latestFeedback: null,
-      lastUpdatedDate: 'Just now',
-      hasResume: true,
-      resumeFileName: 'Marcus_Vance_SAP_CO_Resume.pdf',
-      screeningNote: 'Agency Verdict: Exceeds mandatory experience criteria by 3+ years. Verified deep S/4HANA manufacturing background. Strong verbal communication and structured problem solving.',
-      screeningEvidence: [
-        { requirement: '5+ years SAP CO experience', status: 'MET', evidence: 'Led SAP CO delivery for 8+ years across Tier-1 industrial manufacturing accounts.' },
-        { requirement: '4+ years SAP S/4HANA experience', status: 'MET', evidence: 'Delivered 3 end-to-end greenfield S/4HANA releases (2020 & 2022 versions).' },
-        { requirement: 'Manufacturing industry experience', status: 'MET', evidence: 'Configured Product Cost Controlling and Material Ledger for industrial client.' },
-        { requirement: 'SAP implementation project experience', status: 'MET', evidence: 'Managed full project lifecycles from blueprint to cutover and hypercare.' },
-      ],
-      jobId: primaryJobId,
-      jobTitle: primaryJob,
-      timeline: [
-        { status: 'Shared with Client', createdAt: new Date().toISOString(), updatedBy: 'HireIQ Agency Screening Lead', feedback: 'Shortlisted with 95% verified deterministic score.' }
-      ]
-    },
-    {
-      id: `cand-${Date.now()}-2`,
-      name: 'Elena Rostova',
-      email: 'elena.rostova@candidate-preview.com',
-      phone: '+1 (555) 749-1204',
-      currentTitle: 'Lead Enterprise Systems Specialist',
-      currentCompany: 'Accenture Technology',
-      totalExperience: '6.2 Years',
-      location: 'Jersey City, NJ (Hybrid 3d/wk)',
-      summary: 'Specialized in SAP Financial Management and Cost Center Accounting with extensive experience in discrete manufacturing domains and real-time reporting integrations.',
-      skills: ['SAP CO-OM', 'Cost Center Accounting', 'Internal Orders', 'S/4HANA Finance', 'Power BI Reporting', 'SQL'],
-      atsScore: 91,
-      matchLevel: 'EXCELLENT MATCH',
-      mandatoryPassed: true,
-      currentStatus: 'Round 1 Phase Scheduled',
-      latestFeedback: 'Client team scheduled Round 1 technical conversation for next Tuesday.',
-      lastUpdatedDate: '2 hours ago',
-      hasResume: true,
-      resumeFileName: 'Elena_Rostova_Executive_CV.pdf',
-      screeningNote: 'Agency Verdict: Verified 6+ years SAP domain track record. Passed all mandatory requirements. Excellent cross-functional stakeholder management skills.',
-      screeningEvidence: [
-        { requirement: '5+ years SAP CO experience', status: 'MET', evidence: '6.2 years specialized SAP CO consulting experience.' },
-        { requirement: '4+ years SAP S/4HANA experience', status: 'MET', evidence: '4.5 years hands-on S/4HANA finance & controlling architecture.' },
-        { requirement: 'Manufacturing industry experience', status: 'MET', evidence: 'Heavy manufacturing client engagement on inventory valuation.' },
-      ],
-      jobId: primaryJobId,
-      jobTitle: primaryJob,
-      timeline: [
-        { status: 'Round 1 Phase Scheduled', createdAt: new Date(Date.now() - 7200000).toISOString(), updatedBy: 'Client Hiring Team', feedback: 'Invited for Round 1 technical interview.' },
-        { status: 'Shared with Client', createdAt: new Date(Date.now() - 86400000).toISOString(), updatedBy: 'HireIQ Agency', feedback: 'Delivered in primary candidate batch.' }
-      ]
-    },
-    {
-      id: `cand-${Date.now()}-3`,
-      name: 'David Kim',
-      email: 'david.kim@candidate-preview.com',
-      phone: '+1 (555) 491-6623',
-      currentTitle: 'Senior Controlling & Systems Consultant',
-      currentCompany: 'Capgemini Americas',
-      totalExperience: '7.0 Years',
-      location: 'Philadelphia, PA (Remote / Travel)',
-      summary: 'Functional SAP specialist with proven experience in cost element accounting, overhead management, and financial variance analysis for global supply chain organizations.',
-      skills: ['SAP CO', 'Overhead Cost Controlling', 'Variance Analysis', 'ECC 6.0 to S/4HANA Migration', 'Supply Chain Finance'],
-      atsScore: 88,
-      matchLevel: 'STRONG MATCH',
-      mandatoryPassed: true,
-      currentStatus: 'Shared with Client',
-      latestFeedback: null,
-      lastUpdatedDate: 'Yesterday',
-      hasResume: true,
-      resumeFileName: 'David_Kim_SAP_Consultant.pdf',
-      screeningNote: 'Agency Verdict: High technical competence in core controlling modules. Strong migration track record. Ready for immediate client interview.',
-      screeningEvidence: [
-        { requirement: '5+ years SAP CO experience', status: 'MET', evidence: '7 years continuous enterprise SAP experience.' },
-        { requirement: '4+ years SAP S/4HANA experience', status: 'MET', evidence: '4 years S/4HANA migration and cutover support.' },
-      ],
-      jobId: primaryJobId,
-      jobTitle: primaryJob,
-      timeline: [
-        { status: 'Shared with Client', createdAt: new Date(Date.now() - 86400000).toISOString(), updatedBy: 'HireIQ Agency', feedback: 'Verified match score 88%.' }
-      ]
-    },
-    {
-      id: `cand-${Date.now()}-4`,
-      name: 'Priya Sharma',
-      email: 'priya.sharma@candidate-preview.com',
-      phone: '+1 (555) 912-4029',
-      currentTitle: 'Senior Financial Systems Engineer',
-      currentCompany: 'Tata Consultancy Services',
-      totalExperience: '5.8 Years',
-      location: 'Boston, MA (Hybrid)',
-      summary: 'Full-lifecycle enterprise ERP specialist with deep focus on cost optimization, financial workflow automation, and executive dashboards.',
-      skills: ['SAP CO', 'SAP FICO', 'Cost Allocation', 'Tableau / Power BI', 'S/4HANA Cloud'],
-      atsScore: 85,
-      matchLevel: 'STRONG MATCH',
-      mandatoryPassed: true,
-      currentStatus: 'Shared with Client',
-      latestFeedback: null,
-      lastUpdatedDate: '2 days ago',
-      hasResume: true,
-      resumeFileName: 'Priya_Sharma_Resume.docx',
-      screeningNote: 'Agency Verdict: Passed all baseline mandatory tests. Strong financial analytics capabilities and clean documentation record.',
-      screeningEvidence: [
-        { requirement: '5+ years SAP CO experience', status: 'MET', evidence: '5.8 years across financial operations and ERP.' }
-      ],
-      jobId: primaryJobId,
-      jobTitle: primaryJob,
-      timeline: [
-        { status: 'Shared with Client', createdAt: new Date(Date.now() - 172800000).toISOString(), updatedBy: 'HireIQ Agency', feedback: 'Shortlist delivered.' }
-      ]
-    }
-  ];
-};
-
 function ClientSharePortalContent() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -219,6 +87,7 @@ function ClientSharePortalContent() {
   const [candidates, setCandidates] = useState<CandidateItem[]>([]);
   const [activities, setActivities] = useState<TransparencyActivityItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const hasAutoPromptedRef = React.useRef(false);
 
   // 3. Filter & Tab State
   const [activeTab, setActiveTab] = useState<'candidates' | 'jobs' | 'audit'>('candidates');
@@ -339,10 +208,10 @@ function ClientSharePortalContent() {
         workMode: sj.mode || 'Hybrid',
         salary: sj.salary || 'Competitive',
         status: sj.status === 'Active' ? 'Active Screening' : 'Shortlist Delivered',
-        sourcedCount: Math.max(18, (sj.candidates || 0) * 3 + 12),
-        screenedCount: Math.max(12, (sj.candidates || 0) * 2 + 8),
-        submittedCount: Math.max(3, sj.candidates || 3),
-        createdAt: '3 days ago',
+        sourcedCount: sj.candidates ? sj.candidates * 2 : 0,
+        screenedCount: sj.candidates ? Math.round(sj.candidates * 1.2) : 0,
+        submittedCount: sj.candidates || 0,
+        createdAt: 'Recently',
         description: sj.description,
         priority: 'High',
       }));
@@ -352,44 +221,7 @@ function ClientSharePortalContent() {
       mappedStoreJobs.forEach(j => combinedJobsMap.set(j.id, j));
       uploadedJds.forEach(j => combinedJobsMap.set(j.id, j));
 
-      let finalJobs = Array.from(combinedJobsMap.values());
-      if (finalJobs.length === 0) {
-        // Fallback default job for the client
-        finalJobs = [
-          {
-            id: 'jd-techcorp-1',
-            title: 'SAP CO Consultant & S/4HANA Architect',
-            department: 'Manufacturing Finance Systems',
-            client: resolvedClient,
-            location: 'New York, NY',
-            workMode: 'Hybrid',
-            salary: '$140,000 - $175,000',
-            status: 'Shortlist Delivered',
-            sourcedCount: 42,
-            screenedCount: 28,
-            submittedCount: 4,
-            createdAt: '4 days ago',
-            priority: 'High',
-            description: 'Lead SAP CO and product costing implementation across North American manufacturing facilities.'
-          },
-          {
-            id: 'jd-techcorp-2',
-            title: 'Senior Cloud Platform & DevOps Specialist',
-            department: 'Infrastructure & Cloud Engineering',
-            client: resolvedClient,
-            location: 'Remote (US Timezones)',
-            workMode: 'Remote',
-            salary: '$150,000 - $185,000',
-            status: 'Active Screening',
-            sourcedCount: 31,
-            screenedCount: 19,
-            submittedCount: 2,
-            createdAt: '1 day ago',
-            priority: 'Urgent',
-            description: 'Scale Kubernetes clusters and automate Terraform deployments for multi-region SaaS workloads.'
-          }
-        ];
-      }
+      const finalJobs = Array.from(combinedJobsMap.values());
       setJobs(finalJobs);
 
       // Load Screened & Submitted Candidates
@@ -403,53 +235,87 @@ function ClientSharePortalContent() {
         } catch {}
       }
 
-      if (portalCandidates.length === 0) {
-        portalCandidates = getDemoCandidatesForClient(resolvedClient, finalJobs);
+      // Check ATS Store for real candidates associated with this client's requisitions
+      if (portalCandidates.length === 0 && finalJobs.length > 0) {
+        try {
+          const storeCands = atsStore.getCandidates().filter(c => 
+            c.client?.toLowerCase().trim() === resolvedClient.toLowerCase().trim() ||
+            finalJobs.some(j => j.id === c.jobId)
+          );
+          if (storeCands.length > 0) {
+            portalCandidates = storeCands.map(sc => ({
+              id: sc.id,
+              name: sc.name,
+              email: sc.email,
+              phone: sc.phone,
+              currentTitle: sc.role,
+              currentCompany: sc.currentCompany || 'Verified Candidate',
+              totalExperience: sc.exp,
+              location: sc.location,
+              summary: `Profile screened for ${sc.jobTitle}. Evaluated deterministic score: ${sc.calibratedScore || sc.match}%.`,
+              skills: sc.skills || [],
+              atsScore: sc.calibratedScore || sc.match,
+              matchLevel: (sc.calibratedScore || sc.match) >= 90 ? 'EXCELLENT MATCH' : 'STRONG MATCH',
+              mandatoryPassed: !sc.mandatoryFailed,
+              currentStatus: sc.decision === 'SUBMIT' ? 'Shared with Client' : 'Active Screening',
+              lastUpdatedDate: 'Recently',
+              hasResume: true,
+              resumeFileName: `${sc.name.replace(/\s+/g, '_')}_CV.pdf`,
+              screeningNote: `Agency Screening Verdict: Mandatory requirement compliance: ${sc.mandatoryMatch}. Evaluated by ${sc.assignedRecruiter}.`,
+              jobId: sc.jobId,
+              jobTitle: sc.jobTitle,
+              screeningEvidence: sc.evidenceSnippets || []
+            }));
+          }
+        } catch {}
       }
+
       setCandidates(portalCandidates);
 
       // Load Activities
-      const initialActivities: TransparencyActivityItem[] = [
-        {
-          id: 'act-1',
-          title: 'AI Screening & Verification Completed',
-          detail: 'HireIQ recruiters completed parsing and scoring 28 candidate resumes against mandatory compliance rules.',
-          actor: 'HireIQ Screening Team',
-          actorRole: 'AGENCY',
-          timestamp: '3 hours ago',
-          badge: 'Screening Milestone'
-        },
-        {
-          id: 'act-2',
-          title: 'Executive Profiles Submitted to Client',
-          detail: '4 verified candidates meeting 100% of knockout criteria submitted for client hiring team review.',
-          actor: 'Lead Technical Recruiter',
-          actorRole: 'AGENCY',
-          timestamp: 'Yesterday at 4:30 PM',
-          badge: 'Shortlist Delivery'
-        },
-        {
-          id: 'act-3',
-          title: 'Scoring Rules Configured',
-          detail: `Custom evaluation weights applied: Technical Skills ×1.2, Experience ×1.1. Auto-disqualification enabled for missing mandatory criteria.`,
-          actor: 'Account Governance System',
-          actorRole: 'AGENCY',
-          timestamp: '3 days ago',
-          badge: 'Governance Active'
-        }
-      ];
-      setActivities(initialActivities);
+      let portalActivities: TransparencyActivityItem[] = [];
+      if (typeof window !== 'undefined') {
+        try {
+          const actRaw = localStorage.getItem(`tasknera_portal_activities_${resolvedClient.replace(/\s+/g, '_')}`);
+          if (actRaw) {
+            portalActivities = JSON.parse(actRaw);
+          }
+        } catch {}
+      }
+
+      if (portalActivities.length === 0) {
+        portalActivities = [
+          {
+            id: `act-${Date.now()}`,
+            title: 'Hiring Portal Initialized',
+            detail: `Secure client portal active for ${resolvedClient}. Upload your Job Descriptions (JDs) to begin recruitment sourcing.`,
+            actor: 'HireIQ Transparency Engine',
+            actorRole: 'AGENCY',
+            timestamp: 'Just now',
+            badge: 'Portal Ready'
+          }
+        ];
+      }
+      setActivities(portalActivities);
 
     } catch (e) {
       console.error('[Client Portal] Load error:', e);
     } finally {
       setIsLoading(false);
     }
-  }, [clientParam, token]);
+  }, [clientParam, contactParam, token]);
 
   useEffect(() => {
     loadPortalData();
   }, [loadPortalData]);
+
+  // Prompt the client to upload their JD when entering the portal if no JDs exist yet
+  useEffect(() => {
+    if (!isLoading && jobs.length === 0 && !hasAutoPromptedRef.current) {
+      hasAutoPromptedRef.current = true;
+      setIsJdModalOpen(true);
+    }
+  }, [isLoading, jobs.length]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Action: Submit New JD
@@ -528,7 +394,18 @@ function ClientSharePortalContent() {
         timestamp: 'Just now',
         badge: 'New Requisition'
       };
-      setActivities(prev => [newActivity, ...prev]);
+      setActivities(prev => {
+        const next = [newActivity, ...prev];
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(
+              `tasknera_portal_activities_${clientName.replace(/\s+/g, '_')}`,
+              JSON.stringify(next)
+            );
+          } catch {}
+        }
+        return next;
+      });
 
       // 4. Reset Form & Show Success Banner
       setIsJdModalOpen(false);
@@ -748,7 +625,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
   }, [candidates, selectedJobId, statusFilter, searchQuery]);
 
   const totalProfilesScreened = useMemo(() => {
-    return jobs.reduce((acc, j) => acc + (j.screenedCount || 0), 0) || 54;
+    return jobs.reduce((acc, j) => acc + (j.screenedCount || 0), 0);
   }, [jobs]);
 
   const totalProfilesSubmitted = candidates.length;
@@ -898,7 +775,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                 <span>🔍</span>
               </div>
               <div className="text-2xl sm:text-3xl font-extrabold text-[#101828]">
-                {totalProfilesScreened}+
+                {totalProfilesScreened > 0 ? `${totalProfilesScreened}+` : '0'}
               </div>
               <p className="text-[11px] text-slate-500 mt-1">Resumes evaluated against criteria</p>
             </div>
@@ -932,6 +809,73 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
          4. MAIN CONTENT & TABS
       ───────────────────────────────────────────────────────────── */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
+        {/* Onboarding Banner when no JDs uploaded yet */}
+        {jobs.length === 0 && (
+          <div className="bg-white border-2 border-dashed border-[#3563E9]/40 rounded-3xl p-6 sm:p-10 shadow-xs space-y-6">
+            <div className="max-w-2xl mx-auto text-center space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center text-2xl mx-auto border border-[#D1E0FF]">
+                📋
+              </div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-[#EFF4FF] text-[#3563E9] border border-[#D1E0FF]">
+                <span className="w-2 h-2 rounded-full bg-[#3563E9] animate-pulse" />
+                Step 1: Requisition Intake
+              </div>
+              <h3 className="text-xl sm:text-2xl font-extrabold text-[#101828]">
+                Upload Your Job Description (JD) to Start Candidate Sourcing
+              </h3>
+              <p className="text-xs sm:text-sm text-[#667085] leading-relaxed">
+                Welcome to the client hiring &amp; transparency portal for <span className="font-bold text-slate-800">{clientName}</span>. To start sourcing and screening top talent for your team, please upload your Job Description (JD) or requirement criteria below.
+              </p>
+
+              <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsJdModalOpen(true)}
+                  className="px-6 py-3 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs sm:text-sm font-bold rounded-xl transition-all shadow-sm cursor-pointer flex items-center gap-2 hover:-translate-y-0.5"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Upload Job Description (JD)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 3 Step Transparency Process */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-6 border-t border-[#EAECF0]">
+              <div className="p-4 rounded-2xl bg-[#F7F8FC] border border-[#EAECF0] space-y-1.5">
+                <div className="flex items-center gap-2 text-xs font-bold text-[#3563E9]">
+                  <span className="w-5 h-5 rounded-full bg-[#EFF4FF] border border-[#D1E0FF] flex items-center justify-center text-[10px]">1</span>
+                  <span>Submit Requirements</span>
+                </div>
+                <p className="text-[11px] text-[#667085] leading-relaxed">
+                  Upload your JD document (PDF, Word) or paste role responsibilities, required skills, and salary budget.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[#F7F8FC] border border-[#EAECF0] space-y-1.5">
+                <div className="flex items-center gap-2 text-xs font-bold text-[#101828]">
+                  <span className="w-5 h-5 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px]">2</span>
+                  <span>Deterministic Sourcing</span>
+                </div>
+                <p className="text-[11px] text-[#667085] leading-relaxed">
+                  HireIQ recruiters source active talent and evaluate knockout criteria with full evidence citations.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[#F7F8FC] border border-[#EAECF0] space-y-1.5">
+                <div className="flex items-center gap-2 text-xs font-bold text-[#15966A]">
+                  <span className="w-5 h-5 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[10px]">3</span>
+                  <span>Review &amp; Schedule</span>
+                </div>
+                <p className="text-[11px] text-[#667085] leading-relaxed">
+                  Review verified candidate profiles, download executive summaries, and schedule Round 1/2 interviews directly here.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Navigation Tabs */}
         <div className="flex items-center justify-between gap-4 border-b border-[#EAECF0] pb-2 overflow-x-auto">
           <div className="flex items-center gap-2">
@@ -1039,22 +983,48 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
             </div>
 
             {/* Candidate Cards */}
-            {filteredCandidates.length === 0 ? (
+            {jobs.length === 0 ? (
+              <div className="bg-white border border-[#EAECF0] rounded-3xl p-12 text-center space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center text-2xl mx-auto border border-[#D1E0FF]">
+                  📋
+                </div>
+                <h3 className="text-base font-bold text-[#101828]">Awaiting Job Description (JD)</h3>
+                <p className="text-xs text-[#667085] max-w-sm mx-auto">
+                  Please upload your Job Description to initiate talent sourcing. Once uploaded, verified candidate shortlists screened by our agency team will appear here.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsJdModalOpen(true)}
+                  className="px-5 py-2.5 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer inline-flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Upload Job Description (JD)</span>
+                </button>
+              </div>
+            ) : filteredCandidates.length === 0 ? (
               <div className="bg-white border border-[#EAECF0] rounded-3xl p-12 text-center space-y-3">
                 <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center text-2xl mx-auto border border-[#D1E0FF]">
                   👥
                 </div>
-                <h3 className="text-base font-bold text-[#101828]">No candidates match this filter</h3>
+                <h3 className="text-base font-bold text-[#101828]">
+                  {candidates.length === 0 ? 'Candidate Sourcing & Screening in Progress' : 'No candidates match this filter'}
+                </h3>
                 <p className="text-xs text-[#667085] max-w-sm mx-auto">
-                  Our agency recruiters are actively screening incoming resumes. You will see newly verified candidates appear here automatically.
+                  {candidates.length === 0
+                    ? 'Our agency recruiters have received your requirements and are actively sourcing candidate profiles. As candidates pass mandatory verification, they will be submitted directly to this portal.'
+                    : 'Try clearing your filters or search term to see other candidates.'}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => { setSelectedJobId('all'); setStatusFilter('all'); setSearchQuery(''); }}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl"
-                >
-                  Clear Filters
-                </button>
+                {candidates.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedJobId('all'); setStatusFilter('all'); setSearchQuery(''); }}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl cursor-pointer"
+                  >
+                    Clear Filters
+                  </button>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -1235,65 +1205,87 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {jobs.map(job => (
-                <div key={job.id} className="bg-white border border-[#EAECF0] hover:border-slate-300 rounded-3xl p-5 shadow-xs space-y-4 flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <span className="inline-block text-[10px] font-extrabold uppercase tracking-wider text-[#3563E9] bg-[#EFF4FF] px-2 py-0.5 rounded-md mb-1.5 border border-[#D1E0FF]">
-                          {job.department || 'Active Position'}
+            {jobs.length === 0 ? (
+              <div className="bg-white border border-[#EAECF0] rounded-3xl p-12 text-center space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center text-2xl mx-auto border border-[#D1E0FF]">
+                  📋
+                </div>
+                <h3 className="text-base font-bold text-[#101828]">No Job Descriptions Uploaded Yet</h3>
+                <p className="text-xs text-[#667085] max-w-sm mx-auto">
+                  You haven&apos;t submitted any Job Descriptions yet. Click below to upload your first requisition and initiate talent sourcing.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsJdModalOpen(true)}
+                  className="px-5 py-2.5 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer inline-flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Upload Job Description (JD)</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {jobs.map(job => (
+                  <div key={job.id} className="bg-white border border-[#EAECF0] hover:border-slate-300 rounded-3xl p-5 shadow-xs space-y-4 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <span className="inline-block text-[10px] font-extrabold uppercase tracking-wider text-[#3563E9] bg-[#EFF4FF] px-2 py-0.5 rounded-md mb-1.5 border border-[#D1E0FF]">
+                            {job.department || 'Active Position'}
+                          </span>
+                          <h4 className="text-base font-bold text-[#101828]">{job.title}</h4>
+                          <div className="text-xs text-[#667085] mt-0.5">
+                            📍 {job.location} • 🏢 {job.workMode} • 💰 {job.salary}
+                          </div>
+                        </div>
+
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
+                          {job.status}
                         </span>
-                        <h4 className="text-base font-bold text-[#101828]">{job.title}</h4>
-                        <div className="text-xs text-[#667085] mt-0.5">
-                          📍 {job.location} • 🏢 {job.workMode} • 💰 {job.salary}
+                      </div>
+
+                      {job.description && (
+                        <p className="text-xs text-slate-500 mt-3 line-clamp-2 leading-relaxed">
+                          {job.description}
+                        </p>
+                      )}
+
+                      {/* Funnel Transparency Bar */}
+                      <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-2 text-center text-xs">
+                        <div className="bg-[#F7F8FC] rounded-xl p-2">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase">Sourced</div>
+                          <div className="text-base font-extrabold text-slate-800">{job.sourcedCount}</div>
+                        </div>
+                        <div className="bg-[#F7F8FC] rounded-xl p-2">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase">Screened</div>
+                          <div className="text-base font-extrabold text-slate-800">{job.screenedCount}</div>
+                        </div>
+                        <div className="bg-[#EFF4FF] border border-[#D1E0FF] rounded-xl p-2">
+                          <div className="text-[10px] font-bold text-[#3563E9] uppercase">Submitted</div>
+                          <div className="text-base font-extrabold text-[#3563E9]">{job.submittedCount}</div>
                         </div>
                       </div>
-
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
-                        {job.status}
-                      </span>
                     </div>
 
-                    {job.description && (
-                      <p className="text-xs text-slate-500 mt-3 line-clamp-2 leading-relaxed">
-                        {job.description}
-                      </p>
-                    )}
-
-                    {/* Funnel Transparency Bar */}
-                    <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-2 text-center text-xs">
-                      <div className="bg-[#F7F8FC] rounded-xl p-2">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase">Sourced</div>
-                        <div className="text-base font-extrabold text-slate-800">{job.sourcedCount}</div>
-                      </div>
-                      <div className="bg-[#F7F8FC] rounded-xl p-2">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase">Screened</div>
-                        <div className="text-base font-extrabold text-slate-800">{job.screenedCount}</div>
-                      </div>
-                      <div className="bg-[#EFF4FF] border border-[#D1E0FF] rounded-xl p-2">
-                        <div className="text-[10px] font-bold text-[#3563E9] uppercase">Submitted</div>
-                        <div className="text-base font-extrabold text-[#3563E9]">{job.submittedCount}</div>
-                      </div>
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-[11px] text-slate-400">Created {job.createdAt}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedJobId(job.id);
+                          setActiveTab('candidates');
+                        }}
+                        className="text-xs font-bold text-[#3563E9] hover:underline cursor-pointer"
+                      >
+                        View Candidates →
+                      </button>
                     </div>
                   </div>
-
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                    <span className="text-[11px] text-slate-400">Created {job.createdAt}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedJobId(job.id);
-                        setActiveTab('candidates');
-                      }}
-                      className="text-xs font-bold text-[#3563E9] hover:underline cursor-pointer"
-                    >
-                      View Candidates →
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
