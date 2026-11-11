@@ -165,7 +165,7 @@ export default function ClientProfilesPage() {
   const handleGenerateShareLink = () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const token = `cli-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-    const fullUrl = `${origin}/share/${token}`;
+    const fullUrl = `${origin}/share/${token}?client=${encodeURIComponent(selectedClientName)}`;
     
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + expirationDays);
@@ -174,7 +174,7 @@ export default function ClientProfilesPage() {
     const newShare: SharedClientLink = {
       id: `share-${Date.now()}`,
       clientName: selectedClientName,
-      jobTitle: selectedJob?.title || 'Senior Engineering Positions',
+      jobTitle: selectedJobId === 'default' || !selectedJobId ? 'All Client Positions' : (selectedJob?.title || 'All Client Positions'),
       token,
       shareUrl: fullUrl,
       clientEmail: clientEmail.trim() || undefined,
@@ -193,7 +193,7 @@ export default function ClientProfilesPage() {
       // ignore
     }
 
-    showToast('Client share link generated successfully!');
+    showToast('Client hiring & transparency link generated successfully!');
   };
 
   const handleCopyLink = (url: string) => {
@@ -445,8 +445,8 @@ export default function ClientProfilesPage() {
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-[#1E293B]">Share Client Portal Link</h2>
-                    <p className="text-xs text-slate-500">Generate a secure, live review link for your client hiring team</p>
+                    <h2 className="text-xl font-bold text-[#1E293B]">Client Hiring & Transparency Portal</h2>
+                    <p className="text-xs text-slate-500">Generate a live portal link for client JD uploads, sourcing visibility, and candidate reviews</p>
                   </div>
                 </div>
                 <button
@@ -585,10 +585,10 @@ export default function ClientProfilesPage() {
                       <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                       </svg>
-                      Share Link Created for {selectedClientName}
+                      Share & Transparency Portal Created for {selectedClientName}
                     </div>
                     <p className="mt-1 text-xs text-emerald-700">
-                      Your client can now view candidates, review qualifications, and submit feedback without requiring system login credentials.
+                      Your client can now directly upload new JDs into HireIQ, monitor live screening progress, and review screened &amp; submitted candidate profiles with full transparency.
                     </p>
                   </div>
 
