@@ -789,29 +789,32 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
         {/* Onboarding Banner when no JDs uploaded yet */}
         {jobs.length === 0 && (
-          <div className="bg-white border-2 border-dashed border-[#3563E9]/40 rounded-3xl p-6 sm:p-10 shadow-xs space-y-6">
-            <div className="max-w-2xl mx-auto text-center space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center mx-auto border border-[#D1E0FF]">
-                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          <div className="bg-white border border-[#EAECF0] rounded-3xl p-6 sm:p-10 shadow-sm space-y-8 relative overflow-hidden bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(53,99,233,0.05),transparent)]">
+            <div className="max-w-2xl mx-auto text-center space-y-3.5">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-b from-[#EFF4FF] to-[#D1E0FF]/40 border border-[#D1E0FF] text-[#3563E9] flex items-center justify-center mx-auto shadow-xs">
+                <svg className="w-6 h-6 text-[#3563E9]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-[#EFF4FF] text-[#3563E9] border border-[#D1E0FF]">
-                <span className="w-2 h-2 rounded-full bg-[#3563E9] animate-pulse" />
-                Step 1: Requisition Intake
+
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-bold tracking-wide uppercase bg-[#EFF4FF] text-[#3563E9] border border-[#D1E0FF]/80">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#3563E9] animate-pulse" />
+                Step 1 • Requisition Intake
               </div>
-              <h3 className="text-xl sm:text-2xl font-extrabold text-[#101828]">
+
+              <h3 className="text-xl sm:text-2xl font-extrabold text-[#101828] tracking-tight">
                 Upload Your Job Description (JD) to Start Candidate Sourcing
               </h3>
-              <p className="text-xs sm:text-sm text-[#667085] leading-relaxed">
-                Welcome to the client hiring &amp; transparency portal for <span className="font-bold text-slate-800">{clientName}</span>. To start sourcing and screening top talent for your team, please upload your Job Description (JD) or requirement criteria below.
+
+              <p className="text-xs sm:text-sm text-[#667085] leading-relaxed max-w-xl mx-auto">
+                Welcome to the client hiring &amp; transparency portal for <span className="font-bold text-[#101828]">{clientName}</span>. To start sourcing and screening top talent for your team, please upload your Job Description (JD) or requirement criteria below.
               </p>
 
               <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
                 <button
                   type="button"
                   onClick={() => setIsJdModalOpen(true)}
-                  className="px-6 py-3 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs sm:text-sm font-bold rounded-xl transition-all shadow-sm cursor-pointer flex items-center gap-2 hover:-translate-y-0.5"
+                  className="px-6 py-3 bg-[#3563E9] hover:bg-[#2851D6] active:scale-[0.99] text-white text-xs sm:text-sm font-bold rounded-xl transition-all shadow-md shadow-[#3563E9]/20 cursor-pointer flex items-center gap-2 hover:-translate-y-0.5"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -822,35 +825,71 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
             </div>
 
             {/* 3 Step Transparency Process */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-6 border-t border-[#EAECF0]">
-              <div className="p-4 rounded-2xl bg-[#F7F8FC] border border-[#EAECF0] space-y-1.5">
-                <div className="flex items-center gap-2 text-xs font-bold text-[#3563E9]">
-                  <span className="w-5 h-5 rounded-full bg-[#EFF4FF] border border-[#D1E0FF] flex items-center justify-center text-[10px]">1</span>
-                  <span>Submit Requirements</span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-8 border-t border-[#EAECF0]">
+              {/* Step 1 */}
+              <div className="bg-[#F8F9FC] hover:bg-white border border-[#EAECF0] hover:border-[#3563E9]/30 rounded-2xl p-5 transition-all shadow-xs hover:shadow-sm space-y-3 group">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#3563E9] bg-[#EFF4FF] border border-[#D1E0FF] px-2 py-0.5 rounded-md">
+                    Step 01
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-white border border-[#EAECF0] text-[#3563E9] flex items-center justify-center shadow-xs group-hover:border-[#3563E9]/30 transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                  </div>
                 </div>
-                <p className="text-[11px] text-[#667085] leading-relaxed">
-                  Upload your JD document (PDF, Word) or paste role responsibilities, required skills, and salary budget.
-                </p>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-[#101828] group-hover:text-[#3563E9] transition-colors">
+                    Submit Requirements
+                  </h4>
+                  <p className="text-xs text-[#667085] leading-relaxed mt-1">
+                    Upload your JD file (PDF, Word) or paste role criteria, mandatory qualifications, and compensation ranges.
+                  </p>
+                </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#F7F8FC] border border-[#EAECF0] space-y-1.5">
-                <div className="flex items-center gap-2 text-xs font-bold text-[#101828]">
-                  <span className="w-5 h-5 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px]">2</span>
-                  <span>Deterministic Sourcing</span>
+              {/* Step 2 */}
+              <div className="bg-[#F8F9FC] hover:bg-white border border-[#EAECF0] hover:border-[#3563E9]/30 rounded-2xl p-5 transition-all shadow-xs hover:shadow-sm space-y-3 group">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#3563E9] bg-[#EFF4FF] border border-[#D1E0FF] px-2 py-0.5 rounded-md">
+                    Step 02
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-white border border-[#EAECF0] text-[#3563E9] flex items-center justify-center shadow-xs group-hover:border-[#3563E9]/30 transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  </div>
                 </div>
-                <p className="text-[11px] text-[#667085] leading-relaxed">
-                  HireIQ recruiters source active talent and evaluate knockout criteria with full evidence citations.
-                </p>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-[#101828] group-hover:text-[#3563E9] transition-colors">
+                    Deterministic Sourcing
+                  </h4>
+                  <p className="text-xs text-[#667085] leading-relaxed mt-1">
+                    HireIQ recruiters source active talent and evaluate mandatory knockout criteria with full evidence citations.
+                  </p>
+                </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#F7F8FC] border border-[#EAECF0] space-y-1.5">
-                <div className="flex items-center gap-2 text-xs font-bold text-[#15966A]">
-                  <span className="w-5 h-5 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[10px]">3</span>
-                  <span>Review &amp; Schedule</span>
+              {/* Step 3 */}
+              <div className="bg-[#F8F9FC] hover:bg-white border border-[#EAECF0] hover:border-[#3563E9]/30 rounded-2xl p-5 transition-all shadow-xs hover:shadow-sm space-y-3 group">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#3563E9] bg-[#EFF4FF] border border-[#D1E0FF] px-2 py-0.5 rounded-md">
+                    Step 03
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-white border border-[#EAECF0] text-[#3563E9] flex items-center justify-center shadow-xs group-hover:border-[#3563E9]/30 transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
                 </div>
-                <p className="text-[11px] text-[#667085] leading-relaxed">
-                  Review verified candidate profiles, download executive summaries, and schedule Round 1/2 interviews directly here.
-                </p>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-[#101828] group-hover:text-[#3563E9] transition-colors">
+                    Review &amp; Schedule
+                  </h4>
+                  <p className="text-xs text-[#667085] leading-relaxed mt-1">
+                    Review verified candidate profiles, download executive summaries, and schedule Round 1 &amp; 2 interviews directly.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
