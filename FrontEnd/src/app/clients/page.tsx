@@ -227,34 +227,19 @@ export default function ClientsPage() {
         {/* Enterprise KPI Overview */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
           <div className="bg-white border border-[#EAECF0] rounded-2xl p-5 shadow-xs">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#667085]">Active Client Portals</span>
-              <div className="w-8 h-8 rounded-lg bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center font-bold">
-                🔗
-              </div>
-            </div>
+            <span className="text-xs font-bold uppercase tracking-wider text-[#667085] block mb-2">Active Client Portals</span>
             <div className="text-3xl font-extrabold text-[#101828]">{sharedLinks.length}</div>
             <p className="text-xs text-[#667085] mt-1">Dedicated links created for clients</p>
           </div>
 
           <div className="bg-white border border-[#EAECF0] rounded-2xl p-5 shadow-xs">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#667085]">Client Accounts</span>
-              <div className="w-8 h-8 rounded-lg bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center font-bold">
-                🏢
-              </div>
-            </div>
+            <span className="text-xs font-bold uppercase tracking-wider text-[#667085] block mb-2">Client Accounts</span>
             <div className="text-3xl font-extrabold text-[#101828]">{clientAccounts.length}</div>
             <p className="text-xs text-[#667085] mt-1">Active hiring accounts in HireIQ</p>
           </div>
 
           <div className="bg-white border border-[#EAECF0] rounded-2xl p-5 shadow-xs">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#667085]">Connected Requisitions</span>
-              <div className="w-8 h-8 rounded-lg bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center font-bold">
-                💼
-              </div>
-            </div>
+            <span className="text-xs font-bold uppercase tracking-wider text-[#667085] block mb-2">Connected Requisitions</span>
             <div className="text-3xl font-extrabold text-[#101828]">{jobs.length}</div>
             <p className="text-xs text-[#667085] mt-1">Open positions connected to clients</p>
           </div>
@@ -559,8 +544,11 @@ export default function ClientsPage() {
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-[#101828] mb-1.5">Access Security</label>
-                      <div className="h-[38px] rounded-xl bg-slate-50 border border-[#EAECF0] px-3 flex items-center text-[11px] font-semibold text-[#667085]">
-                        🔒 Token-Protected Direct Access
+                      <div className="h-[38px] rounded-xl bg-slate-50 border border-[#EAECF0] px-3 flex items-center gap-1.5 text-[11px] font-semibold text-[#667085]">
+                        <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        <span>Token-Protected Direct Access</span>
                       </div>
                     </div>
                   </div>
