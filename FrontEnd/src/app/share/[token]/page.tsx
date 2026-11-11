@@ -668,24 +668,6 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
               </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 text-xs text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-3 py-1.5 rounded-xl font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Live ATS Synchronization Active</span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsJdModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer hover:-translate-y-0.5"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-              </svg>
-              <span>Submit New JD</span>
-            </button>
-          </div>
         </div>
       </header>
 
