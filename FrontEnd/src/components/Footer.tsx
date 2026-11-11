@@ -24,8 +24,8 @@ const FOOTER_NAV: {
   ],
   company: [
     { label: 'Settings', href: '/settings' },
-    { label: 'Book a Demo Session', href: 'mailto:operations@tasknera.com?subject=HireIQ%20Demo%20Session%20Request' },
-    { label: 'operations@tasknera.com', href: 'mailto:operations@tasknera.com' },
+    { label: 'Book a Demo Session', href: '/contact' },
+    { label: 'Contact Us', href: '/contact' },
   ],
 };
 

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import Header from '@/components/Header';
 import { useAuth } from '@/context/AuthContext';
 import { atsStore } from '@/lib/atsStore';
@@ -200,16 +201,16 @@ export default function BillingPage() {
               Your current plan and usage, calculated from stored records in this workspace.
             </p>
           </div>
-          <a
-            href={getMailtoUrl(activePlan.name === 'Enterprise' ? 'Enterprise' : 'Professional')}
+          <Link
+            href="/contact?subject=Subscription%20Upgrade"
             className="inline-flex items-center gap-2 rounded-xl bg-[#3563E9] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#2851D6] shadow-xs transition shrink-0"
-            title="Open email to operations@tasknera.com"
+            title="Contact operations team for plan upgrade"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
-            <span>Email operations@tasknera.com to Upgrade</span>
-          </a>
+            <span>Contact Operations to Upgrade</span>
+          </Link>
         </div>
 
         {/* 2 Main Top Cards (Matches UI Screenshot) */}
@@ -272,15 +273,15 @@ export default function BillingPage() {
               </p>
               <div className="pt-2 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-2">
                 <span className="font-semibold text-slate-700">Need to upgrade or change seats?</span>
-                <a
-                  href={getMailtoUrl()}
+                <Link
+                  href="/contact?subject=Subscription%20Seat%20Change"
                   className="inline-flex items-center gap-1.5 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs font-bold text-[#3563E9] hover:bg-blue-50/60 hover:border-blue-200 shadow-2xs transition"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
-                  <span>Email operations@tasknera.com</span>
-                </a>
+                  <span>Contact Operations</span>
+                </Link>
               </div>
             </div>
           </div>
@@ -459,16 +460,16 @@ export default function BillingPage() {
                       {isCurrent ? 'Active Plan' : `Upgrade to ${plan.name}`}
                     </button>
                     {!isCurrent && (
-                      <a
-                        href={getMailtoUrl(plan.name)}
+                      <Link
+                        href={`/contact?subject=${encodeURIComponent(`Upgrade Inquiry: ${plan.name}`)}`}
                         className="w-full flex items-center justify-center gap-1.5 py-1 rounded-lg text-[11px] font-semibold text-slate-500 hover:text-[#3563E9] transition"
-                        title={`Email operations@tasknera.com to upgrade to ${plan.name}`}
+                        title={`Contact operations team to upgrade to ${plan.name}`}
                       >
                         <svg className="w-3.5 h-3.5 text-[#3563E9]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
-                        <span>Email operations@tasknera.com</span>
-                      </a>
+                        <span>Contact Operations Desk</span>
+                      </Link>
                     )}
                   </div>
                 </div>
@@ -546,16 +547,16 @@ export default function BillingPage() {
                 </div>
 
                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
-                  <a
-                    href={getMailtoUrl(selectedUpgradePlan)}
+                  <Link
+                    href={`/contact?subject=${encodeURIComponent(`Upgrade Inquiry: ${selectedUpgradePlan}`)}`}
                     className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#3563E9] hover:underline"
-                    title="Send pre-filled email from your mail client"
+                    title="Visit Contact Us section"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
-                    <span>Or email operations@tasknera.com</span>
-                  </a>
+                    <span>Or contact operations desk</span>
+                  </Link>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"

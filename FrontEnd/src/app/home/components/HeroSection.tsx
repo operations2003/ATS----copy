@@ -125,12 +125,13 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onBookDemo }) => {
             <div className="flex items-center gap-2 text-xs text-slate-500 mb-8">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
               <span>Enterprise demo scheduling &amp; queries:</span>
-              <a 
-                href="mailto:operations@tasknera.com?subject=HireIQ%20Demo%20Session%20Request&body=Hi%20HireIQ%20Team%2C%0A%0AI%20would%20like%20to%20schedule%20a%20demo%20session%20for%20HireIQ.%0A%0ACompany%3A%20%0AName%3A%20%0APreferred%20Time%3A%20" 
-                className="font-bold text-brand-orange hover:underline"
+              <Link 
+                href="/contact" 
+                className="font-bold text-brand-orange hover:underline flex items-center gap-1"
               >
-                operations@tasknera.com
-              </a>
+                <span>Contact Operations Team</span>
+                <span aria-hidden="true">→</span>
+              </Link>
             </div>
 
             <div className="flex flex-wrap items-center gap-5 text-xs sm:text-sm font-medium text-brand-charcoal-3">
