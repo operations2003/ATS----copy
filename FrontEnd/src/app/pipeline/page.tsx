@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Header from '@/components/Header';
 import { useAuth } from '@/context/AuthContext';
 import { atsStore } from '@/lib/atsStore';
+import ClientSubmissionDossierModal, { SubmissionDossierData } from '@/components/ClientSubmissionDossierModal';
 
 type PipelineStage =
   | 'Screening'
@@ -35,6 +36,37 @@ interface PipelineCandidate {
   requisitionTitle?: string;
   decision?: 'SUBMIT' | 'REVIEW' | 'DO NOT SUBMIT';
   recruiterName?: string;
+
+  // The 30 submission fields filled by recruiter
+  submissionDate?: string;
+  jdName?: string;
+  clientName?: string;
+  candidateName?: string;
+  emailId?: string;
+  phoneNumber?: string;
+  currentLocation?: string;
+  currentDesignation?: string;
+  totalWorkExperience?: string;
+  relevantWorkExperience?: string;
+  noticePeriod?: string;
+  currentCtc?: string;
+  expectedCtc?: string;
+  cvLink?: string;
+  atsScoreDisplay?: string;
+  candidateStatus?: string;
+  screeningStatus?: string;
+  recruiterRemarks?: string;
+  interviewRound1?: string;
+  interviewRound2?: string;
+  finalInterview?: string;
+  offerStatus?: string;
+  joiningDate?: string;
+  joiningStatus?: string;
+  rejectionReason?: string;
+  lastFollowUpDate?: string;
+  nextFollowUpDate?: string;
+  response?: string;
+  overallStatus?: string;
 }
 
 interface ScheduleForm {
@@ -173,6 +205,11 @@ export default function PipelinePage() {
   const [candidateRoundHistory, setCandidateRoundHistory] = useState<Record<string, CandidateRoundOutcome[]>>({});
   const [candidateInterviewsMap, setCandidateInterviewsMap] = useState<Record<string, any[]>>({});
   const [selectedHistoryCandidate, setSelectedHistoryCandidate] = useState<PipelineCandidate | null>(null);
+
+  // Submission Dossier Modal State (Assigned Recruiter fills 30 fields)
+  const [dossierCandidate, setDossierCandidate] = useState<PipelineCandidate | null>(null);
+  const [dossierTargetStage, setDossierTargetStage] = useState<PipelineStage | null>(null);
+  const [isDossierOpen, setIsDossierOpen] = useState(false);
 
   // Load real requisitions and parsed candidates
   useEffect(() => {
@@ -419,6 +456,35 @@ export default function PipelinePage() {
           requisitionTitle,
           decision,
           recruiterName,
+          submissionDate: c.submissionDate,
+          jdName: c.jdName,
+          clientName: c.clientName,
+          candidateName: c.candidateName,
+          emailId: c.emailId || c.email,
+          phoneNumber: c.phoneNumber || c.phone,
+          currentLocation: c.currentLocation || c.location,
+          currentDesignation: c.currentDesignation || c.role || c.currentTitle,
+          totalWorkExperience: c.totalWorkExperience || c.exp || c.totalExperience,
+          relevantWorkExperience: c.relevantWorkExperience,
+          noticePeriod: c.noticePeriod,
+          currentCtc: c.currentCtc,
+          expectedCtc: c.expectedCtc,
+          cvLink: c.cvLink,
+          atsScoreDisplay: c.atsScoreDisplay,
+          candidateStatus: c.candidateStatus,
+          screeningStatus: c.screeningStatus,
+          recruiterRemarks: c.recruiterRemarks,
+          interviewRound1: c.interviewRound1,
+          interviewRound2: c.interviewRound2,
+          finalInterview: c.finalInterview,
+          offerStatus: c.offerStatus,
+          joiningDate: c.joiningDate,
+          joiningStatus: c.joiningStatus,
+          rejectionReason: c.rejectionReason,
+          lastFollowUpDate: c.lastFollowUpDate,
+          nextFollowUpDate: c.nextFollowUpDate,
+          response: c.response,
+          overallStatus: c.overallStatus,
         });
       }
 
@@ -719,18 +785,18 @@ export default function PipelinePage() {
       );
 
       if (isShortlisted) {
-        const totalExp = fullCand?.exp || fullCand?.totalExperience || fullCand?.total_experience || '5.5 Years';
-        const numExp = parseFloat(String(totalExp).replace(/[^0-9.]/g, '')) || 5;
-        const relExp = fullCand?.relevantWorkExperience || `${Math.max(1, Math.round(numExp * 0.8 * 10) / 10)} Years`;
-        const estLpa = Math.max(8, Math.round(numExp * 2.5));
-        const curCtc = fullCand?.currentCtc || fullCand?.currentSalary || `₹${estLpa} LPA`;
-        const expCtc = fullCand?.expectedCtc || fullCand?.expectedSalary || `₹${Math.round(estLpa * 1.3)} LPA`;
-        const notice = fullCand?.noticePeriod || fullCand?.notice || '30 Days (Serving Notice)';
-        const submissionDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-        const nextThreeDays = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-        const recruiter = recruiterName || candidate.recruiterName || 'Agency Recruiter';
-        const cvFileName = fullCand?.fileName || fullCand?.resumeFileName || `${candidate.name.replace(/\s+/g, '_')}_CV.pdf`;
+        const totalExp = candidate.totalWorkExperience || fullCand?.exp || fullCand?.totalExperience || fullCand?.total_experience || '';
+        const relExp = candidate.relevantWorkExperience || fullCand?.relevantWorkExperience || 'Pending Recruiter Input';
+        const curCtc = candidate.currentCtc || fullCand?.currentCtc || fullCand?.currentSalary || 'Pending Recruiter Input';
+        const expCtc = candidate.expectedCtc || fullCand?.expectedCtc || fullCand?.expectedSalary || 'Pending Recruiter Input';
+        const notice = candidate.noticePeriod || fullCand?.noticePeriod || fullCand?.notice || 'Pending Recruiter Input';
+        const submissionDate = candidate.submissionDate || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        const yesterday = candidate.lastFollowUpDate || new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        const nextThreeDays = candidate.nextFollowUpDate || '';
+        const recruiter = recruiterName || candidate.recruiterName || user?.name || user?.email || 'Agency Recruiter';
+        const remarks = candidate.recruiterRemarks || fullCand?.screeningInfo?.notes || 'Pending Recruiter Remarks';
+        const candidateResp = candidate.response || 'Pending Recruiter Follow-up';
+        const cvFileName = candidate.cvLink || fullCand?.fileName || fullCand?.resumeFileName || `${candidate.name.replace(/\s+/g, '_')}_CV.pdf`;
 
         const candidateEntry = {
           id: candidate.id,
@@ -752,47 +818,47 @@ export default function PipelinePage() {
           lastUpdatedDate: 'Just now',
           hasResume: true,
           resumeFileName: cvFileName,
-          screeningNote: fullCand?.screeningInfo?.notes || `Agency Screening Verdict: Mandatory requirements compliance verified. Shortlisted by ${recruiter}.`,
+          screeningNote: remarks,
           jobId: jobId || 'client-job',
           jobTitle: requisitionTitle || 'Requisition Role',
           decision: 'SUBMIT',
           screeningEvidence: fullCand?.evidenceSnippets || fullCand?.screeningEvidence || [],
 
-          // The 30 executive fields
+          // The 30 executive fields filled by assigned recruiter
           submissionDate,
-          jdName: requisitionTitle || 'Requisition Role',
-          clientName: clientName,
+          jdName: candidate.jdName || requisitionTitle || 'Requisition Role',
+          clientName: candidate.clientName || clientName,
           recruiterName: recruiter,
-          candidateName: candidate.name,
-          emailId: fullCand?.email || `${candidate.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@candidate-profile.com`,
-          phoneNumber: fullCand?.phone || '+91 98765 43210',
-          currentLocation: fullCand?.location || 'Remote / Hybrid',
-          currentDesignation: candidate.role || fullCand?.currentTitle || 'Software Engineer',
+          candidateName: candidate.candidateName || candidate.name,
+          emailId: candidate.emailId || fullCand?.email || `${candidate.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@candidate-profile.com`,
+          phoneNumber: candidate.phoneNumber || fullCand?.phone || '+91 98765 43210',
+          currentLocation: candidate.currentLocation || fullCand?.location || 'Remote / Hybrid',
+          currentDesignation: candidate.currentDesignation || candidate.role || fullCand?.currentTitle || 'Software Engineer',
           totalWorkExperience: totalExp,
           relevantWorkExperience: relExp,
           noticePeriod: notice,
           currentCtc: curCtc,
           expectedCtc: expCtc,
           cvLink: cvFileName,
-          atsScoreDisplay: `${candidate.score}% Match`,
-          candidateStatus: portalStatus,
-          screeningStatus: 'Verified (100% Mandatory Criteria Met)',
-          recruiterRemarks: fullCand?.screeningInfo?.notes || `Agency Screening Verdict: Mandatory requirements compliance verified. Shortlisted by ${recruiter}.`,
-          interviewRound1: extraInterviewInfo?.round === 'Round 1 Phase' && extraInterviewInfo?.startAt
+          atsScoreDisplay: candidate.atsScoreDisplay || `${candidate.score}% Match`,
+          candidateStatus: candidate.candidateStatus || portalStatus,
+          screeningStatus: candidate.screeningStatus || 'Verified (100% Mandatory Criteria Met)',
+          recruiterRemarks: remarks,
+          interviewRound1: candidate.interviewRound1 || (extraInterviewInfo?.round === 'Round 1 Phase' && extraInterviewInfo?.startAt
             ? `Scheduled: ${new Date(extraInterviewInfo.startAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} with ${extraInterviewInfo.interviewer || recruiter}`
-            : (newStage === 'Round 1 Phase' ? 'Round 1 Scheduled' : 'Ready for Client Scheduling'),
-          interviewRound2: extraInterviewInfo?.round === 'Round 2 Phase' && extraInterviewInfo?.startAt
+            : (newStage === 'Round 1 Phase' ? 'Round 1 Scheduled' : 'Ready for Client Scheduling')),
+          interviewRound2: candidate.interviewRound2 || (extraInterviewInfo?.round === 'Round 2 Phase' && extraInterviewInfo?.startAt
             ? `Scheduled: ${new Date(extraInterviewInfo.startAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} with ${extraInterviewInfo.interviewer || recruiter}`
-            : (newStage === 'Round 2 Phase' ? 'Round 2 Scheduled' : 'Pending Round 1'),
-          finalInterview: newStage === 'Selected' ? 'Completed & Recommended' : 'Pending',
-          offerStatus: newStage === 'Offered' ? 'Offer Extended' : newStage === 'Selected' ? 'Selected / Offer Formulation' : 'Pending Client Shortlist Review',
-          joiningDate: newStage === 'Joined' ? 'Joined' : '30 Days Post Offer Release',
-          joiningStatus: newStage === 'Joined' ? 'Joined' : 'Pending Offer Acceptance',
-          rejectionReason: 'None (Profile Qualified)',
+            : (newStage === 'Round 2 Phase' ? 'Round 2 Scheduled' : 'Pending Round 1')),
+          finalInterview: candidate.finalInterview || (newStage === 'Selected' ? 'Completed & Recommended' : 'Pending'),
+          offerStatus: candidate.offerStatus || (newStage === 'Offered' ? 'Offer Extended' : newStage === 'Selected' ? 'Selected / Offer Formulation' : 'Pending Client Shortlist Review'),
+          joiningDate: candidate.joiningDate || (newStage === 'Joined' ? 'Joined' : 'Pending Offer Acceptance'),
+          joiningStatus: candidate.joiningStatus || (newStage === 'Joined' ? 'Joined' : 'Pending Offer Acceptance'),
+          rejectionReason: candidate.rejectionReason || 'None',
           lastFollowUpDate: yesterday,
           nextFollowUpDate: nextThreeDays,
-          response: 'Interested & Actively Available',
-          overallStatus: portalStatus,
+          response: candidateResp,
+          overallStatus: candidate.overallStatus || portalStatus,
         };
 
         if (existingIndex >= 0) {
@@ -963,6 +1029,61 @@ export default function PipelinePage() {
     }
   };
 
+  // Open 30-point submission dossier modal for assigned recruiter data entry
+  const handleOpenDossierModal = (candidate: PipelineCandidate, targetStage?: PipelineStage) => {
+    setDossierCandidate(candidate);
+    setDossierTargetStage(targetStage || null);
+    setIsDossierOpen(true);
+  };
+
+  // Save 30-point submission dossier filled by assigned recruiter
+  const handleSaveDossier = (data: SubmissionDossierData) => {
+    if (!dossierCandidate) return;
+
+    const nextStage = dossierTargetStage || dossierCandidate.stage;
+    const assignedRecruiter = data.recruiterName || user?.name || user?.email || 'Agency Recruiter';
+
+    const updatedCandidate: PipelineCandidate = {
+      ...dossierCandidate,
+      ...data,
+      stage: nextStage,
+      recruiterName: assignedRecruiter,
+      decision: 'SUBMIT',
+    };
+
+    setCandidates(prev =>
+      prev.map(c => (c.id === dossierCandidate.id ? updatedCandidate : c))
+    );
+
+    // Persist to pipeline localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        const rawPipe = localStorage.getItem(STORAGE_KEY);
+        let pipeList = rawPipe ? JSON.parse(rawPipe) : [];
+        if (Array.isArray(pipeList)) {
+          const idx = pipeList.findIndex((c: any) => c.id === dossierCandidate.id);
+          if (idx >= 0) {
+            pipeList[idx] = { ...pipeList[idx], ...updatedCandidate };
+          } else {
+            pipeList.push(updatedCandidate);
+          }
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(pipeList));
+        }
+      } catch {}
+    }
+
+    // Sync recruiter-filled 30 fields to client preview portal
+    syncCandidateToClientPortal(
+      updatedCandidate,
+      nextStage,
+      assignedRecruiter
+    );
+
+    setIsDossierOpen(false);
+    setDossierCandidate(null);
+    setDossierTargetStage(null);
+  };
+
   // Move candidate between stages
   const moveCandidate = (candidateId: string, direction: -1 | 1) => {
     const candidate = candidates.find(c => c.id === candidateId);
@@ -972,7 +1093,13 @@ export default function PipelinePage() {
     const nextStage = stages[currentIndex + direction];
     if (!nextStage) return;
 
-    // ── SPECIFIC TRIGGER: When moving to Round 1 Phase OR Round 2 Phase, show Schedule Interview modal ──
+    // ── SPECIFIC TRIGGER 1: When moving to Shortlisted (submitting to client portal), open the 30-Field Dossier Modal so the assigned recruiter can fill the data! ──
+    if (nextStage === 'Shortlisted') {
+      handleOpenDossierModal(candidate, 'Shortlisted');
+      return;
+    }
+
+    // ── SPECIFIC TRIGGER 2: When moving to Round 1 Phase OR Round 2 Phase, show Schedule Interview modal ──
     if (nextStage === 'Round 1 Phase' || nextStage === 'Round 2 Phase') {
       setSchedulingCandidate(candidate);
       setSchedulingTargetStage(nextStage);
@@ -1378,26 +1505,45 @@ export default function PipelinePage() {
                               );
                             })()}
 
-                            <div className="mt-2.5 flex items-center justify-between">
+                            <div className="mt-2.5 flex items-center justify-between gap-1.5">
                               <button
                                 type="button"
                                 onClick={() => moveCandidate(candidate.id, -1)}
                                 disabled={stageIndex === 0}
                                 aria-label={`Move ${candidate.name} to previous stage`}
                                 title="Move to previous stage"
-                                className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+                                className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35 shrink-0 cursor-pointer"
                               >
                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 12H5m0 0 6 6m-6-6 6-6" />
                                 </svg>
                               </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleOpenDossierModal(candidate)}
+                                className={`flex-1 py-1 px-2 rounded-lg border text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer truncate ${
+                                  candidate.noticePeriod || candidate.currentCtc
+                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                                    : 'border-blue-200 bg-blue-50 text-[#3563E9] hover:bg-blue-100'
+                                }`}
+                                title="Assigned Recruiter: Click to fill or edit the 30 client submission fields"
+                              >
+                                <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                <span className="truncate">
+                                  {candidate.noticePeriod || candidate.currentCtc ? '30 Details ✓' : 'Fill 30 Details'}
+                                </span>
+                              </button>
+
                               <button
                                 type="button"
                                 onClick={() => moveCandidate(candidate.id, 1)}
                                 disabled={stageIndex === stages.length - 1}
                                 aria-label={`Move ${candidate.name} to next stage`}
                                 title="Move to next stage"
-                                className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+                                className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35 shrink-0 cursor-pointer"
                               >
                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 12h14m0 0-6-6m6 6-6 6" />
@@ -2162,6 +2308,24 @@ export default function PipelinePage() {
           </div>
         );
       })()}
+
+      {/* ── CLIENT SUBMISSION DOSSIER MODAL (ASSIGNED RECRUITER 30 DATA POINTS) ── */}
+      {isDossierOpen && dossierCandidate && (
+        <ClientSubmissionDossierModal
+          isOpen={isDossierOpen}
+          onClose={() => {
+            setIsDossierOpen(false);
+            setDossierCandidate(null);
+            setDossierTargetStage(null);
+          }}
+          candidate={dossierCandidate}
+          targetStage={dossierTargetStage}
+          onSave={handleSaveDossier}
+          assignedRecruiterName={dossierCandidate.recruiterName || user?.name || user?.email || 'Agency Recruiter'}
+          defaultClientName={dossierCandidate.clientName || 'Client Partner'}
+          defaultJdName={dossierCandidate.requisitionTitle || 'Requisition Role'}
+        />
+      )}
     </>
   );
 }

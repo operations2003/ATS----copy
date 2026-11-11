@@ -9,6 +9,7 @@ export interface SelectedCandidateSummary {
   currentTitle?: string;
   currentCompany?: string;
   totalExperienceYears?: number;
+  [key: string]: any;
 }
 
 interface ClientShareCreateModalProps {
@@ -85,9 +86,8 @@ export default function ClientShareCreateModal({
 
           for (const cand of selectedCandidates) {
             const existsIdx = existingCands.findIndex((c: any) => c.id === cand.id);
-            const numExp = cand.totalExperienceYears || 5;
-            const estLpa = Math.max(8, Math.round(numExp * 2.5));
-            const submissionDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+            const numExp = cand.totalExperienceYears || cand.totalExperience || 'Not Specified';
+            const submissionDate = cand.submissionDate || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
             const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
             const nextThreeDays = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -95,49 +95,49 @@ export default function ClientShareCreateModal({
               id: cand.id,
               name: cand.name,
               candidateName: cand.name,
-              email: `${cand.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@candidate-profile.com`,
-              emailId: `${cand.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@candidate-profile.com`,
-              phone: '+91 98765 43210',
-              phoneNumber: '+91 98765 43210',
-              currentTitle: cand.currentTitle || 'Software Engineer',
-              currentDesignation: cand.currentTitle || 'Software Engineer',
+              email: cand.email || cand.emailId || '',
+              emailId: cand.email || cand.emailId || '',
+              phone: cand.phone || cand.phoneNumber || '',
+              phoneNumber: cand.phone || cand.phoneNumber || '',
+              currentTitle: cand.currentDesignation || cand.currentTitle || 'Software Engineer',
+              currentDesignation: cand.currentDesignation || cand.currentTitle || 'Software Engineer',
               currentCompany: cand.currentCompany || 'Technology Services',
-              totalExperience: `${numExp} Years`,
-              totalWorkExperience: `${numExp} Years`,
-              relevantWorkExperience: `${Math.max(1, Math.round(numExp * 0.8 * 10) / 10)} Years`,
-              location: job.location || 'Remote / Hybrid',
-              currentLocation: job.location || 'Remote / Hybrid',
-              noticePeriod: '30 Days (Serving Notice)',
-              currentCtc: `₹${estLpa} LPA`,
-              expectedCtc: `₹${Math.round(estLpa * 1.3)} LPA`,
-              cvLink: `${cand.name.replace(/\s+/g, '_')}_CV.pdf`,
-              atsScore: cand.score,
-              atsScoreDisplay: `${cand.score}% Match`,
-              candidateStatus: 'Shortlisted & Submitted',
-              screeningStatus: 'Verified (100% Mandatory Criteria Met)',
-              recruiterRemarks: `Agency Screening Verdict: Candidate shortlisted with ATS match score ${cand.score}%. Recommended for client evaluation.`,
-              interviewRound1: 'Ready for Scheduling',
-              interviewRound2: 'Pending Round 1',
-              finalInterview: 'Pending',
-              offerStatus: 'Pending Client Review',
-              joiningDate: '30 Days Post Offer',
-              joiningStatus: 'Pending',
-              rejectionReason: 'None (Profile Qualified)',
-              lastFollowUpDate: yesterday,
-              nextFollowUpDate: nextThreeDays,
-              response: 'Interested & Actively Available',
-              overallStatus: 'Shortlisted & Submitted',
+              totalExperience: typeof numExp === 'number' ? `${numExp} Years` : numExp,
+              totalWorkExperience: typeof numExp === 'number' ? `${numExp} Years` : numExp,
+              relevantWorkExperience: cand.relevantWorkExperience || 'Pending Recruiter Input',
+              location: cand.currentLocation || cand.location || job.location || 'Not Specified',
+              currentLocation: cand.currentLocation || cand.location || job.location || 'Not Specified',
+              noticePeriod: cand.noticePeriod || 'Pending Recruiter Input',
+              currentCtc: cand.currentCtc || 'Pending Recruiter Input',
+              expectedCtc: cand.expectedCtc || 'Pending Recruiter Input',
+              cvLink: cand.cvLink || cand.resumeFileName || `${cand.name.replace(/\s+/g, '_')}_CV.pdf`,
+              atsScore: cand.score || cand.atsScore || 85,
+              atsScoreDisplay: `${cand.score || cand.atsScore || 85}% Match`,
+              candidateStatus: cand.candidateStatus || 'Shortlisted & Submitted',
+              screeningStatus: cand.screeningStatus || 'Verified (100% Mandatory Criteria Met)',
+              recruiterRemarks: cand.recruiterRemarks || cand.screeningNote || 'Pending Recruiter Remarks',
+              interviewRound1: cand.interviewRound1 || 'Ready for Scheduling',
+              interviewRound2: cand.interviewRound2 || 'Pending Round 1',
+              finalInterview: cand.finalInterview || 'Pending',
+              offerStatus: cand.offerStatus || 'Pending Client Review',
+              joiningDate: cand.joiningDate || 'Pending Offer',
+              joiningStatus: cand.joiningStatus || 'Pending',
+              rejectionReason: cand.rejectionReason || 'None (Profile Qualified)',
+              lastFollowUpDate: cand.lastFollowUpDate || yesterday,
+              nextFollowUpDate: cand.nextFollowUpDate || nextThreeDays,
+              response: cand.response || 'Pending Recruiter Follow-up',
+              overallStatus: cand.overallStatus || 'Shortlisted & Submitted',
               submissionDate,
-              jdName: job.position,
+              jdName: cand.jdName || job.position,
               clientName: clientName.trim() || job.client,
-              recruiterName: 'Agency Recruiter',
-              currentStatus: 'Shared with Client',
+              recruiterName: cand.recruiterName || cand.assignedRecruiter || (job as any).assignedRecruiter || 'Assigned Recruiter',
+              currentStatus: cand.currentStatus || 'Shared with Client',
               lastUpdatedDate: 'Just now',
               hasResume: true,
-              resumeFileName: `${cand.name.replace(/\s+/g, '_')}_CV.pdf`,
+              resumeFileName: cand.cvLink || cand.resumeFileName || `${cand.name.replace(/\s+/g, '_')}_CV.pdf`,
               jobId: job.id,
               jobTitle: job.position,
-              decision: 'SUBMIT',
+              decision: cand.decision || 'SUBMIT',
             };
 
             if (existsIdx >= 0) {

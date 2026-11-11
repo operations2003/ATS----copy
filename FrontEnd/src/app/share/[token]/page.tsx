@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { atsStore, JobItem as StoreJobItem } from '@/lib/atsStore';
+import ClientSubmissionDossierModal, { SubmissionDossierData } from '@/components/ClientSubmissionDossierModal';
 
 const STATUS_OPTIONS = [
   'Shared with Client',
@@ -118,43 +119,24 @@ function buildFull30FieldsCandidate(
   const score = typeof cand.atsScore === 'number' ? cand.atsScore : (typeof cand.score === 'number' ? cand.score : 85);
   const title = cand.currentDesignation || cand.currentTitle || cand.current_title || cand.role || 'Software Engineer';
   const company = cand.currentCompany || cand.current_company || cand.company || 'Technology Services';
-  const totalExp = cand.totalWorkExperience || cand.totalExperience || cand.total_experience || cand.exp || '5.5 Years';
+  const totalExp = cand.totalWorkExperience || cand.totalExperience || cand.total_experience || cand.exp || 'Not Specified';
 
-  // Calculate sensible relevant work experience if not already set
-  let relExp = cand.relevantWorkExperience || cand.relevantExperience || cand.relevant_experience;
-  if (!relExp) {
-    const numExp = parseFloat(String(totalExp).replace(/[^0-9.]/g, ''));
-    if (!isNaN(numExp) && numExp > 0) {
-      const relNum = Math.max(1, Math.round(numExp * 0.8 * 10) / 10);
-      relExp = `${relNum} Years`;
-    } else {
-      relExp = totalExp || '4+ Years';
-    }
-  }
+  // Relevant Experience: DO NOT auto-invent fake numbers; only show what assigned recruiter entered
+  const relExp = cand.relevantWorkExperience || cand.relevantExperience || cand.relevant_experience || 'Pending Recruiter Input';
 
   const jdName = cand.jdName || cand.jobTitle || job?.title || 'Requisition Role';
   const client = cand.clientName || cand.client || job?.client || fallbackClientName;
   const recruiter = cand.recruiterName || cand.assignedRecruiter || job?.assignedRecruiter || fallbackRecruiterName;
-  const location = cand.currentLocation || cand.location || job?.location || 'Bengaluru, India';
-  const email = cand.emailId || cand.email || `${name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@candidate-profile.com`;
-  const phone = cand.phoneNumber || cand.phone || '+91 98765 43210';
+  const location = cand.currentLocation || cand.location || job?.location || 'Not Specified';
+  const email = cand.emailId || cand.email || '';
+  const phone = cand.phoneNumber || cand.phone || '';
 
-  // Notice Period
-  const noticePeriod = cand.noticePeriod || cand.notice || '30 Days (Serving Notice)';
+  // Notice Period: DO NOT invent fake notice periods; show what assigned recruiter entered
+  const noticePeriod = cand.noticePeriod || cand.notice || 'Pending Recruiter Input';
 
-  // CTC formatting
-  let currentCtc = cand.currentCtc || cand.currentSalary || cand.current_salary;
-  let expectedCtc = cand.expectedCtc || cand.expectedSalary || cand.expected_salary;
-  if (!currentCtc) {
-    const numExp = parseFloat(String(totalExp).replace(/[^0-9.]/g, '')) || 5;
-    const estLpa = Math.max(8, Math.round(numExp * 2.5));
-    currentCtc = `₹${estLpa} LPA`;
-  }
-  if (!expectedCtc) {
-    const curNum = parseFloat(String(currentCtc).replace(/[^0-9.]/g, '')) || 15;
-    const expLpa = Math.round(curNum * 1.3);
-    expectedCtc = `₹${expLpa} LPA`;
-  }
+  // CTC: DO NOT invent fake salaries; show what assigned recruiter entered
+  const currentCtc = cand.currentCtc || cand.currentSalary || cand.current_salary || 'Pending Recruiter Input';
+  const expectedCtc = cand.expectedCtc || cand.expectedSalary || cand.expected_salary || 'Pending Recruiter Input';
 
   // Submission Date (Format: e.g. 11 Nov 2026)
   const submissionDate = cand.submissionDate || cand.date || new Date().toLocaleDateString('en-GB', {
@@ -164,25 +146,21 @@ function buildFull30FieldsCandidate(
   });
 
   // Follow-up dates
-  const today = new Date();
-  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-  const nextThreeDays = new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000);
-
-  const lastFollowUpDate = cand.lastFollowUpDate || yesterday.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  const nextFollowUpDate = cand.nextFollowUpDate || nextThreeDays.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const lastFollowUpDate = cand.lastFollowUpDate || 'Not Recorded';
+  const nextFollowUpDate = cand.nextFollowUpDate || 'Not Scheduled';
 
   // Interview stage statuses
-  const interviewRound1 = cand.interviewRound1 || (cand.currentStatus?.includes('Round 1') ? 'Scheduled (Confirmed with Candidate)' : 'Ready for Client Scheduling');
-  const interviewRound2 = cand.interviewRound2 || (cand.currentStatus?.includes('Round 2') ? 'Scheduled' : 'Pending Round 1 Completion');
-  const finalInterview = cand.finalInterview || (cand.currentStatus?.includes('Selected') ? 'Completed & Recommended' : 'Pending');
-  const offerStatus = cand.offerStatus || (cand.currentStatus?.includes('Offer') || cand.currentStatus?.includes('Selected') ? 'Offer Formulation' : 'Pending Client Shortlist Review');
-  const joiningDate = cand.joiningDate || '30 Days Post Offer Release';
-  const joiningStatus = cand.joiningStatus || (cand.currentStatus === 'Joined' ? 'Joined' : 'Pending Offer Acceptance');
-  const rejectionReason = cand.rejectionReason || 'None (Profile Meets Mandatory Benchmarks)';
-  const response = cand.response || 'Actively Available & Highly Interested';
+  const interviewRound1 = cand.interviewRound1 || (cand.currentStatus?.includes('Round 1') ? 'Scheduled' : 'Pending Scheduling');
+  const interviewRound2 = cand.interviewRound2 || (cand.currentStatus?.includes('Round 2') ? 'Scheduled' : 'Pending Round 1');
+  const finalInterview = cand.finalInterview || (cand.currentStatus?.includes('Selected') ? 'Completed' : 'Pending');
+  const offerStatus = cand.offerStatus || (cand.currentStatus?.includes('Offer') ? 'Offer Extended' : cand.currentStatus?.includes('Selected') ? 'Selected' : 'In Sourcing');
+  const joiningDate = cand.joiningDate || 'Pending Offer';
+  const joiningStatus = cand.joiningStatus || (cand.currentStatus === 'Joined' ? 'Joined' : 'Pending');
+  const rejectionReason = cand.rejectionReason || 'None';
+  const response = cand.response || 'Pending Recruiter Follow-up';
   const overallStatus = cand.overallStatus || cand.currentStatus || 'Shortlisted & Submitted';
   const screeningStatus = cand.screeningStatus || (cand.mandatoryPassed !== false ? 'Verified (100% Mandatory Criteria Met)' : 'Conditional Review');
-  const recruiterRemarks = cand.recruiterRemarks || cand.screeningNote || `Agency Screening Verdict: Candidate demonstrated high competency in core requirements for ${jdName}. Verified deterministic ATS score: ${score}%. Recommend for direct client interview.`;
+  const recruiterRemarks = cand.recruiterRemarks || cand.screeningNote || 'Pending Recruiter Remarks';
   const cvLink = cand.cvLink || cand.resumeFileName || cand.fileName || `${name.replace(/\s+/g, '_')}_CV.pdf`;
 
   return {
@@ -325,9 +303,65 @@ function ClientSharePortalContent() {
   const [downloadingCandidateId, setDownloadingCandidateId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // 7.1 Recruiter 30-Detail Dossier Modal
+  const [editingDossierCandidate, setEditingDossierCandidate] = useState<CandidateItem | null>(null);
+  const [isDossierModalOpen, setIsDossierModalOpen] = useState(false);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleSavePortalDossier = (data: SubmissionDossierData) => {
+    if (!editingDossierCandidate) return;
+    const updated = candidates.map(c => {
+      if (c.id === editingDossierCandidate.id) {
+        return {
+          ...c,
+          ...data,
+          currentStatus: data.overallStatus || c.currentStatus,
+          screeningNote: data.recruiterRemarks || c.screeningNote,
+          lastUpdatedDate: 'Just now'
+        };
+      }
+      return c;
+    });
+    setCandidates(updated);
+
+    // Persist to client portal storage
+    const storageKey = `tasknera_portal_cands_${clientName.replace(/\s+/g, '_')}`;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+    } catch {}
+
+    // Two-way sync to pipeline
+    try {
+      const pipelineRaw = localStorage.getItem('tasknera_recruitment_pipeline_v1');
+      if (pipelineRaw) {
+        const pipeCands = JSON.parse(pipelineRaw);
+        if (Array.isArray(pipeCands)) {
+          const updatedPipe = pipeCands.map((p: any) => {
+            if (p.id === editingDossierCandidate.id || p.name === editingDossierCandidate.name) {
+              return {
+                ...p,
+                ...data,
+                stage: data.overallStatus?.toLowerCase().includes('interview') ? 'Interviewing' :
+                       data.overallStatus?.toLowerCase().includes('offer') ? 'Offered' :
+                       data.overallStatus?.toLowerCase().includes('hire') ? 'Hired' : p.stage,
+                notes: data.recruiterRemarks || p.notes
+              };
+            }
+            return p;
+          });
+          localStorage.setItem('tasknera_recruitment_pipeline_v1', JSON.stringify(updatedPipe));
+        }
+      }
+    } catch {}
+
+    window.dispatchEvent(new CustomEvent('tasknera_portal_sync'));
+    showToast(`Updated 30-field dossier for ${editingDossierCandidate.name}`);
+    setIsDossierModalOpen(false);
+    setEditingDossierCandidate(null);
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1993,6 +2027,17 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                               <button
                                 type="button"
                                 onClick={() => {
+                                  setEditingDossierCandidate(cand);
+                                  setIsDossierModalOpen(true);
+                                }}
+                                className="px-2.5 py-1 bg-[#EFF4FF] hover:bg-[#D1E0FF] text-[#3563E9] border border-[#D1E0FF] rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                                title="Edit 30 submission fields (Assigned Recruiter)"
+                              >
+                                <span>✏️ Fill / Edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
                                   setInterviewCandidate(cand);
                                   setInterviewRound('Round 1 Phase');
                                   setInterviewStartAt('');
@@ -2073,6 +2118,18 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
 
                         {/* Action Buttons */}
                         <div className="flex items-center gap-2 self-stretch sm:self-auto shrink-0 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingDossierCandidate(cand);
+                              setIsDossierModalOpen(true);
+                            }}
+                            className="px-3.5 py-2 bg-[#EFF4FF] hover:bg-[#D1E0FF] text-[#3563E9] border border-[#D1E0FF] rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                            title="Fill or edit all 30 candidate submission fields (Assigned Recruiter)"
+                          >
+                            <span>✏️ Fill / Edit 30 Details</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => handleDownloadCandidateCv(cand)}
@@ -2190,6 +2247,18 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                           </div>
 
                           <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingDossierCandidate(cand);
+                                setIsDossierModalOpen(true);
+                              }}
+                              className="px-2.5 py-1 bg-[#EFF4FF] hover:bg-[#D1E0FF] text-[#3563E9] border border-[#D1E0FF] rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1"
+                              title="Edit all 30 candidate submission fields (Assigned Recruiter)"
+                            >
+                              <span>✏️ Edit 30 Details</span>
+                            </button>
                             <span className="text-xs font-bold text-[#3563E9]">
                               {expandedDossierIds[cand.id] ? 'Hide Dossier ▲' : 'Show All 30 Details ▼'}
                             </span>
@@ -2895,6 +2964,22 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
             </form>
           </div>
         </div>
+      )}
+
+      {/* Recruiter 30-Point Dossier Modal */}
+      {isDossierModalOpen && editingDossierCandidate && (
+        <ClientSubmissionDossierModal
+          isOpen={isDossierModalOpen}
+          onClose={() => {
+            setIsDossierModalOpen(false);
+            setEditingDossierCandidate(null);
+          }}
+          candidate={editingDossierCandidate}
+          onSave={handleSavePortalDossier}
+          assignedRecruiterName={assignedMember || 'Senior Recruiter'}
+          defaultClientName={clientName}
+          defaultJdName={editingDossierCandidate.jdName || (jobs[0]?.title ?? 'Requisition Role')}
+        />
       )}
 
       {/* Toast Notification */}
