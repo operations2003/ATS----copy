@@ -106,6 +106,11 @@ export default function ClientsPage() {
   const [selectedJobScope, setSelectedJobScope] = useState<'ALL' | string>('ALL');
   const [assignmentNote, setAssignmentNote] = useState('');
 
+  // View Uploaded JDs Modal State
+  const [viewJdModalOpen, setViewJdModalOpen] = useState(false);
+  const [activeViewJdLink, setActiveViewJdLink] = useState<SharedClientLink | null>(null);
+  const [selectedJdDetailIndex, setSelectedJdDetailIndex] = useState(0);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setCachedRole(localStorage.getItem('tasknera_role'));
@@ -283,8 +288,21 @@ export default function ClientsPage() {
     return jobs.filter(j => j.client?.toLowerCase().trim() === clientName.toLowerCase().trim()).length;
   };
 
+  interface ClientJdItem {
+    id: string;
+    title: string;
+    assignedRecruiter?: string;
+    description?: string;
+    location?: string;
+    mode?: string;
+    salary?: string;
+    createdAt?: string;
+    status?: string;
+    mandatoryRequirementsCount?: number;
+  }
+
   // Helper to retrieve detailed uploaded JDs for a client
-  const getClientUploadedJds = (clientName: string): { id: string; title: string; assignedRecruiter?: string }[] => {
+  const getClientUploadedJds = (clientName: string): ClientJdItem[] => {
     if (typeof window !== 'undefined') {
       try {
         const raw = localStorage.getItem(`tasknera_client_jds_${clientName.replace(/\s+/g, '_')}`);
@@ -294,7 +312,14 @@ export default function ClientsPage() {
             return parsed.map((item: any, idx: number) => ({
               id: item.id || `jd-${idx}`,
               title: item.title || item.name || 'Job Requisition',
-              assignedRecruiter: item.assignedRecruiter
+              assignedRecruiter: item.assignedRecruiter,
+              description: item.description,
+              location: item.location || 'Remote',
+              mode: item.workMode || item.mode || 'Hybrid',
+              salary: item.salary || 'Competitive',
+              createdAt: item.createdAt || 'Recently',
+              status: item.status || 'Active Screening',
+              mandatoryRequirementsCount: item.mandatoryRequirementsCount || 3
             }));
           }
         }
@@ -302,7 +327,24 @@ export default function ClientsPage() {
     }
     return jobs
       .filter(j => j.client?.toLowerCase().trim() === clientName.toLowerCase().trim())
-      .map(j => ({ id: j.id, title: j.title, assignedRecruiter: j.assignedRecruiter }));
+      .map(j => ({
+        id: j.id,
+        title: j.title,
+        assignedRecruiter: j.assignedRecruiter,
+        description: j.description,
+        location: j.location,
+        mode: j.mode,
+        salary: j.salary,
+        createdAt: 'In ATS',
+        status: j.status,
+        mandatoryRequirementsCount: j.mandatoryRequirementsCount
+      }));
+  };
+
+  const handleOpenJdViewer = (link: SharedClientLink) => {
+    setActiveViewJdLink(link);
+    setSelectedJdDetailIndex(0);
+    setViewJdModalOpen(true);
   };
 
   // Helper to determine who is assigned to this client's JDs
@@ -651,7 +693,18 @@ export default function ClientsPage() {
                     <div>
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <h3 className="text-[#101828] font-bold text-base">{link.clientName}</h3>
+                          <a
+                            href={link.shareUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#101828] hover:text-[#3563E9] font-bold text-base transition-colors inline-flex items-center gap-1.5 group cursor-pointer"
+                            title="Click to open client portal in new tab"
+                          >
+                            <span>{link.clientName}</span>
+                            <svg className="w-3.5 h-3.5 text-[#3563E9] opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
                           {link.contactName && (
                             <p className="text-xs text-[#3563E9] font-semibold mt-0.5">
                               Contact: {link.contactName}
@@ -678,19 +731,43 @@ export default function ClientsPage() {
                       <div className="mt-3 space-y-1.5 text-xs text-[#667085]">
                         <div className="flex items-center justify-between">
                           <span>JDs Uploaded:</span>
-                          <span className="font-bold text-[#101828]">{uploadedCount} Job Position{uploadedCount === 1 ? '' : 's'}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenJdViewer(link)}
+                            className="font-bold text-[#3563E9] hover:text-[#2851D6] hover:underline cursor-pointer inline-flex items-center gap-1 transition-all group"
+                            title="Click to open and view uploaded Job Description"
+                          >
+                            <span>{uploadedCount} Job Position{uploadedCount === 1 ? '' : 's'}</span>
+                            <svg className="w-3.5 h-3.5 text-[#3563E9] group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </button>
                         </div>
                         <div className="flex items-center justify-between">
                           <span>Assigned To:</span>
                           {assignedInfo ? (
-                            <span className="font-bold text-[#101828] inline-flex items-center gap-1.5" title={assignedInfo.role ? `${assignedInfo.name} (${assignedInfo.role})` : assignedInfo.name}>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAssignModal(link)}
+                              className="font-bold text-[#101828] hover:text-[#3563E9] inline-flex items-center gap-1.5 cursor-pointer transition-colors group"
+                              title="Click to reassign member"
+                            >
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                               <span className="truncate max-w-[145px]">{assignedInfo.name}</span>
-                            </span>
+                              <svg className="w-3 h-3 text-slate-400 group-hover:text-[#3563E9] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            </button>
                           ) : (
-                            <span className="font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 text-[10px]">
-                              Unassigned
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAssignModal(link)}
+                              className="font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded-md border border-amber-200 text-[10px] cursor-pointer transition-colors inline-flex items-center gap-1"
+                              title="Click to assign team member"
+                            >
+                              <span>Unassigned</span>
+                              <span className="text-[10px] font-bold text-amber-600">+</span>
+                            </button>
                           )}
                         </div>
                         <div className="flex items-center justify-between">
@@ -710,12 +787,27 @@ export default function ClientsPage() {
                           type="text"
                           readOnly
                           value={link.shareUrl}
-                          className="w-full bg-transparent text-[11px] font-mono text-[#667085] outline-none select-all truncate"
+                          onClick={() => window.open(link.shareUrl, '_blank')}
+                          title="Click to open portal in new tab"
+                          className="w-full bg-transparent text-[11px] font-mono text-[#667085] hover:text-[#3563E9] outline-none select-all truncate cursor-pointer"
                         />
+                        <a
+                          href={link.shareUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 text-xs font-bold text-[#3563E9] hover:text-[#2851D6] hover:underline cursor-pointer inline-flex items-center gap-0.5"
+                          title="Open link in new tab"
+                        >
+                          <span>Open</span>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                        <span className="text-slate-300">|</span>
                         <button
                           type="button"
                           onClick={() => handleCopyLink(link.shareUrl)}
-                          className="shrink-0 text-xs font-bold text-[#3563E9] hover:underline cursor-pointer"
+                          className="shrink-0 text-xs font-bold text-[#667085] hover:text-[#101828] hover:underline cursor-pointer"
                         >
                           Copy
                         </button>
@@ -1405,6 +1497,247 @@ export default function ClientsPage() {
             </div>
           </div>
         )}
+
+        {/* Modal: View Uploaded JDs for Client */}
+        {viewJdModalOpen && activeViewJdLink && (() => {
+          const clientJds = getClientUploadedJds(activeViewJdLink.clientName);
+          const currentJd = clientJds[selectedJdDetailIndex] || clientJds[0];
+          const clientAssigned = getAssignedMemberForClient(activeViewJdLink);
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
+              <div className="bg-white border border-[#EAECF0] rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
+                {/* Modal Header */}
+                <div className="flex items-center justify-between border-b border-[#EAECF0] px-6 py-4 bg-slate-50/70">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center border border-[#D1E0FF] shadow-xs">
+                      <svg className="w-5 h-5 text-[#3563E9]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-[#101828]">Uploaded Job Descriptions</h3>
+                      <p className="text-xs text-[#667085]">
+                        Client: <span className="font-semibold text-[#101828]">{activeViewJdLink.clientName}</span>
+                        {activeViewJdLink.contactName && <span> • Contact: <span className="font-semibold text-[#101828]">{activeViewJdLink.contactName}</span></span>}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setViewJdModalOpen(false)}
+                    className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center text-sm font-bold cursor-pointer transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Modal Content */}
+                <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+                  {clientJds.length === 0 ? (
+                    <div className="text-center py-10 px-4">
+                      <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center mx-auto mb-3 shadow-xs">
+                        <svg className="w-7 h-7 text-[#3563E9]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <h4 className="text-sm font-bold text-[#101828] mb-1">No JDs Uploaded Yet</h4>
+                      <p className="text-xs text-[#667085] max-w-sm mx-auto mb-5">
+                        {activeViewJdLink.clientName} has not uploaded any Job Description documents yet. They can submit JDs directly through their active portal link.
+                      </p>
+                      <a
+                        href={activeViewJdLink.shareUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#3563E9] text-white text-xs font-bold hover:bg-[#2851D6] transition-colors shadow-xs"
+                      >
+                        <span>Open Client Portal</span>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Multiple Positions Tab Selector */}
+                      {clientJds.length > 1 && (
+                        <div>
+                          <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                            Select Requisition ({clientJds.length} Positions Available)
+                          </div>
+                          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                            {clientJds.map((jd, idx) => (
+                              <button
+                                key={jd.id || idx}
+                                type="button"
+                                onClick={() => setSelectedJdDetailIndex(idx)}
+                                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                                  selectedJdDetailIndex === idx
+                                    ? 'bg-[#3563E9] text-white shadow-sm'
+                                    : 'bg-slate-100 text-[#475467] hover:bg-slate-200 hover:text-[#101828]'
+                                }`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
+                                <span className="truncate max-w-[180px]">{jd.title}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Primary Position Card */}
+                      {currentJd && (
+                        <div className="space-y-4">
+                          <div className="bg-[#F8F9FC] border border-[#EAECF0] rounded-2xl p-4">
+                            <div className="flex items-start justify-between gap-3 mb-3">
+                              <div>
+                                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider text-[#3563E9] bg-[#EFF4FF] px-2.5 py-0.5 rounded-md border border-[#D1E0FF] mb-1.5">
+                                  Position #{selectedJdDetailIndex + 1}
+                                </span>
+                                <h4 className="text-base font-extrabold text-[#101828] leading-tight">
+                                  {currentJd.title}
+                                </h4>
+                              </div>
+                              <span className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                {currentJd.status || 'Active Screening'}
+                              </span>
+                            </div>
+
+                            {/* Tags Grid */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200/60 text-xs">
+                              <div className="bg-white rounded-xl p-2.5 border border-[#EAECF0]">
+                                <span className="block text-[10px] font-semibold text-[#667085] uppercase">Work Mode</span>
+                                <span className="font-bold text-[#101828] mt-0.5 inline-block">{currentJd.mode || 'Hybrid'}</span>
+                              </div>
+                              <div className="bg-white rounded-xl p-2.5 border border-[#EAECF0]">
+                                <span className="block text-[10px] font-semibold text-[#667085] uppercase">Location</span>
+                                <span className="font-bold text-[#101828] mt-0.5 inline-block truncate max-w-full">{currentJd.location || 'Remote / Hybrid'}</span>
+                              </div>
+                              <div className="bg-white rounded-xl p-2.5 border border-[#EAECF0] col-span-2 sm:col-span-1">
+                                <span className="block text-[10px] font-semibold text-[#667085] uppercase">Target Budget</span>
+                                <span className="font-bold text-emerald-700 mt-0.5 inline-block">{currentJd.salary || 'Competitive'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Recruiter Assignment Status */}
+                          <div className="rounded-2xl border border-[#EAECF0] p-4 transition-all bg-white">
+                            {(currentJd.assignedRecruiter || clientAssigned) ? (
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 font-extrabold text-sm flex items-center justify-center border border-emerald-200">
+                                    {(currentJd.assignedRecruiter || clientAssigned?.name || 'R').charAt(0)}
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs font-bold text-[#101828]">
+                                        {currentJd.assignedRecruiter || clientAssigned?.name}
+                                      </span>
+                                      <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-1.5 py-0.5 rounded">
+                                        Owner
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-[#667085]">
+                                      {clientAssigned?.role || 'Lead Technical Recruiter'} • Actively managing requisition
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setViewJdModalOpen(false);
+                                    handleOpenAssignModal(activeViewJdLink);
+                                  }}
+                                  className="text-xs font-bold text-[#3563E9] hover:text-[#2851D6] hover:underline cursor-pointer shrink-0"
+                                >
+                                  Reassign Member
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between gap-3 bg-amber-50/50 p-2 rounded-xl">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 font-bold text-xs flex items-center justify-center border border-amber-200">
+                                    !
+                                  </div>
+                                  <div>
+                                    <p className="text-xs font-bold text-amber-950">Currently Unassigned</p>
+                                    <p className="text-[11px] text-amber-700">Assign a recruiter to start evaluating incoming candidates</p>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setViewJdModalOpen(false);
+                                    handleOpenAssignModal(activeViewJdLink);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
+                                >
+                                  <span>Assign Recruiter</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* JD Details / Criteria */}
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="text-xs font-bold text-[#101828]">
+                                Job Description &amp; Role Requirements
+                              </label>
+                              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                Deterministic ATS Screening Active
+                              </span>
+                            </div>
+                            <div className="bg-[#F8F9FC] border border-[#EAECF0] rounded-2xl p-4 text-xs text-[#344054] leading-relaxed max-h-56 overflow-y-auto whitespace-pre-wrap font-sans">
+                              {currentJd.description || (
+                                `Position: ${currentJd.title}\nClient: ${activeViewJdLink.clientName}\nLocation: ${currentJd.location || 'Remote / Hybrid'}\nWork Arrangement: ${currentJd.mode || 'Hybrid'}\nTarget Salary Range: ${currentJd.salary || 'Competitive Market Rate'}\n\nRole Responsibilities & Requirements:\n- Build and maintain mission-critical software features with exceptional code quality.\n- Collaborate with product management, engineering peers, and client leadership.\n- Rigorous automated testing, performance tuning, and technical documentation.\n- Compliance with HireIQ deterministic knockout criteria (minimum 3 required parameters).`
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="border-t border-[#EAECF0] px-6 py-4 flex items-center justify-between bg-slate-50/70">
+                  <a
+                    href={activeViewJdLink.shareUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[#3563E9] hover:text-[#2851D6] hover:underline cursor-pointer"
+                  >
+                    <span>Open Live Portal</span>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewJdModalOpen(false);
+                        router.push('/ats');
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-[#182230] cursor-pointer transition-colors"
+                    >
+                      View in ATS Pool
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewJdModalOpen(false)}
+                      className="px-5 py-2.5 rounded-xl bg-[#3563E9] hover:bg-[#2851D6] text-xs font-bold text-white shadow-xs cursor-pointer transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Toast Feedback */}
         {toastMessage && (
