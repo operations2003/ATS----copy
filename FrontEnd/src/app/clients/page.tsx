@@ -2,8 +2,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import { useAuth } from '@/context/AuthContext';
 import { atsStore, JobItem } from '@/lib/atsStore';
 
 interface SharedClientLink {
@@ -23,6 +25,12 @@ interface SharedClientLink {
 const CLIENT_SHARES_STORAGE_KEY = 'tasknera_client_portal_shares_v1';
 
 export default function ClientsPage() {
+  const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
+  const [cachedRole, setCachedRole] = useState<string | null>(null);
+  const [cachedEmail, setCachedEmail] = useState<string | null>(null);
+  const [isClientLoaded, setIsClientLoaded] = useState(false);
+
   // Share Link Modal State
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [clientCompanyName, setClientCompanyName] = useState('');
@@ -36,6 +44,26 @@ export default function ClientsPage() {
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setCachedRole(localStorage.getItem('tasknera_role'));
+      setCachedEmail(localStorage.getItem('tasknera_email'));
+      setIsClientLoaded(true);
+    }
+  }, []);
+
+  const currentRole = user?.role || cachedRole || '';
+  const currentEmail = (user?.email || cachedEmail || '').toLowerCase().trim();
+  const isSuperAdmin = currentRole === 'SUPER_ADMIN' || currentEmail === 'operations@tasknera.com' || currentEmail === 'admin@gmail.com';
+  const isClientAdmin = currentRole === 'CLIENT_ADMIN' || currentRole === 'ADMIN';
+  const isAdmin = isSuperAdmin || isClientAdmin;
+
+  useEffect(() => {
+    if (isClientLoaded && !authLoading && !isAdmin) {
+      router.replace('/dashboard');
+    }
+  }, [isClientLoaded, authLoading, isAdmin, router]);
 
   useEffect(() => {
     // Load jobs from ATS Store
@@ -192,6 +220,35 @@ export default function ClientsPage() {
       setToastMessage(null);
     }, 3500);
   };
+
+  // Non-admin Access Restriction Guard
+  if (isClientLoaded && !authLoading && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-[#F7F8FC] flex flex-col justify-between">
+        <Header />
+        <main className="flex-1 flex items-center justify-center p-6 pt-28 pb-16">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-[#EAECF0] p-8 text-center">
+            <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-red-100">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m11-3.5a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-[#101828] mb-2">Administrator Access Required</h2>
+            <p className="text-sm text-[#667085] mb-6">
+              The Client Portals section is restricted to administrators. Only administrative accounts can generate and manage client transparency links.
+            </p>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center justify-center w-full px-4 py-2.5 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold rounded-xl transition-colors shadow-sm cursor-pointer"
+            >
+              Return to Dashboard
+            </Link>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F7F8FC] text-[#182230] flex flex-col selection:bg-[#EFF4FF] selection:text-[#3563E9]">
