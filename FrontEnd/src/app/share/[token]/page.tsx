@@ -208,7 +208,7 @@ function ClientSharePortalContent() {
 
   // 1. Identify Client Identity
   const clientParam = searchParams.get('client') || '';
-  const [clientName, setClientName] = useState<string>(clientParam || 'TechCorp Industries');
+  const [clientName, setClientName] = useState<string>(clientParam || 'Client Partner');
   const [portalToken, setPortalToken] = useState<string>(token || '');
 
   // 2. Data State
@@ -289,7 +289,7 @@ function ClientSharePortalContent() {
       }
 
       if (!resolvedClient) {
-        resolvedClient = 'TechCorp Industries';
+        resolvedClient = 'Client Partner';
       }
       setClientName(resolvedClient);
 
