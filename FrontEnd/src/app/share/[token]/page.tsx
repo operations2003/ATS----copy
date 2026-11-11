@@ -208,7 +208,10 @@ function ClientSharePortalContent() {
 
   // 1. Identify Client Identity
   const clientParam = searchParams.get('client') || '';
+  const contactParam = searchParams.get('contact') || '';
   const [clientName, setClientName] = useState<string>(clientParam || 'Client Partner');
+  const [contactName, setContactName] = useState<string>(contactParam);
+  const [welcomeNote, setWelcomeNote] = useState<string>('');
   const [portalToken, setPortalToken] = useState<string>(token || '');
 
   // 2. Data State
@@ -275,14 +278,22 @@ function ClientSharePortalContent() {
 
       // Resolve client from token in local storage if not in query param
       let resolvedClient = clientParam;
-      if (!resolvedClient && typeof window !== 'undefined') {
+      let resolvedContact = contactParam;
+      let resolvedNote = '';
+      if (typeof window !== 'undefined') {
         try {
           const sharesRaw = localStorage.getItem('tasknera_client_portal_shares_v1');
           if (sharesRaw) {
             const parsed = JSON.parse(sharesRaw);
             const found = Array.isArray(parsed) ? parsed.find(s => s.token === token) : null;
-            if (found?.clientName) {
+            if (found?.clientName && !resolvedClient) {
               resolvedClient = found.clientName;
+            }
+            if (found?.contactName && !resolvedContact) {
+              resolvedContact = found.contactName;
+            }
+            if (found?.welcomeNote) {
+              resolvedNote = found.welcomeNote;
             }
           }
         } catch {}
@@ -292,6 +303,13 @@ function ClientSharePortalContent() {
         resolvedClient = 'Client Partner';
       }
       setClientName(resolvedClient);
+      if (resolvedContact) {
+        setContactName(resolvedContact);
+        setJdContactName(resolvedContact);
+      }
+      if (resolvedNote) {
+        setWelcomeNote(resolvedNote);
+      }
 
       // Load JDs from ATS Store matching this client
       const storeJobs = atsStore.getJobs();
@@ -831,6 +849,17 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
               <h2 className="text-2xl sm:text-3xl font-extrabold text-[#101828] tracking-tight">
                 Hiring Pipeline for {clientName}
               </h2>
+              {contactName && (
+                <p className="text-xs text-[#3563E9] font-bold mt-1">
+                  Client Contact: {contactName}
+                </p>
+              )}
+              {welcomeNote && (
+                <div className="mt-2.5 p-3 rounded-xl bg-[#EFF4FF] border border-[#D1E0FF] text-xs text-[#1E293B]">
+                  <span className="font-bold text-[#3563E9]">💬 Message from Agency: </span>
+                  {welcomeNote}
+                </div>
+              )}
               <p className="text-xs sm:text-sm text-[#667085] mt-1 max-w-2xl leading-relaxed">
                 Submit job descriptions directly into our recruitment engine, track candidate screening volumes in real time, and review verified profiles shortlisted for your hiring managers.
               </p>
