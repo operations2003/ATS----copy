@@ -360,6 +360,85 @@ export default function ClientsPage() {
     return null;
   };
 
+  // Automatically reconcile existing client assignments into tasknera_created_jobs
+  useEffect(() => {
+    if (!isClientLoaded) return;
+    try {
+      const stored = localStorage.getItem(CLIENT_SHARES_STORAGE_KEY);
+      if (!stored) return;
+      const parsed: SharedClientLink[] = JSON.parse(stored);
+      if (!Array.isArray(parsed)) return;
+
+      const existingCreated = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
+      let modified = false;
+
+      parsed.forEach(link => {
+        const assigned = link.assignedMember;
+        if (assigned && assigned !== 'Unassigned') {
+          const clientJds = getClientUploadedJds(link.clientName);
+          const targetRole = link.assignedMemberRole || 'Technical Recruiter';
+          const worker = {
+            id: `rec-${assigned.toLowerCase().replace(/\s+/g, '-')}`,
+            name: assigned,
+            role: targetRole,
+            action: 'Assigned Lead',
+            isCreator: false
+          };
+
+          clientJds.forEach(item => {
+            const idx = existingCreated.findIndex((cj: any) =>
+              String(cj.id) === String(item.id) ||
+              ((cj.client || '').toLowerCase().trim() === link.clientName.toLowerCase().trim() &&
+               (cj.position || cj.title || '').toLowerCase().trim() === item.title.toLowerCase().trim())
+            );
+
+            if (idx >= 0) {
+              if (existingCreated[idx].assignedRecruiter !== assigned) {
+                existingCreated[idx].assignedRecruiter = assigned;
+                existingCreated[idx].assignedTo = assigned;
+                existingCreated[idx].workedBy = [
+                  worker,
+                  ...(Array.isArray(existingCreated[idx].workedBy) ? existingCreated[idx].workedBy.filter((w: any) => w.name?.toLowerCase() !== assigned.toLowerCase()) : [])
+                ];
+                modified = true;
+              }
+            } else {
+              existingCreated.unshift({
+                id: item.id || `job-client-${Date.now()}`,
+                client: link.clientName,
+                company: link.clientName,
+                position: item.title,
+                title: item.title,
+                location: item.location || 'Remote / Hybrid',
+                work_mode: item.mode || 'Hybrid',
+                workMode: item.mode || 'Hybrid',
+                mode: item.mode || 'Hybrid',
+                salary: item.salary || 'Competitive Market Rate',
+                status: 'Active',
+                created_at: new Date().toISOString(),
+                createdAt: new Date().toISOString(),
+                assignedRecruiter: assigned,
+                assignedTo: assigned,
+                workedBy: [worker],
+                candidatesCount: 0,
+                candidates: 0,
+                topScore: 0,
+                description: item.description || `Requisition intake for ${link.clientName}`
+              });
+              modified = true;
+            }
+          });
+        }
+      });
+
+      if (modified) {
+        localStorage.setItem('tasknera_created_jobs', JSON.stringify(existingCreated));
+      }
+    } catch (e) {
+      console.warn('Reconcile existing client assignments error:', e);
+    }
+  }, [isClientLoaded]);
+
   const handleOpenAssignModal = (link: SharedClientLink) => {
     setActiveAssignLink(link);
     const current = getAssignedMemberForClient(link);
@@ -414,13 +493,46 @@ export default function ClientsPage() {
       localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updatedLinks));
     } catch {}
 
-    // 2. Reassign matching jobs in atsStore
-    const matchingJobs = atsStore.getJobs().filter(
-      j => j.client?.toLowerCase().trim() === clientName.toLowerCase().trim()
-    );
-    matchingJobs.forEach(job => {
-      if (selectedJobScope === 'ALL' || job.id === selectedJobScope) {
-        atsStore.reassignJob(job.id, targetMember, adminName);
+    // 2. Reassign matching jobs in atsStore & ensure all client JDs exist in atsStore
+    const clientJds = getClientUploadedJds(clientName);
+    const existingAtsJobs = atsStore.getJobs();
+    
+    // Sync each client JD into atsStore
+    clientJds.forEach(item => {
+      if (selectedJobScope === 'ALL' || item.id === selectedJobScope) {
+        const found = existingAtsJobs.find(
+          j => String(j.id) === String(item.id) || 
+               (j.client?.toLowerCase().trim() === clientName.toLowerCase().trim() &&
+                j.title?.toLowerCase().trim() === item.title.toLowerCase().trim())
+        );
+        if (found) {
+          atsStore.reassignJob(found.id, targetMember, adminName, targetRole);
+        } else {
+          try {
+            atsStore.addJob({
+              title: item.title,
+              client: clientName,
+              location: item.location || 'Remote / Hybrid',
+              mode: (item.mode === 'Onsite' ? 'Onsite' : item.mode === 'Remote' ? 'Remote' : 'Hybrid'),
+              salary: item.salary || 'Competitive',
+              candidates: 0,
+              topScore: 0,
+              status: 'Active',
+              assignedRecruiter: targetMember,
+              workedBy: [{
+                id: `rec-${targetMember.toLowerCase().replace(/\s+/g, '-')}`,
+                name: targetMember,
+                role: targetRole,
+                action: 'Assigned Lead',
+                isCreator: false
+              }],
+              pod: 'Client Portal Inflow',
+              mandatoryRequirementsCount: item.mandatoryRequirementsCount || 3,
+              totalRequirementsCount: 6,
+              description: item.description || `Requisition intake for ${clientName}`
+            }, adminName, 'ADMIN');
+          } catch {}
+        }
       }
     });
 
@@ -442,6 +554,107 @@ export default function ClientsPage() {
           }
         }
       } catch {}
+    }
+
+    // 3b. Sync assigned job(s) directly into tasknera_created_jobs & tasknera_all_jobs so it appears in the member's Jobs & Requisitions list
+    if (typeof window !== 'undefined') {
+      try {
+        const existingCreated = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
+        const updatedWorker = {
+          id: `rec-${targetMember.toLowerCase().replace(/\s+/g, '-')}`,
+          name: targetMember,
+          role: targetRole,
+          action: 'Assigned Lead',
+          isCreator: false
+        };
+
+        const targetJds = clientJds.length > 0 ? clientJds : [{
+          id: `job-client-${Date.now()}`,
+          title: 'Client Requisition',
+          location: 'Remote / Hybrid',
+          mode: 'Hybrid',
+          salary: 'Competitive Market Rate',
+          description: `Intake requisition for ${clientName}`
+        }];
+
+        targetJds.forEach(item => {
+          if (selectedJobScope === 'ALL' || item.id === selectedJobScope) {
+            const existingIdx = existingCreated.findIndex((cj: any) =>
+              String(cj.id) === String(item.id) ||
+              ((cj.client || '').toLowerCase().trim() === clientName.toLowerCase().trim() &&
+               (cj.position || cj.title || '').toLowerCase().trim() === item.title.toLowerCase().trim())
+            );
+
+            if (existingIdx >= 0) {
+              const currentWorkers = Array.isArray(existingCreated[existingIdx].workedBy)
+                ? existingCreated[existingIdx].workedBy
+                : [];
+              existingCreated[existingIdx] = {
+                ...existingCreated[existingIdx],
+                assignedRecruiter: targetMember,
+                assignedTo: targetMember,
+                workedBy: [
+                  updatedWorker,
+                  ...currentWorkers.filter((w: any) => w.name?.toLowerCase() !== targetMember.toLowerCase())
+                ]
+              };
+            } else {
+              const newJobEntry = {
+                id: item.id || `job-client-${Date.now()}`,
+                client: clientName,
+                company: clientName,
+                position: item.title,
+                title: item.title,
+                location: item.location || 'Remote / Hybrid',
+                work_mode: item.mode || 'Hybrid',
+                workMode: item.mode || 'Hybrid',
+                mode: item.mode || 'Hybrid',
+                salary: item.salary || 'Competitive Market Rate',
+                status: 'Active',
+                created_at: new Date().toISOString(),
+                createdAt: new Date().toISOString(),
+                created_by: user?.id || 'admin',
+                createdBy: user?.id || 'admin',
+                assignedRecruiter: targetMember,
+                assignedTo: targetMember,
+                workedBy: [updatedWorker],
+                candidatesCount: 0,
+                candidates: 0,
+                topScore: 0,
+                description: item.description || `Client uploaded Job Description for ${item.title}`,
+                organizationId: user?.organizationId || 'org-tasknera'
+              };
+              existingCreated.unshift(newJobEntry);
+            }
+          }
+        });
+        localStorage.setItem('tasknera_created_jobs', JSON.stringify(existingCreated));
+
+        // Also update tasknera_all_jobs
+        const existingAll = JSON.parse(localStorage.getItem('tasknera_all_jobs') || '[]');
+        targetJds.forEach(item => {
+          if (selectedJobScope === 'ALL' || item.id === selectedJobScope) {
+            const allIdx = existingAll.findIndex((aj: any) =>
+              String(aj.id) === String(item.id) ||
+              ((aj.client || '').toLowerCase().trim() === clientName.toLowerCase().trim() &&
+               (aj.position || aj.title || '').toLowerCase().trim() === item.title.toLowerCase().trim())
+            );
+            if (allIdx >= 0) {
+              existingAll[allIdx] = {
+                ...existingAll[allIdx],
+                assignedRecruiter: targetMember,
+                workedBy: [updatedWorker, ...(Array.isArray(existingAll[allIdx].workedBy) ? existingAll[allIdx].workedBy.filter((w: any) => w.name?.toLowerCase() !== targetMember.toLowerCase()) : [])]
+              };
+            } else {
+              const matchedCreated = existingCreated.find((c: any) => String(c.id) === String(item.id) || c.position === item.title);
+              if (matchedCreated) existingAll.unshift(matchedCreated);
+            }
+          }
+        });
+        localStorage.setItem('tasknera_all_jobs', JSON.stringify(existingAll));
+      } catch (e) {
+        console.warn('Error syncing tasknera_created_jobs:', e);
+      }
     }
 
     // 4. Log transparency activity in tasknera_portal_activities_${clientName}

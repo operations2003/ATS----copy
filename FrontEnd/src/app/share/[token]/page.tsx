@@ -409,7 +409,7 @@ function ClientSharePortalContent() {
         });
       });
 
-      // 2. Persist in Client JDs storage
+      // 2. Persist in Client JDs storage & sync into tasknera_created_jobs
       const updatedJobs = [...newCreatedJobs, ...jobs];
       setJobs(updatedJobs);
       if (typeof window !== 'undefined') {
@@ -418,6 +418,39 @@ function ClientSharePortalContent() {
             `tasknera_client_jds_${clientName.replace(/\s+/g, '_')}`,
             JSON.stringify(updatedJobs)
           );
+        } catch {}
+
+        try {
+          const createdList = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
+          const toAdd = newCreatedJobs.map(j => ({
+            id: j.id,
+            client: clientName,
+            company: clientName,
+            position: j.title,
+            title: j.title,
+            location: j.location || 'Remote / Hybrid',
+            work_mode: j.workMode || 'Hybrid',
+            workMode: j.workMode || 'Hybrid',
+            mode: j.workMode || 'Hybrid',
+            salary: j.salary || 'Competitive Market Rate',
+            status: 'Active',
+            created_at: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            assignedRecruiter: j.assignedRecruiter && j.assignedRecruiter !== 'Agency Delivery Team' ? j.assignedRecruiter : undefined,
+            assignedTo: j.assignedRecruiter && j.assignedRecruiter !== 'Agency Delivery Team' ? j.assignedRecruiter : undefined,
+            workedBy: j.assignedRecruiter && j.assignedRecruiter !== 'Agency Delivery Team' ? [{
+              id: `rec-${j.assignedRecruiter.toLowerCase().replace(/\s+/g, '-')}`,
+              name: j.assignedRecruiter,
+              role: 'Technical Recruiter',
+              action: 'Assigned Lead',
+              isCreator: false
+            }] : [],
+            candidatesCount: 0,
+            candidates: 0,
+            topScore: 0,
+            description: j.description || `Client uploaded Job Description: ${j.title}`
+          }));
+          localStorage.setItem('tasknera_created_jobs', JSON.stringify([...toAdd, ...createdList.filter((x: any) => !toAdd.some(a => a.id === x.id))]));
         } catch {}
       }
 

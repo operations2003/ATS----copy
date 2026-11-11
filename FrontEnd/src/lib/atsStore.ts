@@ -730,11 +730,49 @@ class ATSStore {
     return newJob;
   }
 
-  public reassignJob(jobId: string, newRecruiterName: string, leadName: string) {
+  public reassignJob(jobId: string, newRecruiterName: string, leadName: string, targetRole: string = 'Technical Recruiter') {
     const job = this.jobs.find(j => j.id === jobId);
     if (!job) return;
     const prevRecruiter = job.assignedRecruiter;
     job.assignedRecruiter = newRecruiterName;
+
+    // Ensure workedBy is maintained with the assigned recruiter
+    if (!Array.isArray(job.workedBy)) {
+      job.workedBy = [];
+    }
+    const cleanId = `rec-${newRecruiterName.toLowerCase().replace(/\s+/g, '-')}`;
+    const existingIndex = job.workedBy.findIndex(w => w.name.toLowerCase() === newRecruiterName.toLowerCase());
+    if (existingIndex >= 0) {
+      job.workedBy[existingIndex] = {
+        ...job.workedBy[existingIndex],
+        role: targetRole,
+        action: 'Assigned Lead'
+      };
+    } else {
+      job.workedBy = [
+        {
+          id: cleanId,
+          name: newRecruiterName,
+          role: targetRole,
+          action: 'Assigned Lead',
+          isCreator: false
+        },
+        ...job.workedBy.filter(w => !prevRecruiter || w.name.toLowerCase() !== prevRecruiter.toLowerCase())
+      ];
+    }
+
+    // Update recruiter metrics
+    const newRec = this.recruiters.find(r => r.name.toLowerCase() === newRecruiterName.toLowerCase() || newRecruiterName.toLowerCase().includes(r.name.toLowerCase()));
+    if (newRec) {
+      newRec.activeJobs = Math.max(1, (newRec.activeJobs || 0) + 1);
+    }
+    if (prevRecruiter && prevRecruiter !== newRecruiterName) {
+      const prevRec = this.recruiters.find(r => r.name.toLowerCase() === prevRecruiter.toLowerCase());
+      if (prevRec && (prevRec.activeJobs || 0) > 0) {
+        prevRec.activeJobs = Math.max(0, (prevRec.activeJobs || 1) - 1);
+      }
+    }
+
     this.logAudit({
       action: 'REQUISITION_REASSIGNED',
       user: `${leadName} (Team Lead)`,

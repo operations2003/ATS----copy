@@ -195,7 +195,9 @@ export default function DashboardPage() {
             title === 'test engineer' ||
             title.includes('test engineer') ||
             id === '83838c13-a542-457c-a696-1289c9734869' ||
-            id.startsWith('jd-')
+            id.startsWith('jd-mock') ||
+            id.startsWith('jd-dummy') ||
+            id.startsWith('jd-test')
           );
         };
 
@@ -206,6 +208,7 @@ export default function DashboardPage() {
             const raw = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
             const currentUserId = user?.id;
             const currentUserEmail = user?.email?.toLowerCase();
+            const currentUserName = user?.name || (user?.email ? user.email.split('@')[0] : '');
             const isAdmin = user?.role === 'ADMIN' || user?.role === 'CLIENT_ADMIN' || user?.role === 'SUPER_ADMIN';
             const currentOrgId = user?.organizationId || 'org-tasknera';
             const isSuperAdmin = user?.role === 'SUPER_ADMIN';
@@ -215,10 +218,20 @@ export default function DashboardPage() {
               const jOrgId = j.organizationId || 'org-tasknera';
               if (!isSuperAdmin && jOrgId !== currentOrgId) return false;
               if (isAdmin) return true;
-              if (!currentUserId && !currentUserEmail) return false;
+              if (!currentUserId && !currentUserEmail && !currentUserName) return false;
               const jUserId = j.created_by || j.createdBy;
               const jEmail = (j.creatorEmail || j.email || '').toLowerCase();
-              return (currentUserId && jUserId === currentUserId) || (currentUserEmail && jEmail === currentUserEmail);
+              const jAssigned = (j.assignedRecruiter || j.assignedTo || '').toLowerCase();
+              const jWorkers = Array.isArray(j.workedBy) ? j.workedBy : [];
+              const isAssigned = (
+                (currentUserName && jAssigned.includes(currentUserName.toLowerCase())) ||
+                (currentUserEmail && jAssigned.includes(currentUserEmail)) ||
+                jWorkers.some((w: any) =>
+                  (currentUserName && w.name && w.name.toLowerCase().includes(currentUserName.toLowerCase())) ||
+                  (currentUserEmail && w.email && w.email.toLowerCase() === currentUserEmail)
+                )
+              );
+              return (currentUserId && jUserId === currentUserId) || (currentUserEmail && jEmail === currentUserEmail) || isAssigned;
             });
           } catch {}
         }
@@ -337,6 +350,58 @@ export default function DashboardPage() {
               created: lj.created_at ? new Date(lj.created_at).toLocaleDateString() : 'Recent'
             });
           }
+        }
+
+        // 4b. Reconcile client shares and uploaded JDs into dashboard
+        if (typeof window !== 'undefined') {
+          try {
+            const clientSharesRaw = localStorage.getItem('tasknera_client_shares');
+            if (clientSharesRaw) {
+              const clientShares = JSON.parse(clientSharesRaw);
+              if (Array.isArray(clientShares)) {
+                for (const share of clientShares) {
+                  if (share.clientName) {
+                    const clientKey = `tasknera_client_jds_${share.clientName.replace(/\s+/g, '_')}`;
+                    const cjRaw = localStorage.getItem(clientKey);
+                    let cjList: any[] = [];
+                    if (cjRaw) {
+                      try { cjList = JSON.parse(cjRaw); } catch {}
+                    }
+                    if (Array.isArray(cjList)) {
+                      for (const cj of cjList) {
+                        const effectiveRecruiter = cj.assignedRecruiter || share.assignedMember;
+                        const cjTitle = cj.title || cj.name || 'Job Requisition';
+                        const cjId = String(cj.id || `job-client-${share.clientName}-${cjTitle}`);
+                        const currentUserName = user?.name || '';
+                        const currentUserEmail = user?.email?.toLowerCase() || '';
+                        const isAdmin = user?.role === 'ADMIN' || user?.role === 'CLIENT_ADMIN' || user?.role === 'SUPER_ADMIN';
+
+                        const isAssigned = (
+                          isAdmin ||
+                          (effectiveRecruiter && currentUserName && effectiveRecruiter.toLowerCase().includes(currentUserName.toLowerCase())) ||
+                          (effectiveRecruiter && currentUserEmail && effectiveRecruiter.toLowerCase().includes(currentUserEmail))
+                        );
+
+                        if (isAssigned && !jobMap.has(cjId)) {
+                          jobMap.set(cjId, {
+                            id: cjId,
+                            title: formatCleanPositionTitle(cjTitle),
+                            client: share.clientName,
+                            location: cj.location || 'Remote / Hybrid',
+                            mode: cj.workMode || cj.mode || 'Hybrid',
+                            candidates: 0,
+                            topScore: null,
+                            status: 'Active',
+                            created: 'Recent'
+                          });
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } catch {}
         }
 
         // Ingest all candidate evaluations stored in localStorage across all jobs
