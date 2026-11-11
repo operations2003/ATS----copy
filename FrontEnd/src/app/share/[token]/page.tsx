@@ -733,7 +733,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
               )}
               {welcomeNote && (
                 <div className="mt-2.5 p-3 rounded-xl bg-[#EFF4FF] border border-[#D1E0FF] text-xs text-[#1E293B]">
-                  <span className="font-bold text-[#3563E9]">💬 Message from Agency: </span>
+                  <span className="font-bold text-[#3563E9]">Message from Agency: </span>
                   {welcomeNote}
                 </div>
               )}
@@ -759,9 +759,8 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
           {/* 4 Transparency KPI Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div className="bg-[#F7F8FC] border border-[#EAECF0] rounded-2xl p-4 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-[#667085] font-semibold mb-1">
-                <span>Active Requisitions</span>
-                <span>📋</span>
+              <div className="text-xs text-[#667085] font-semibold mb-1">
+                Active Requisitions
               </div>
               <div className="text-2xl sm:text-3xl font-extrabold text-[#101828]">
                 {jobs.length}
@@ -770,9 +769,8 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
             </div>
 
             <div className="bg-[#F7F8FC] border border-[#EAECF0] rounded-2xl p-4 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-[#667085] font-semibold mb-1">
-                <span>Profiles Screened by Agency</span>
-                <span>🔍</span>
+              <div className="text-xs text-[#667085] font-semibold mb-1">
+                Profiles Screened by Agency
               </div>
               <div className="text-2xl sm:text-3xl font-extrabold text-[#101828]">
                 {totalProfilesScreened > 0 ? `${totalProfilesScreened}+` : '0'}
@@ -781,9 +779,8 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
             </div>
 
             <div className="bg-[#F7F8FC] border border-[#EAECF0] rounded-2xl p-4 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-[#667085] font-semibold mb-1">
-                <span>Shortlisted &amp; Submitted</span>
-                <span>⭐</span>
+              <div className="text-xs text-[#667085] font-semibold mb-1">
+                Shortlisted &amp; Submitted
               </div>
               <div className="text-2xl sm:text-3xl font-extrabold text-[#3563E9]">
                 {totalProfilesSubmitted}
@@ -792,9 +789,8 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
             </div>
 
             <div className="bg-[#F7F8FC] border border-[#EAECF0] rounded-2xl p-4 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-[#667085] font-semibold mb-1">
-                <span>Interviews in Progress</span>
-                <span>📅</span>
+              <div className="text-xs text-[#667085] font-semibold mb-1">
+                Interviews in Progress
               </div>
               <div className="text-2xl sm:text-3xl font-extrabold text-[#15966A]">
                 {inInterviewCount}
@@ -813,8 +809,10 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
         {jobs.length === 0 && (
           <div className="bg-white border-2 border-dashed border-[#3563E9]/40 rounded-3xl p-6 sm:p-10 shadow-xs space-y-6">
             <div className="max-w-2xl mx-auto text-center space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center text-2xl mx-auto border border-[#D1E0FF]">
-                📋
+              <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center mx-auto border border-[#D1E0FF]">
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
               </div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-[#EFF4FF] text-[#3563E9] border border-[#D1E0FF]">
                 <span className="w-2 h-2 rounded-full bg-[#3563E9] animate-pulse" />
@@ -888,7 +886,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                   : 'bg-white border border-[#EAECF0] text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <span>👥 Screened Candidates</span>
+              <span>Screened Candidates</span>
               <span className={`px-2 py-0.2 rounded-full text-[10px] ${activeTab === 'candidates' ? 'bg-[#3563E9] text-white' : 'bg-slate-100 text-slate-700'}`}>
                 {candidates.length}
               </span>
@@ -903,7 +901,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                   : 'bg-white border border-[#EAECF0] text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <span>📋 Job Requisitions ({jobs.length})</span>
+              <span>Job Requisitions ({jobs.length})</span>
             </button>
 
             <button
@@ -915,7 +913,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                   : 'bg-white border border-[#EAECF0] text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <span>🕒 Agency Activity &amp; Audit Log</span>
+              <span>Agency Activity &amp; Audit Log</span>
             </button>
           </div>
 
@@ -985,8 +983,10 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
             {/* Candidate Cards */}
             {jobs.length === 0 ? (
               <div className="bg-white border border-[#EAECF0] rounded-3xl p-12 text-center space-y-3">
-                <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center text-2xl mx-auto border border-[#D1E0FF]">
-                  📋
+                <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center mx-auto border border-[#D1E0FF]">
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
                 </div>
                 <h3 className="text-base font-bold text-[#101828]">Awaiting Job Description (JD)</h3>
                 <p className="text-xs text-[#667085] max-w-sm mx-auto">
@@ -1005,8 +1005,10 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
               </div>
             ) : filteredCandidates.length === 0 ? (
               <div className="bg-white border border-[#EAECF0] rounded-3xl p-12 text-center space-y-3">
-                <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center text-2xl mx-auto border border-[#D1E0FF]">
-                  👥
+                <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center mx-auto border border-[#D1E0FF]">
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
                 </div>
                 <h3 className="text-base font-bold text-[#101828]">
                   {candidates.length === 0 ? 'Candidate Sourcing & Screening in Progress' : 'No candidates match this filter'}
@@ -1068,8 +1070,8 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                             <p className="text-xs text-[#667085] mt-1">
                               <span className="font-semibold text-slate-800">{cand.currentTitle}</span>
                               {cand.currentCompany && ` at ${cand.currentCompany}`}
-                              {cand.totalExperience && ` • 💼 ${cand.totalExperience}`}
-                              {cand.location && ` • 📍 ${cand.location}`}
+                              {cand.totalExperience && ` • ${cand.totalExperience}`}
+                              {cand.location && ` • ${cand.location}`}
                             </p>
                           </div>
                         </div>
@@ -1083,7 +1085,9 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                             className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-[#EAECF0] hover:border-slate-300 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
                             title="Download verified candidate summary & CV"
                           >
-                            <span>{downloadingCandidateId === cand.id ? '⏳' : '📄'}</span>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
                             <span>{downloadingCandidateId === cand.id ? 'Downloading...' : 'Download Resume'}</span>
                           </button>
 
@@ -1096,7 +1100,9 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                             }}
                             className="px-3.5 py-2 bg-[#101828] hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
                           >
-                            <span>📅</span>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
                             <span>Schedule Interview</span>
                           </button>
 
@@ -1109,7 +1115,9 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                             }}
                             className="px-3.5 py-2 bg-[#3563E9] hover:bg-[#2851D6] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
                           >
-                            <span>💬</span>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
                             <span>Client Decision</span>
                           </button>
                         </div>
@@ -1207,8 +1215,10 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
 
             {jobs.length === 0 ? (
               <div className="bg-white border border-[#EAECF0] rounded-3xl p-12 text-center space-y-3">
-                <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center text-2xl mx-auto border border-[#D1E0FF]">
-                  📋
+                <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center mx-auto border border-[#D1E0FF]">
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
                 </div>
                 <h3 className="text-base font-bold text-[#101828]">No Job Descriptions Uploaded Yet</h3>
                 <p className="text-xs text-[#667085] max-w-sm mx-auto">
@@ -1237,7 +1247,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                           </span>
                           <h4 className="text-base font-bold text-[#101828]">{job.title}</h4>
                           <div className="text-xs text-[#667085] mt-0.5">
-                            📍 {job.location} • 🏢 {job.workMode} • 💰 {job.salary}
+                            {job.location} • {job.workMode} • {job.salary}
                           </div>
                         </div>
 
@@ -1441,7 +1451,11 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer"
                   />
-                  <div className="text-xl mb-1">📄</div>
+                  <div className="mb-2">
+                    <svg className="w-8 h-8 text-[#3563E9] mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                  </div>
                   <div className="text-xs font-bold text-slate-700">
                     {jdFileName ? `✓ Selected: ${jdFileName}` : 'Click or drag JD document here'}
                   </div>
