@@ -97,20 +97,30 @@ function ClientSharePortalContent() {
 
   // 4. Modal 1: Client Upload / Submit New JD Modal
   const [isJdModalOpen, setIsJdModalOpen] = useState(false);
-  const [jdTitle, setJdTitle] = useState('');
-  const [jdDepartment, setJdDepartment] = useState('');
-  const [jdExperience, setJdExperience] = useState('5 - 8 Years');
-  const [jdWorkMode, setJdWorkMode] = useState<'Hybrid' | 'Remote' | 'Onsite'>('Hybrid');
-  const [jdLocation, setJdLocation] = useState('New York, NY (or Remote)');
-  const [jdSalary, setJdSalary] = useState('$130,000 - $160,000');
-  const [jdText, setJdText] = useState('');
-  const [jdRequirements, setJdRequirements] = useState('');
-  const [jdUrgency, setJdUrgency] = useState<'Standard' | 'High' | 'Urgent'>('High');
-  const [jdContactName, setJdContactName] = useState('');
-  const [jdContactEmail, setJdContactEmail] = useState('');
-  const [jdFileName, setJdFileName] = useState<string | null>(null);
+  const [jdFiles, setJdFiles] = useState<{ file?: File; name: string; size: string; title: string }[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [isSubmittingJd, setIsSubmittingJd] = useState(false);
   const [jdSuccessBanner, setJdSuccessBanner] = useState<string | null>(null);
+
+  const handleFileSelect = (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const newItems = Array.from(fileList).map(f => {
+      const cleanTitle = f.name
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[-_]/g, ' ')
+        .replace(/\b(jd|job|description|spec|specs|final|v\d+)\b/gi, '')
+        .trim();
+      const sizeInKb = (f.size / 1024).toFixed(1);
+      const sizeStr = f.size > 1024 * 1024 ? `${(f.size / (1024 * 1024)).toFixed(1)} MB` : `${sizeInKb} KB`;
+      return {
+        file: f,
+        name: f.name,
+        size: sizeStr,
+        title: cleanTitle.length > 2 ? cleanTitle : f.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ')
+      };
+    });
+    setJdFiles(prev => [...prev, ...newItems]);
+  };
 
   // 5. Modal 2: Schedule Interview Modal
   const [interviewCandidate, setInterviewCandidate] = useState<CandidateItem | null>(null);
@@ -174,7 +184,6 @@ function ClientSharePortalContent() {
       setClientName(resolvedClient);
       if (resolvedContact) {
         setContactName(resolvedContact);
-        setJdContactName(resolvedContact);
       }
       if (resolvedNote) {
         setWelcomeNote(resolvedNote);
@@ -318,62 +327,80 @@ function ClientSharePortalContent() {
   }, [isLoading, jobs.length]);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Action: Submit New JD
+  // Action: Submit New JD PDF
   // ─────────────────────────────────────────────────────────────────────────────
   const handleClientSubmitJd = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!jdTitle.trim()) {
-      alert('Please enter a role title for the Job Description.');
+    if (jdFiles.length === 0) {
+      alert('Please select or drag in at least one Job Description (PDF) file.');
       return;
     }
 
     setIsSubmittingJd(true);
     try {
-      const newJobId = `jd-client-${Date.now()}`;
-      const newJob: ClientPortalJob = {
-        id: newJobId,
-        title: jdTitle.trim(),
-        department: jdDepartment.trim() || 'Core Team',
-        client: clientName,
-        location: jdLocation.trim() || 'Remote',
-        workMode: jdWorkMode,
-        salary: jdSalary.trim() || 'Competitive Market Rate',
-        status: 'Agency Sourcing Candidates',
-        sourcedCount: 0,
-        screenedCount: 0,
-        submittedCount: 0,
-        createdAt: 'Just now',
-        description: jdText.trim() || jdRequirements.trim() || `Client uploaded job requirements for ${jdTitle.trim()}`,
-        priority: jdUrgency,
-      };
+      const newCreatedJobs: ClientPortalJob[] = [];
+      const newActivities: TransparencyActivityItem[] = [];
 
-      // 1. Add into ATS Store so recruiters immediately see it in the main ATS
-      try {
-        atsStore.addJob(
-          {
-            title: newJob.title,
-            client: clientName,
-            location: newJob.location,
-            mode: newJob.workMode,
-            salary: newJob.salary,
-            candidates: 0,
-            topScore: 0,
-            status: 'Active',
-            assignedRecruiter: 'Agency Delivery Team',
-            pod: 'Client Portal Inflow',
-            mandatoryRequirementsCount: 3,
-            totalRequirementsCount: 6,
-            description: newJob.description,
-          },
-          jdContactName.trim() || `${clientName} Hiring Manager`,
-          'CLIENT'
-        );
-      } catch (err) {
-        console.warn('atsStore addJob fallback:', err);
-      }
+      jdFiles.forEach((item, idx) => {
+        const newJobId = `jd-client-${Date.now()}-${idx}`;
+        const cleanTitle = item.title.trim() || item.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+        const newJob: ClientPortalJob = {
+          id: newJobId,
+          title: cleanTitle,
+          department: 'Requisition Intake',
+          client: clientName,
+          location: 'Remote / Hybrid',
+          workMode: 'Hybrid',
+          salary: 'Competitive Market Rate',
+          status: 'Agency Sourcing Candidates',
+          sourcedCount: 0,
+          screenedCount: 0,
+          submittedCount: 0,
+          createdAt: 'Just now',
+          description: `Client uploaded Job Description PDF: ${item.name}`,
+          priority: 'High',
+        };
+
+        // 1. Add into ATS Store so recruiters immediately see it in the main ATS
+        try {
+          atsStore.addJob(
+            {
+              title: newJob.title,
+              client: clientName,
+              location: newJob.location,
+              mode: newJob.workMode,
+              salary: newJob.salary,
+              candidates: 0,
+              topScore: 0,
+              status: 'Active',
+              assignedRecruiter: 'Agency Delivery Team',
+              pod: 'Client Portal Inflow',
+              mandatoryRequirementsCount: 3,
+              totalRequirementsCount: 6,
+              description: newJob.description,
+            },
+            contactName.trim() || `${clientName} Hiring Manager`,
+            'CLIENT'
+          );
+        } catch (err) {
+          console.warn('atsStore addJob fallback:', err);
+        }
+
+        newCreatedJobs.push(newJob);
+
+        newActivities.push({
+          id: `act-${Date.now()}-${idx}`,
+          title: `New JD PDF Uploaded: ${newJob.title}`,
+          detail: `Client uploaded "${item.name}". Requisition registered and assigned to agency recruiters for deterministic sourcing.`,
+          actor: contactName || `${clientName} Hiring Team`,
+          actorRole: 'CLIENT',
+          timestamp: 'Just now',
+          badge: 'JD Uploaded'
+        });
+      });
 
       // 2. Persist in Client JDs storage
-      const updatedJobs = [newJob, ...jobs];
+      const updatedJobs = [...newCreatedJobs, ...jobs];
       setJobs(updatedJobs);
       if (typeof window !== 'undefined') {
         try {
@@ -385,17 +412,8 @@ function ClientSharePortalContent() {
       }
 
       // 3. Log transparency activity
-      const newActivity: TransparencyActivityItem = {
-        id: `act-${Date.now()}`,
-        title: `New JD Submitted: ${newJob.title}`,
-        detail: `Client hiring manager ${jdContactName || clientName} submitted requisition with priority: ${jdUrgency}. Agency recruiters notified to begin sourcing.`,
-        actor: jdContactName || `${clientName} Hiring Manager`,
-        actorRole: 'CLIENT',
-        timestamp: 'Just now',
-        badge: 'New Requisition'
-      };
       setActivities(prev => {
-        const next = [newActivity, ...prev];
+        const next = [...newActivities, ...prev];
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem(
@@ -409,13 +427,10 @@ function ClientSharePortalContent() {
 
       // 4. Reset Form & Show Success Banner
       setIsJdModalOpen(false);
-      setJdSuccessBanner(`Job Description for "${newJob.title}" successfully submitted! Our hiring team has been alerted and candidate sourcing is now underway.`);
-      setJdTitle('');
-      setJdDepartment('');
-      setJdText('');
-      setJdRequirements('');
-      setJdFileName(null);
-      showToast('✓ Job Description submitted to agency recruiters!');
+      setJdFiles([]);
+      const rolesSummary = newCreatedJobs.map(j => `"${j.title}"`).join(', ');
+      setJdSuccessBanner(`Job Description ${rolesSummary} successfully submitted! Our hiring team has been alerted and candidate sourcing is now underway.`);
+      showToast('✓ Job Description PDF uploaded successfully!');
     } catch (err: any) {
       alert(err.message || 'Error submitting Job Description.');
     } finally {
@@ -1359,185 +1374,140 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
       ───────────────────────────────────────────────────────────── */}
       {isJdModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden my-8">
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden my-8">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center font-bold text-lg border border-[#D1E0FF]">
-                  +
+                <div className="w-10 h-10 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center border border-[#D1E0FF] shadow-xs">
+                  <svg className="w-5 h-5 text-[#3563E9]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-[#101828]">Upload Job Description</h3>
-                  <p className="text-xs text-[#667085]">Submit requirements directly to HireIQ for candidate sourcing</p>
+                  <p className="text-xs text-[#667085]">Upload your JD PDF to begin candidate sourcing</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setIsJdModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-sm font-bold cursor-pointer"
+                onClick={() => { setIsJdModalOpen(false); setJdFiles([]); }}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-sm font-bold cursor-pointer transition-colors"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleClientSubmitJd} className="p-6 space-y-4 text-xs">
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Position / Job Title <span className="text-rose-600">*</span>
-                </label>
+            <form onSubmit={handleClientSubmitJd} className="p-6 space-y-5">
+              {/* Dropzone */}
+              <div
+                onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setIsDragOver(false); handleFileSelect(e.dataTransfer.files); }}
+                className={`relative border-2 border-dashed rounded-3xl p-8 text-center transition-all cursor-pointer ${
+                  isDragOver
+                    ? 'border-[#3563E9] bg-[#EFF4FF]/60'
+                    : 'border-[#D1E0FF] hover:border-[#3563E9] bg-[#F8F9FC] hover:bg-[#EFF4FF]/20'
+                }`}
+              >
                 <input
-                  required
-                  type="text"
-                  value={jdTitle}
-                  onChange={e => setJdTitle(e.target.value)}
-                  placeholder="e.g. Senior Backend Engineer (Node.js & AWS)"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:border-[#3563E9] focus:ring-1 focus:ring-[#3563E9] text-xs font-semibold text-slate-900 bg-white"
+                  type="file"
+                  accept=".pdf"
+                  multiple
+                  onChange={(e) => handleFileSelect(e.target.files)}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                 />
+                <div className="w-14 h-14 rounded-2xl bg-white border border-[#EAECF0] text-[#3563E9] flex items-center justify-center mx-auto mb-3 shadow-xs">
+                  <svg className="w-7 h-7 text-[#3563E9]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </div>
+                <div className="text-sm font-bold text-[#101828]">
+                  Click to upload or drag &amp; drop your JD PDF
+                </div>
+                <p className="text-xs text-[#667085] mt-1">
+                  Supports PDF documents up to 25MB • Multiple files allowed
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">Department / Business Unit</label>
-                  <input
-                    type="text"
-                    value={jdDepartment}
-                    onChange={e => setJdDepartment(e.target.value)}
-                    placeholder="e.g. Core Engineering"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">Target Experience</label>
-                  <input
-                    type="text"
-                    value={jdExperience}
-                    onChange={e => setJdExperience(e.target.value)}
-                    placeholder="e.g. 5 - 8 Years"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">Work Mode</label>
-                  <select
-                    value={jdWorkMode}
-                    onChange={e => setJdWorkMode(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white font-semibold text-slate-800"
-                  >
-                    <option value="Hybrid">Hybrid</option>
-                    <option value="Remote">Remote</option>
-                    <option value="Onsite">Onsite</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">Location</label>
-                  <input
-                    type="text"
-                    value={jdLocation}
-                    onChange={e => setJdLocation(e.target.value)}
-                    placeholder="e.g. New York, NY"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">Budget / Salary</label>
-                  <input
-                    type="text"
-                    value={jdSalary}
-                    onChange={e => setJdSalary(e.target.value)}
-                    placeholder="e.g. $140k - $170k"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900"
-                  />
-                </div>
-              </div>
-
-              {/* File Upload Dropzone */}
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Upload JD Document (PDF, Word, TXT)
-                </label>
-                <div className="border-2 border-dashed border-slate-300 hover:border-[#3563E9] rounded-2xl p-4 text-center bg-slate-50/50 cursor-pointer transition-colors relative">
-                  <input
-                    type="file"
-                    accept=".pdf,.docx,.doc,.txt"
-                    onChange={e => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setJdFileName(file.name);
-                        if (!jdTitle) {
-                          setJdTitle(file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '));
-                        }
-                      }
-                    }}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                  />
-                  <div className="mb-2">
-                    <svg className="w-8 h-8 text-[#3563E9] mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
+              {/* Uploaded Files List */}
+              {jdFiles.length > 0 && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                    <span>Attached JD Files ({jdFiles.length})</span>
+                    <span className="text-[11px] font-normal text-slate-400">Position titles extracted below</span>
                   </div>
-                  <div className="text-xs font-bold text-slate-700">
-                    {jdFileName ? `✓ Selected: ${jdFileName}` : 'Click or drag JD document here'}
+
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {jdFiles.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="bg-white border border-[#EAECF0] hover:border-[#3563E9]/30 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-xs transition-all"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-9 h-9 rounded-xl bg-red-50 text-red-600 border border-red-100 flex items-center justify-center font-extrabold text-[11px] shrink-0">
+                            PDF
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <input
+                              type="text"
+                              value={item.title}
+                              onChange={(e) => {
+                                const newTitle = e.target.value;
+                                setJdFiles(prev => prev.map((f, i) => i === idx ? { ...f, title: newTitle } : f));
+                              }}
+                              placeholder="Position / Role Title"
+                              className="text-xs font-bold text-[#101828] bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#3563E9] focus:outline-none w-full truncate"
+                            />
+                            <div className="text-[11px] text-[#667085] truncate mt-0.5">
+                              {item.name} • {item.size}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setJdFiles(prev => prev.filter((_, i) => i !== idx))}
+                          className="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center text-xs cursor-pointer shrink-0 transition-colors"
+                          title="Remove file"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Supports PDF, DOCX, and TXT up to 25MB</p>
-                </div>
-              </div>
 
-              {/* Paste Text Area */}
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Or Paste Job Description / Must-Have Criteria
-                </label>
-                <textarea
-                  rows={4}
-                  value={jdText}
-                  onChange={e => setJdText(e.target.value)}
-                  placeholder="Paste role responsibilities, required skills, knockout requirements, and team notes..."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:border-[#3563E9] text-xs text-slate-800 placeholder-slate-400"
-                />
-              </div>
-
-              {/* Contact Information */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-100">
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">Your Name (Hiring Contact)</label>
-                  <input
-                    type="text"
-                    value={jdContactName}
-                    onChange={e => setJdContactName(e.target.value)}
-                    placeholder="e.g. Sarah Jenkins (VP Engineering)"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900"
-                  />
+                  <div className="relative inline-block pt-1">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      multiple
+                      onChange={(e) => handleFileSelect(e.target.files)}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#3563E9] hover:underline cursor-pointer">
+                      + Add another JD PDF
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">Hiring Urgency</label>
-                  <select
-                    value={jdUrgency}
-                    onChange={e => setJdUrgency(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white font-semibold text-slate-800"
-                  >
-                    <option value="High">High Priority (Shortlists in 48h)</option>
-                    <option value="Urgent">Urgent / Critical Need</option>
-                    <option value="Standard">Standard Pipeline</option>
-                  </select>
-                </div>
-              </div>
+              )}
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsJdModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+                  onClick={() => { setIsJdModalOpen(false); setJdFiles([]); }}
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingJd}
-                  className="px-5 py-2.5 bg-[#3563E9] hover:bg-[#2851D6] text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer disabled:opacity-50"
+                  disabled={isSubmittingJd || jdFiles.length === 0}
+                  className="px-5 py-2.5 bg-[#3563E9] hover:bg-[#2851D6] active:scale-[0.99] text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
-                  {isSubmittingJd ? 'Submitting to Agency...' : 'Submit Requisition to Agency'}
+                  {isSubmittingJd
+                    ? 'Submitting...'
+                    : jdFiles.length > 1
+                    ? `Upload ${jdFiles.length} JDs to Agency`
+                    : 'Submit JD to Agency'}
                 </button>
               </div>
             </form>
