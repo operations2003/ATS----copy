@@ -57,6 +57,7 @@ interface ClientPortalJob {
   createdAt: string;
   description?: string;
   priority?: 'Standard' | 'High' | 'Urgent';
+  assignedRecruiter?: string;
 }
 
 interface TransparencyActivityItem {
@@ -81,6 +82,7 @@ function ClientSharePortalContent() {
   const [contactName, setContactName] = useState<string>(contactParam);
   const [welcomeNote, setWelcomeNote] = useState<string>('');
   const [portalToken, setPortalToken] = useState<string>(token || '');
+  const [assignedMember, setAssignedMember] = useState<string>('');
 
   // 2. Data State
   const [jobs, setJobs] = useState<ClientPortalJob[]>([]);
@@ -173,6 +175,9 @@ function ClientSharePortalContent() {
             }
             if (found?.welcomeNote) {
               resolvedNote = found.welcomeNote;
+            }
+            if (found?.assignedMember) {
+              setAssignedMember(found.assignedMember);
             }
           }
         } catch {}
@@ -361,6 +366,8 @@ function ClientSharePortalContent() {
           priority: 'High',
         };
 
+        const effectiveRecruiter = assignedMember || 'Agency Delivery Team';
+
         // 1. Add into ATS Store so recruiters immediately see it in the main ATS
         try {
           atsStore.addJob(
@@ -373,7 +380,7 @@ function ClientSharePortalContent() {
               candidates: 0,
               topScore: 0,
               status: 'Active',
-              assignedRecruiter: 'Agency Delivery Team',
+              assignedRecruiter: effectiveRecruiter,
               pod: 'Client Portal Inflow',
               mandatoryRequirementsCount: 3,
               totalRequirementsCount: 6,
@@ -386,12 +393,15 @@ function ClientSharePortalContent() {
           console.warn('atsStore addJob fallback:', err);
         }
 
-        newCreatedJobs.push(newJob);
+        newCreatedJobs.push({
+          ...newJob,
+          assignedRecruiter: effectiveRecruiter
+        });
 
         newActivities.push({
           id: `act-${Date.now()}-${idx}`,
           title: `New JD PDF Uploaded: ${newJob.title}`,
-          detail: `Client uploaded "${item.name}". Requisition registered and assigned to agency recruiters for deterministic sourcing.`,
+          detail: `Client uploaded "${item.name}". Requisition registered and assigned to ${effectiveRecruiter} for deterministic sourcing.`,
           actor: contactName || `${clientName} Hiring Team`,
           actorRole: 'CLIENT',
           timestamp: 'Just now',

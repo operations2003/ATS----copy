@@ -20,7 +20,27 @@ interface SharedClientLink {
   expiresAt: string;
   createdAt: string;
   views: number;
+  assignedMember?: string;
+  assignedMemberRole?: string;
+  assignedAt?: string;
 }
+
+export interface TeamMemberOption {
+  id: string;
+  name: string;
+  email?: string;
+  role: string;
+  team?: string;
+}
+
+const DEFAULT_ORGANIZATION_MEMBERS: TeamMemberOption[] = [
+  { id: 'tm-sarah', name: 'Sarah Jenkins', email: 'sarah.j@hireiq.internal', role: 'Senior Technical Recruiter', team: 'Core Engineering' },
+  { id: 'tm-alex', name: 'Alex Rivera', email: 'alex.r@hireiq.internal', role: 'Enterprise Delivery Lead', team: 'Client Solutions' },
+  { id: 'tm-david', name: 'David Kim', email: 'david.k@hireiq.internal', role: 'Technical Sourcing Lead', team: 'Cloud & Infrastructure' },
+  { id: 'tm-elena', name: 'Elena Rostova', email: 'elena.r@hireiq.internal', role: 'Senior Talent Partner', team: 'Executive & Product' },
+  { id: 'tm-marcus', name: 'Marcus Vance', email: 'marcus.v@hireiq.internal', role: 'Fullstack TA Specialist', team: 'Frontend & Mobile' },
+  { id: 'tm-priya', name: 'Priya Sharma', email: 'priya.s@hireiq.internal', role: 'AI & Data Recruiting Partner', team: 'Data & Analytics' },
+];
 
 const CLIENT_SHARES_STORAGE_KEY = 'tasknera_client_portal_shares_v1';
 
@@ -39,11 +59,24 @@ export default function ClientsPage() {
   const [clientPhone, setClientPhone] = useState('');
   const [welcomeNote, setWelcomeNote] = useState('');
   const [expirationDays, setExpirationDays] = useState(14);
+  const [defaultAssignMember, setDefaultAssignMember] = useState('');
   const [jobs, setJobs] = useState<JobItem[]>([]);
   const [sharedLinks, setSharedLinks] = useState<SharedClientLink[]>([]);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Assign JD to Team Member Modal State
+  const [teamMembers, setTeamMembers] = useState<TeamMemberOption[]>(DEFAULT_ORGANIZATION_MEMBERS);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [activeAssignLink, setActiveAssignLink] = useState<SharedClientLink | null>(null);
+  const [selectedAssignMember, setSelectedAssignMember] = useState<string>('');
+  const [selectedAssignRole, setSelectedAssignRole] = useState<string>('');
+  const [isCustomMember, setIsCustomMember] = useState(false);
+  const [customMemberName, setCustomMemberName] = useState('');
+  const [customMemberRole, setCustomMemberRole] = useState('Technical Recruiter');
+  const [selectedJobScope, setSelectedJobScope] = useState<'ALL' | string>('ALL');
+  const [assignmentNote, setAssignmentNote] = useState('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -82,6 +115,66 @@ export default function ClientsPage() {
     } catch {
       // ignore
     }
+
+    // Load organization team members from atsStore and backend database
+    const atsRecruiters = atsStore.getRecruiters();
+    const mappedAts: TeamMemberOption[] = atsRecruiters.map(r => ({
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      role: r.displayRole || r.customRole || r.role || 'Talent Acquisition Partner',
+      team: r.team || 'Core Sourcing'
+    }));
+
+    const memberMap = new Map<string, TeamMemberOption>();
+    DEFAULT_ORGANIZATION_MEMBERS.forEach(m => memberMap.set(m.name.toLowerCase().trim(), m));
+    mappedAts.forEach(m => memberMap.set(m.name.toLowerCase().trim(), m));
+
+    // Try fetching live TA members from backend
+    const fetchBackendMembers = async () => {
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+        const res = await fetch(`${backendUrl}/users/ta-members`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.members)) {
+            data.members.forEach((m: any) => {
+              const email = String(m.email || '').toLowerCase().trim();
+              const name = String(m.name || '').trim();
+              if (
+                email === 'admin@gmail.com' ||
+                email === 'operations@tasknera.com' ||
+                email.includes('harsh') ||
+                name.toLowerCase().includes('harsh') ||
+                email.includes('aditya') ||
+                name.toLowerCase().includes('aditya')
+              ) {
+                return;
+              }
+              if (name) {
+                memberMap.set(name.toLowerCase(), {
+                  id: m.id || `be-${email || name}`,
+                  name: name,
+                  email: m.email,
+                  role: m.displayRole || m.role || 'Talent Acquisition Partner',
+                  team: m.team || 'Talent Acquisition'
+                });
+              }
+            });
+            setTeamMembers(Array.from(memberMap.values()));
+            return;
+          }
+        }
+      } catch {
+        // fallback to memberMap
+      }
+      setTeamMembers(Array.from(memberMap.values()));
+    };
+
+    fetchBackendMembers();
   }, []);
 
   // Derives unique client names from shared links and existing ATS jobs
@@ -127,6 +220,158 @@ export default function ClientsPage() {
     return jobs.filter(j => j.client?.toLowerCase().trim() === clientName.toLowerCase().trim()).length;
   };
 
+  // Helper to retrieve detailed uploaded JDs for a client
+  const getClientUploadedJds = (clientName: string): { id: string; title: string; assignedRecruiter?: string }[] => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(`tasknera_client_jds_${clientName.replace(/\s+/g, '_')}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((item: any, idx: number) => ({
+              id: item.id || `jd-${idx}`,
+              title: item.title || item.name || 'Job Requisition',
+              assignedRecruiter: item.assignedRecruiter
+            }));
+          }
+        }
+      } catch {}
+    }
+    return jobs
+      .filter(j => j.client?.toLowerCase().trim() === clientName.toLowerCase().trim())
+      .map(j => ({ id: j.id, title: j.title, assignedRecruiter: j.assignedRecruiter }));
+  };
+
+  // Helper to determine who is assigned to this client's JDs
+  const getAssignedMemberForClient = (link: SharedClientLink): { name: string; role?: string } | null => {
+    if (link.assignedMember) {
+      return { name: link.assignedMember, role: link.assignedMemberRole };
+    }
+    const clientJobs = getClientUploadedJds(link.clientName);
+    const withRecruiter = clientJobs.find(j => j.assignedRecruiter && j.assignedRecruiter !== 'Agency Delivery Team');
+    if (withRecruiter?.assignedRecruiter) {
+      return { name: withRecruiter.assignedRecruiter };
+    }
+    return null;
+  };
+
+  const handleOpenAssignModal = (link: SharedClientLink) => {
+    setActiveAssignLink(link);
+    const current = getAssignedMemberForClient(link);
+    if (current?.name) {
+      const matchInList = teamMembers.find(m => m.name.toLowerCase() === current.name.toLowerCase());
+      if (matchInList) {
+        setIsCustomMember(false);
+        setSelectedAssignMember(matchInList.name);
+        setSelectedAssignRole(matchInList.role);
+      } else {
+        setIsCustomMember(true);
+        setCustomMemberName(current.name);
+        setCustomMemberRole(current.role || 'Technical Recruiter');
+      }
+    } else {
+      setIsCustomMember(false);
+      setSelectedAssignMember(teamMembers[0]?.name || '');
+      setSelectedAssignRole(teamMembers[0]?.role || 'Senior Technical Recruiter');
+    }
+    setSelectedJobScope('ALL');
+    setAssignmentNote('');
+    setAssignModalOpen(true);
+  };
+
+  const handleConfirmAssignment = () => {
+    if (!activeAssignLink) return;
+
+    const targetMember = isCustomMember ? customMemberName.trim() : selectedAssignMember.trim();
+    if (!targetMember) {
+      showToast('Please select or enter a team member');
+      return;
+    }
+
+    const targetRole = isCustomMember ? (customMemberRole.trim() || 'Technical Recruiter') : (selectedAssignRole.trim() || 'Talent Acquisition Lead');
+    const clientName = activeAssignLink.clientName;
+    const adminName = user?.name || cachedEmail?.split('@')[0] || 'Administrator';
+
+    // 1. Update shared links in state & localStorage
+    const updatedLinks = sharedLinks.map(l => {
+      if (l.id === activeAssignLink.id || l.clientName.toLowerCase().trim() === clientName.toLowerCase().trim()) {
+        return {
+          ...l,
+          assignedMember: targetMember,
+          assignedMemberRole: targetRole,
+          assignedAt: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+        };
+      }
+      return l;
+    });
+    setSharedLinks(updatedLinks);
+    try {
+      localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updatedLinks));
+    } catch {}
+
+    // 2. Reassign matching jobs in atsStore
+    const matchingJobs = atsStore.getJobs().filter(
+      j => j.client?.toLowerCase().trim() === clientName.toLowerCase().trim()
+    );
+    matchingJobs.forEach(job => {
+      if (selectedJobScope === 'ALL' || job.id === selectedJobScope) {
+        atsStore.reassignJob(job.id, targetMember, adminName);
+      }
+    });
+
+    // 3. Update tasknera_client_jds_${clientName} in localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        const storageKey = `tasknera_client_jds_${clientName.replace(/\s+/g, '_')}`;
+        const raw = localStorage.getItem(storageKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const updatedClientJds = parsed.map((item: any) => {
+              if (selectedJobScope === 'ALL' || item.id === selectedJobScope) {
+                return { ...item, assignedRecruiter: targetMember, assignedMemberRole: targetRole };
+              }
+              return item;
+            });
+            localStorage.setItem(storageKey, JSON.stringify(updatedClientJds));
+          }
+        }
+      } catch {}
+    }
+
+    // 4. Log transparency activity in tasknera_portal_activities_${clientName}
+    if (typeof window !== 'undefined') {
+      try {
+        const actStorageKey = `tasknera_portal_activities_${clientName.replace(/\s+/g, '_')}`;
+        const rawActs = localStorage.getItem(actStorageKey);
+        const parsedActs = rawActs ? JSON.parse(rawActs) : [];
+        const newAct = {
+          id: `act-assign-${Date.now()}`,
+          title: `Requisition Assigned to ${targetMember}`,
+          detail: `Client Job Description(s) assigned to ${targetMember} (${targetRole}) for deterministic sourcing and candidate screening.${assignmentNote.trim() ? ` Note: "${assignmentNote.trim()}"` : ''}`,
+          actor: adminName,
+          actorRole: 'ADMIN',
+          timestamp: 'Just now',
+          badge: 'Assigned'
+        };
+        localStorage.setItem(actStorageKey, JSON.stringify([newAct, ...(Array.isArray(parsedActs) ? parsedActs : [])]));
+      } catch {}
+    }
+
+    // 5. Ensure member is registered in atsStore
+    atsStore.ensureMember({
+      name: targetMember,
+      email: `${targetMember.toLowerCase().replace(/\s+/g, '.')}@hireiq.internal`,
+      role: 'RECRUITER_MEMBER',
+      customRole: targetRole
+    } as any);
+
+    // 6. Refresh jobs and show toast
+    setJobs(atsStore.getJobs());
+    setAssignModalOpen(false);
+    showToast(`✓ Assigned JDs for ${clientName} to ${targetMember}`);
+  };
+
   const handleOpenShareModal = (clientName?: string) => {
     if (clientName) {
       setClientCompanyName(clientName);
@@ -137,6 +382,7 @@ export default function ClientsPage() {
     setClientEmail('');
     setClientPhone('');
     setWelcomeNote('');
+    setDefaultAssignMember('');
     setGeneratedLink(null);
     setCopiedLink(false);
     setShareModalOpen(true);
@@ -167,6 +413,8 @@ export default function ClientsPage() {
       expiryLabel = expiryDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     }
 
+    const matchedMember = defaultAssignMember.trim() ? teamMembers.find(m => m.name === defaultAssignMember.trim()) : null;
+
     const newShare: SharedClientLink = {
       id: `share-${Date.now()}`,
       clientName: targetCompany,
@@ -179,6 +427,9 @@ export default function ClientsPage() {
       expiresAt: expiryLabel,
       createdAt: 'Just now',
       views: 0,
+      assignedMember: defaultAssignMember.trim() || undefined,
+      assignedMemberRole: matchedMember?.role || undefined,
+      assignedAt: defaultAssignMember.trim() ? new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : undefined,
     };
 
     const updated = [newShare, ...sharedLinks];
@@ -189,6 +440,18 @@ export default function ClientsPage() {
       localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updated));
     } catch {
       // ignore
+    }
+
+    // If pre-assigned, cascade to any existing client jobs
+    if (defaultAssignMember.trim()) {
+      const adminName = user?.name || cachedEmail?.split('@')[0] || 'Administrator';
+      const matchingJobs = atsStore.getJobs().filter(
+        j => j.client?.toLowerCase().trim() === targetCompany.toLowerCase().trim()
+      );
+      matchingJobs.forEach(job => {
+        atsStore.reassignJob(job.id, defaultAssignMember.trim(), adminName);
+      });
+      setJobs(atsStore.getJobs());
     }
 
     showToast('Client JD upload link generated successfully!');
@@ -315,6 +578,7 @@ export default function ClientsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {sharedLinks.map(link => {
                 const uploadedCount = getClientUploadedJdsCount(link.clientName);
+                const assignedInfo = getAssignedMemberForClient(link);
 
                 return (
                   <div
@@ -354,6 +618,19 @@ export default function ClientsPage() {
                           <span className="font-bold text-[#101828]">{uploadedCount} Job Position{uploadedCount === 1 ? '' : 's'}</span>
                         </div>
                         <div className="flex items-center justify-between">
+                          <span>Assigned To:</span>
+                          {assignedInfo ? (
+                            <span className="font-bold text-[#101828] inline-flex items-center gap-1.5" title={assignedInfo.role ? `${assignedInfo.name} (${assignedInfo.role})` : assignedInfo.name}>
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                              <span className="truncate max-w-[145px]">{assignedInfo.name}</span>
+                            </span>
+                          ) : (
+                            <span className="font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 text-[10px]">
+                              Unassigned
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between">
                           <span>Expires:</span>
                           <span className="font-medium text-[#101828]">{link.expiresAt}</span>
                         </div>
@@ -382,27 +659,40 @@ export default function ClientsPage() {
                       </div>
                     </div>
 
-                    <div className="mt-5 pt-3 border-t border-[#EAECF0] flex items-center justify-between gap-2">
-                      <a
-                        href={link.shareUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs font-bold text-[#3563E9] hover:text-[#2851D6] cursor-pointer"
+                    <div className="mt-4 pt-3 border-t border-[#EAECF0] flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAssignModal(link)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#EFF4FF] hover:bg-[#D1E0FF] text-[#3563E9] text-xs font-bold transition-all shadow-xs cursor-pointer"
                       >
-                        <span>Preview Portal</span>
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                         </svg>
-                      </a>
+                        <span>{assignedInfo ? 'Reassign JD' : 'Assign JD'}</span>
+                      </button>
 
-                      {link.clientEmail && (
+                      <div className="flex items-center gap-3">
                         <a
-                          href={`mailto:${link.clientEmail}?subject=${encodeURIComponent(`Hiring & JD Submission Portal: ${link.clientName}`)}&body=${encodeURIComponent(`Hello ${link.contactName || link.clientName},\n\nPlease use your secure link below to upload your Job Descriptions directly into our screening system:\n\n${link.shareUrl}\n\nBest regards,\nRecruitment Team`)}`}
-                          className="text-xs font-semibold text-[#667085] hover:text-[#101828] cursor-pointer"
+                          href={link.shareUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-bold text-[#667085] hover:text-[#3563E9] transition-colors cursor-pointer"
                         >
-                          Send Email
+                          <span>Preview Portal</span>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
                         </a>
-                      )}
+
+                        {link.clientEmail && (
+                          <a
+                            href={`mailto:${link.clientEmail}?subject=${encodeURIComponent(`Hiring & JD Submission Portal: ${link.clientName}`)}&body=${encodeURIComponent(`Hello ${link.contactName || link.clientName},\n\nPlease use your secure link below to upload your Job Descriptions directly into our screening system:\n\n${link.shareUrl}\n\nBest regards,\nRecruitment Team`)}`}
+                            className="text-xs font-semibold text-[#667085] hover:text-[#101828] cursor-pointer"
+                          >
+                            Send Email
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -583,7 +873,26 @@ export default function ClientsPage() {
                     />
                   </div>
 
-                  {/* Row 4: Link Expiry & Security */}
+                  {/* Row 4: Assign to Organization Team Member */}
+                  <div>
+                    <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                      Assign Requisition Owner <span className="text-[#667085] font-normal">(Optional - Pre-assign incoming JDs)</span>
+                    </label>
+                    <select
+                      value={defaultAssignMember}
+                      onChange={e => setDefaultAssignMember(e.target.value)}
+                      className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
+                    >
+                      <option value="">-- Assign Later from Client Card --</option>
+                      {teamMembers.map(m => (
+                        <option key={m.id} value={m.name}>
+                          {m.name} • {m.role} {m.team ? `(${m.team})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Row 5: Link Expiry & Security */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-[#101828] mb-1.5">Link Validity</label>
@@ -747,6 +1056,285 @@ export default function ClientsPage() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Assign JD to Organization Member Modal */}
+        {assignModalOpen && activeAssignLink && (
+          <div
+            className="fixed inset-0 z-[300] flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4"
+            onMouseDown={e => {
+              if (e.target === e.currentTarget) setAssignModalOpen(false);
+            }}
+          >
+            <div className="my-auto w-full max-w-xl rounded-2xl bg-white p-6 sm:p-7 shadow-2xl border border-[#EAECF0]">
+              {/* Modal Header */}
+              <div className="flex items-start justify-between border-b border-[#EAECF0] pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#EFF4FF] text-[#3563E9] shadow-xs">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-[#101828]">Assign Client JDs to Team Member</h2>
+                    <p className="text-xs text-[#667085]">
+                      Assign Job Descriptions from <span className="font-bold text-[#101828]">{activeAssignLink.clientName}</span> to a recruiter or delivery lead in your organization.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAssignModalOpen(false)}
+                  className="rounded-lg p-1.5 text-xl leading-none text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="mt-5 space-y-4">
+                {/* Client & Requisition Context Box */}
+                <div className="rounded-xl border border-[#EAECF0] bg-slate-50/70 p-3.5 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[#667085]">Client Account:</span>
+                    <span className="font-bold text-[#101828]">{activeAssignLink.clientName}</span>
+                  </div>
+                  {activeAssignLink.contactName && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#667085]">Hiring Contact:</span>
+                      <span className="font-semibold text-[#101828]">{activeAssignLink.contactName}</span>
+                    </div>
+                  )}
+                  {(() => {
+                    const clientJds = getClientUploadedJds(activeAssignLink.clientName);
+                    const currentAssigned = getAssignedMemberForClient(activeAssignLink);
+                    return (
+                      <>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-[#667085]">Current Status:</span>
+                          {currentAssigned ? (
+                            <span className="font-bold text-[#101828] inline-flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              Assigned to {currentAssigned.name}
+                            </span>
+                          ) : (
+                            <span className="font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-[10px]">
+                              Currently Unassigned
+                            </span>
+                          )}
+                        </div>
+                        <div className="pt-2 border-t border-[#EAECF0]/80">
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-[#667085] mb-1">
+                            Uploaded Job Descriptions ({clientJds.length}):
+                          </div>
+                          {clientJds.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {clientJds.map(j => (
+                                <span
+                                  key={j.id}
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold bg-white border border-[#EAECF0] px-2.5 py-1 rounded-lg text-[#101828]"
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[#3563E9]" />
+                                  {j.title}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-[#667085] italic">
+                              No JDs uploaded yet. This assignment will automatically be applied to incoming JDs submitted via this client link.
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                {/* Team Member Selection */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-[#101828]">
+                      Assign To Organization Member <span className="text-[#3563E9]">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomMember(!isCustomMember)}
+                      className="text-[11px] font-bold text-[#3563E9] hover:underline cursor-pointer"
+                    >
+                      {isCustomMember ? '← Choose from Organization List' : '+ Enter Custom Member Name'}
+                    </button>
+                  </div>
+
+                  {!isCustomMember ? (
+                    <div className="space-y-2">
+                      <select
+                        value={selectedAssignMember}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setSelectedAssignMember(val);
+                          const found = teamMembers.find(m => m.name === val);
+                          if (found) setSelectedAssignRole(found.role);
+                        }}
+                        className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
+                      >
+                        <option value="" disabled>-- Select Organization Member --</option>
+                        {teamMembers.map(member => (
+                          <option key={member.id} value={member.name}>
+                            {member.name} — {member.role} {member.team ? `(${member.team})` : ''}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Member Details Preview */}
+                      {selectedAssignMember && (() => {
+                        const member = teamMembers.find(m => m.name === selectedAssignMember);
+                        return member ? (
+                          <div className="flex items-center gap-3 p-3 rounded-xl bg-[#EFF4FF]/60 border border-[#D1E0FF] text-xs">
+                            <div className="w-9 h-9 rounded-full bg-[#3563E9] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                              {member.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-[#101828] truncate">{member.name}</div>
+                              <div className="text-[11px] text-[#667085] truncate">
+                                {member.role} {member.team ? `• ${member.team}` : ''} {member.email ? `• ${member.email}` : ''}
+                              </div>
+                            </div>
+                            <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-[#3563E9] border border-[#D1E0FF]">
+                              Designated Owner
+                            </span>
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl border border-[#D1E0FF] bg-[#EFF4FF]/40">
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#101828] mb-1">
+                          Member Full Name <span className="text-[#3563E9]">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={customMemberName}
+                          onChange={e => setCustomMemberName(e.target.value)}
+                          placeholder="e.g. Priya Sharma"
+                          className="w-full rounded-xl border border-[#EAECF0] bg-white px-3 py-2 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#101828] mb-1">
+                          Role / Title in Organization
+                        </label>
+                        <input
+                          type="text"
+                          value={customMemberRole}
+                          onChange={e => setCustomMemberRole(e.target.value)}
+                          placeholder="e.g. Technical Recruiter"
+                          className="w-full rounded-xl border border-[#EAECF0] bg-white px-3 py-2 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9]"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Scope Selection */}
+                {(() => {
+                  const clientJds = getClientUploadedJds(activeAssignLink.clientName);
+                  if (clientJds.length > 1) {
+                    return (
+                      <div>
+                        <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                          Requisition Assignment Scope
+                        </label>
+                        <div className="grid grid-cols-1 gap-2">
+                          <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
+                            selectedJobScope === 'ALL'
+                              ? 'bg-[#EFF4FF] border-[#3563E9] text-[#101828]'
+                              : 'bg-white border-[#EAECF0] text-[#667085] hover:bg-slate-50'
+                          }`}>
+                            <input
+                              type="radio"
+                              name="jobScope"
+                              checked={selectedJobScope === 'ALL'}
+                              onChange={() => setSelectedJobScope('ALL')}
+                              className="text-[#3563E9]"
+                            />
+                            <span>All Requisitions from {activeAssignLink.clientName} ({clientJds.length} total)</span>
+                          </label>
+
+                          {clientJds.map(job => (
+                            <label
+                              key={job.id}
+                              className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
+                                selectedJobScope === job.id
+                                  ? 'bg-[#EFF4FF] border-[#3563E9] text-[#101828]'
+                                  : 'bg-white border-[#EAECF0] text-[#667085] hover:bg-slate-50'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="jobScope"
+                                checked={selectedJobScope === job.id}
+                                onChange={() => setSelectedJobScope(job.id)}
+                                className="text-[#3563E9]"
+                              />
+                              <span className="truncate">Only "{job.title}"</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* Sourcing Instructions Note */}
+                <div>
+                  <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                    Internal Sourcing Guidelines &amp; Notes <span className="text-[#667085] font-normal">(Optional)</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={assignmentNote}
+                    onChange={e => setAssignmentNote(e.target.value)}
+                    placeholder="e.g. Focus on candidates with 5+ years experience and hybrid availability. Shortlist target: 5 verified profiles."
+                    className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-medium text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20 resize-none"
+                  />
+                </div>
+
+                {/* Permissions & Responsibilities info */}
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-900 flex items-start gap-2">
+                  <svg className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>
+                    The assigned member will be registered as the requisition owner in HireIQ, manage candidate evaluations, and be visible in audit logs.
+                  </span>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="mt-6 flex items-center justify-end gap-3 border-t border-[#EAECF0] pt-4">
+                <button
+                  type="button"
+                  onClick={() => setAssignModalOpen(false)}
+                  className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-semibold text-[#182230] hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmAssignment}
+                  disabled={isCustomMember ? !customMemberName.trim() : !selectedAssignMember.trim()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#3563E9] px-6 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#2851D6] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Confirm Assignment
+                </button>
+              </div>
             </div>
           </div>
         )}
