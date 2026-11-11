@@ -6,21 +6,6 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { atsStore, JobItem } from '@/lib/atsStore';
 
-interface ClientProfile {
-  id: string;
-  clientName: string;
-  profileName: string;
-  description: string;
-  strictMandatory: boolean;
-  autoReject: boolean;
-  techWeight: number;
-  expWeight: number;
-  certWeight: number;
-  jobsUsed: number;
-  lastUsed: string;
-  tagColor: string;
-}
-
 interface SharedClientLink {
   id: string;
   clientName: string;
@@ -33,31 +18,9 @@ interface SharedClientLink {
   views: number;
 }
 
-const defaultForm = {
-  clientName: '',
-  profileName: '',
-  description: '',
-  strictMandatory: true,
-  autoReject: true,
-  techWeight: 1.0,
-  expWeight: 1.0,
-  certWeight: 1.0,
-  mandatoryWeight: 50,
-  skillsWeight: 20,
-  experienceWeight: 15,
-  responsibilitiesWeight: 10,
-  preferredWeight: 5,
-};
-
-const CLIENT_PROFILES_STORAGE_KEY = 'tasknera_client_profiles_v1';
 const CLIENT_SHARES_STORAGE_KEY = 'tasknera_client_portal_shares_v1';
 
-export default function ClientProfilesPage() {
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(defaultForm);
-  const [list, setList] = useState<ClientProfile[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-
+export default function ClientsPage() {
   // Share Link Modal State
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [selectedClientName, setSelectedClientName] = useState('');
@@ -80,22 +43,7 @@ export default function ClientProfilesPage() {
       setSelectedJobId(loadedJobs[0].id);
     }
 
-    // Load custom client evaluation profiles from localStorage
-    try {
-      const storedProfiles = localStorage.getItem(CLIENT_PROFILES_STORAGE_KEY);
-      if (storedProfiles) {
-        const parsed = JSON.parse(storedProfiles);
-        if (Array.isArray(parsed)) {
-          setList(parsed);
-        }
-      }
-    } catch {
-      // ignore
-    } finally {
-      setIsLoaded(true);
-    }
-
-    // Load previously generated client share links
+    // Load client share links from localStorage
     try {
       const stored = localStorage.getItem(CLIENT_SHARES_STORAGE_KEY);
       if (stored) {
@@ -109,70 +57,40 @@ export default function ClientProfilesPage() {
     }
   }, []);
 
-  const totalWeight = form.mandatoryWeight + form.skillsWeight + form.experienceWeight + form.responsibilitiesWeight + form.preferredWeight;
-
-  // Derives unique client names from saved profiles and existing ATS jobs
+  // Derives unique client names from shared links and existing ATS jobs
   const availableClientNames = useMemo(() => {
     const set = new Set<string>();
-    list.forEach(p => {
-      if (p.clientName?.trim()) set.add(p.clientName.trim());
+    sharedLinks.forEach(l => {
+      if (l.clientName?.trim()) set.add(l.clientName.trim());
     });
     jobs.forEach(j => {
       if (j.client?.trim()) set.add(j.client.trim());
     });
     return Array.from(set);
-  }, [list, jobs]);
+  }, [sharedLinks, jobs]);
 
-  const handleSave = () => {
-    if (!form.clientName.trim() || !form.profileName.trim() || totalWeight !== 100) return;
-
-    const newProfile: ClientProfile = {
-      id: `cp-${Date.now()}`,
-      clientName: form.clientName.trim(),
-      profileName: form.profileName.trim(),
-      description: form.description.trim() || 'Custom evaluation rules and candidate screening standard.',
-      strictMandatory: form.strictMandatory,
-      autoReject: form.autoReject,
-      techWeight: form.techWeight,
-      expWeight: form.expWeight,
-      certWeight: form.certWeight,
-      jobsUsed: 0,
-      lastUsed: 'Just now',
-      tagColor: 'bg-blue-50 text-blue-700 border-blue-200',
-    };
-
-    const updated = [newProfile, ...list];
-    setList(updated);
-
-    try {
-      localStorage.setItem(CLIENT_PROFILES_STORAGE_KEY, JSON.stringify(updated));
-    } catch {
-      // ignore
-    }
-
-    setForm(defaultForm);
-    setShowForm(false);
-    showToast('Client evaluation profile created successfully');
-  };
-
-  const handleDeleteProfile = (id: string, name: string) => {
-    const updated = list.filter(p => p.id !== id);
-    setList(updated);
-    try {
-      localStorage.setItem(CLIENT_PROFILES_STORAGE_KEY, JSON.stringify(updated));
-    } catch {
-      // ignore
-    }
-    showToast(`Removed profile for ${name}`);
-  };
+  // Aggregate client account cards from existing jobs
+  const clientAccounts = useMemo(() => {
+    const map = new Map<string, { name: string; jobsCount: number; jobTitles: string[] }>();
+    jobs.forEach(j => {
+      const client = j.client?.trim() || 'General Client';
+      if (!map.has(client)) {
+        map.set(client, { name: client, jobsCount: 0, jobTitles: [] });
+      }
+      const entry = map.get(client)!;
+      entry.jobsCount += 1;
+      if (j.title && !entry.jobTitles.includes(j.title)) {
+        entry.jobTitles.push(j.title);
+      }
+    });
+    return Array.from(map.values());
+  }, [jobs]);
 
   const handleOpenShareModal = (clientName?: string) => {
     if (clientName) {
       setSelectedClientName(clientName);
     } else if (selectedClientName) {
       // maintain current selection
-    } else if (list.length > 0) {
-      setSelectedClientName(list[0].clientName);
     } else if (availableClientNames.length > 0) {
       setSelectedClientName(availableClientNames[0]);
     } else {
@@ -218,6 +136,17 @@ export default function ClientProfilesPage() {
     showToast('Client hiring & transparency link generated successfully!');
   };
 
+  const handleDeleteShare = (id: string, name: string) => {
+    const updated = sharedLinks.filter(l => l.id !== id);
+    setSharedLinks(updated);
+    try {
+      localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+    showToast(`Revoked portal link for ${name}`);
+  };
+
   const handleCopyLink = (url: string) => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(url);
@@ -239,68 +168,98 @@ export default function ClientProfilesPage() {
       <Header />
       <main className="max-w-screen-xl mx-auto px-6 pt-24 pb-16 flex-1 w-full">
 
-        {/* Header */}
+        {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#EFF4FF] border border-[#D1E0FF] rounded-full text-xs font-bold text-[#3563E9] mb-2">
               <span className="w-2 h-2 rounded-full bg-[#3563E9]" />
-              Client Governance &amp; Scoring Rules
+              Client Transparency &amp; Portals
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#101828] tracking-tight">Client Evaluation Profiles</h1>
-            <p className="text-sm text-[#667085] mt-1">Configure scoring rules per hiring account to automatically standardize candidate evaluations</p>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#101828] tracking-tight">Client Portals &amp; Shared Links</h1>
+            <p className="text-sm text-[#667085] mt-1">
+              Generate live, secure hiring portal links for clients to submit JDs, view candidate screening progress, and schedule interviews.
+            </p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <button
               type="button"
               onClick={() => handleOpenShareModal()}
-              className="flex items-center gap-2 px-5 py-3 bg-white hover:bg-slate-50 text-[#182230] hover:text-[#101828] border border-[#EAECF0] hover:border-slate-300 text-xs font-bold rounded-xl transition-all shadow-xs hover:-translate-y-0.5 cursor-pointer"
-            >
-              <svg className="w-4 h-4 text-[#3563E9]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-              </svg>
-              Share a Link
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowForm(true)}
               className="flex items-center gap-2 px-5 py-3 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold rounded-xl transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
               </svg>
-              Create New Client Profile
+              Generate Client Portal Link
             </button>
           </div>
         </div>
 
-        {/* Profile Cards Grid or Clean Empty State */}
-        {list.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {list.map(p => {
-              const activeJobsCount = jobs.filter(
-                j => j.client?.toLowerCase().trim() === p.clientName?.toLowerCase().trim()
-              ).length;
+        {/* Enterprise KPI Overview */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
+          <div className="bg-white border border-[#EAECF0] rounded-2xl p-5 shadow-xs">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#667085]">Active Client Portals</span>
+              <div className="w-8 h-8 rounded-lg bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center font-bold">
+                🔗
+              </div>
+            </div>
+            <div className="text-3xl font-extrabold text-[#101828]">{sharedLinks.length}</div>
+            <p className="text-xs text-[#667085] mt-1">Live transparency links shared with clients</p>
+          </div>
 
-              return (
-                <div key={p.id} className="bg-white border border-[#EAECF0] hover:border-[#3563E9]/40 rounded-2xl p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
+          <div className="bg-white border border-[#EAECF0] rounded-2xl p-5 shadow-xs">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#667085]">Client Accounts</span>
+              <div className="w-8 h-8 rounded-lg bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center font-bold">
+                🏢
+              </div>
+            </div>
+            <div className="text-3xl font-extrabold text-[#101828]">{clientAccounts.length}</div>
+            <p className="text-xs text-[#667085] mt-1">Active hiring accounts in HireIQ</p>
+          </div>
+
+          <div className="bg-white border border-[#EAECF0] rounded-2xl p-5 shadow-xs">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#667085]">Active Requisitions</span>
+              <div className="w-8 h-8 rounded-lg bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center font-bold">
+                💼
+              </div>
+            </div>
+            <div className="text-3xl font-extrabold text-[#101828]">{jobs.length}</div>
+            <p className="text-xs text-[#667085] mt-1">Open positions connected to clients</p>
+          </div>
+        </div>
+
+        {/* Active Client Portals Section */}
+        <div className="mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-[#101828]">Active Shared Client Portals</h2>
+              <p className="text-xs text-[#667085]">Live links shared with client hiring managers for real-time candidate review and JD upload</p>
+            </div>
+          </div>
+
+          {sharedLinks.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {sharedLinks.map(link => (
+                <div
+                  key={link.id}
+                  className="bg-white border border-[#EAECF0] hover:border-[#3563E9]/40 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+                >
                   <div>
-                    <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-start justify-between mb-2">
                       <div>
-                        <h3 className="text-[#101828] font-bold text-base">{p.clientName}</h3>
-                        <p className="text-[#3563E9] font-semibold text-xs mt-0.5">{p.profileName}</p>
+                        <h3 className="text-[#101828] font-bold text-base">{link.clientName}</h3>
+                        <p className="text-xs text-[#3563E9] font-semibold mt-0.5">{link.jobTitle}</p>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border shadow-xs ${
-                          p.strictMandatory
-                            ? 'bg-rose-50 text-rose-700 border-rose-200'
-                            : 'bg-blue-50 text-blue-700 border-blue-200'
-                        }`}>
-                          {p.strictMandatory ? 'STRICT COMPLIANCE' : 'FLEXIBLE'}
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Active
                         </span>
                         <button
                           type="button"
-                          title="Delete Profile"
-                          onClick={() => handleDeleteProfile(p.id, p.clientName)}
+                          title="Revoke Link"
+                          onClick={() => handleDeleteShare(link.id, link.clientName)}
                           className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -310,238 +269,122 @@ export default function ClientProfilesPage() {
                       </div>
                     </div>
 
-                    <p className="text-[#667085] text-xs leading-relaxed mb-5">{p.description}</p>
-
-                    <div className="space-y-2.5 mb-5 bg-[#F8FAFC] p-4 rounded-xl border border-[#EAECF0]">
-                      {[
-                        { label: 'Technical Skills Weight', value: `×${p.techWeight}` },
-                        { label: 'Experience Multiplier', value: `×${p.expWeight}` },
-                        { label: 'Certification Weight', value: `×${p.certWeight}` },
-                      ].map((row, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs">
-                          <span className="text-[#667085] font-medium">{row.label}</span>
-                          <span className="text-[#101828] font-bold">{row.value}</span>
-                        </div>
-                      ))}
-                      <div className="flex items-center justify-between text-xs pt-2 border-t border-[#EAECF0]">
-                        <span className="text-[#667085] font-medium">Mandatory Failure Action</span>
-                        <span className={`font-bold px-2 py-0.5 rounded text-[11px] ${p.autoReject ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
-                          {p.autoReject ? 'Auto-Disqualify' : 'Flag for Review'}
-                        </span>
+                    <div className="mt-3 space-y-1.5 text-xs text-[#667085]">
+                      <div className="flex items-center justify-between">
+                        <span>Created:</span>
+                        <span className="font-medium text-[#101828]">{link.createdAt}</span>
                       </div>
+                      <div className="flex items-center justify-between">
+                        <span>Expires:</span>
+                        <span className="font-medium text-[#101828]">{link.expiresAt}</span>
+                      </div>
+                      {link.clientEmail && (
+                        <div className="flex items-center justify-between">
+                          <span>Recipient:</span>
+                          <span className="font-medium text-[#101828] truncate max-w-[150px]">{link.clientEmail}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-4 p-2.5 rounded-xl bg-slate-50 border border-[#EAECF0] flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={link.shareUrl}
+                        className="w-full bg-transparent text-[11px] font-mono text-[#667085] outline-none select-all truncate"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleCopyLink(link.shareUrl)}
+                        className="shrink-0 text-xs font-bold text-[#3563E9] hover:underline cursor-pointer"
+                      >
+                        Copy
+                      </button>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-[#667085] pt-3 border-t border-[#EAECF0]">
-                    <span className="font-semibold">
-                      {activeJobsCount} Active Requisition{activeJobsCount === 1 ? '' : 's'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenShareModal(p.clientName)}
-                      className="inline-flex items-center gap-1 font-bold text-[#3563E9] hover:text-[#2851D6] hover:underline cursor-pointer"
+                  <div className="mt-5 pt-3 border-t border-[#EAECF0] flex items-center justify-between gap-2">
+                    <a
+                      href={link.shareUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#3563E9] hover:text-[#2851D6] cursor-pointer"
                     >
+                      <span>Preview Portal</span>
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
-                      Share Link
-                    </button>
+                    </a>
+
+                    {link.clientEmail && (
+                      <a
+                        href={`mailto:${link.clientEmail}?subject=${encodeURIComponent(`Client Review Portal: ${link.clientName}`)}&body=${encodeURIComponent(`Hello,\n\nPlease review our screened candidates and JD submissions using this link:\n\n${link.shareUrl}\n\nBest regards,\nRecruitment Team`)}`}
+                        className="text-xs font-semibold text-[#667085] hover:text-[#101828] cursor-pointer"
+                      >
+                        Send Email
+                      </a>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          /* Clean Enterprise Empty State when no client profiles exist */
-          <div className="bg-white border border-[#EAECF0] rounded-2xl p-10 sm:p-14 text-center shadow-xs mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-[#EFF4FF] border border-[#D1E0FF] text-[#3563E9] flex items-center justify-center mx-auto mb-4 shadow-xs">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
+              ))}
             </div>
-            <h3 className="text-xl font-bold text-[#101828] mb-2">No Client Evaluation Profiles</h3>
-            <p className="text-sm text-[#667085] max-w-lg mx-auto mb-6">
-              Configure tailored evaluation scoring rules, mandatory criteria weights, and auto-disqualification filters per hiring client to automatically standardize candidate evaluations.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <button
-                type="button"
-                onClick={() => setShowForm(true)}
-                className="flex items-center gap-2 px-5 py-2.5 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold rounded-xl transition-all shadow-sm hover:-translate-y-0.5 cursor-pointer"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+          ) : (
+            /* Clean Empty State */
+            <div className="bg-white border border-[#EAECF0] rounded-2xl p-10 sm:p-12 text-center shadow-xs">
+              <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] border border-[#D1E0FF] text-[#3563E9] flex items-center justify-center mx-auto mb-4 shadow-xs">
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                 </svg>
-                Create First Client Profile
-              </button>
+              </div>
+              <h3 className="text-lg font-bold text-[#101828] mb-1.5">No Client Portals Shared Yet</h3>
+              <p className="text-xs text-[#667085] max-w-md mx-auto mb-5">
+                Generate a live client link to share with your clients. Clients can directly submit JDs into HireIQ and track candidate screening with full transparency.
+              </p>
               <button
                 type="button"
                 onClick={() => handleOpenShareModal()}
-                className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-slate-50 text-[#182230] border border-[#EAECF0] hover:border-slate-300 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer"
               >
-                <svg className="w-4 h-4 text-[#3563E9]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                </svg>
-                Share a Client Portal Link
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Create Form Drawer / Modal */}
-        {showForm && (
-          <div className="bg-white border border-[#EAECF0] rounded-2xl p-7 shadow-xl mb-8">
-            <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#EAECF0]">
-              <div>
-                <h2 className="text-[#101828] font-bold text-lg">Define New Client Evaluation Profile</h2>
-                <p className="text-xs text-[#667085] mt-0.5">Custom weighting models ensure candidate rankings align with client hiring culture</p>
-              </div>
-              <button onClick={() => setShowForm(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-800 cursor-pointer">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
+                Generate First Client Portal Link
               </button>
             </div>
+          )}
+        </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+        {/* Client Accounts from ATS Requisitions */}
+        {clientAccounts.length > 0 && (
+          <div className="bg-white border border-[#EAECF0] rounded-2xl p-6 shadow-xs">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#EAECF0]">
               <div>
-                <label className="block text-xs font-bold text-[#101828] mb-1.5">Client Account Name *</label>
-                <input
-                  type="text"
-                  value={form.clientName}
-                  onChange={e => setForm({ ...form, clientName: e.target.value })}
-                  className="w-full bg-white border border-[#EAECF0] rounded-xl px-4 py-2.5 text-xs font-semibold text-[#182230] focus:outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
-                  placeholder="e.g. Acme Corporation"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-[#101828] mb-1.5">Profile Identifier *</label>
-                <input
-                  type="text"
-                  value={form.profileName}
-                  onChange={e => setForm({ ...form, profileName: e.target.value })}
-                  className="w-full bg-white border border-[#EAECF0] rounded-xl px-4 py-2.5 text-xs font-semibold text-[#182230] focus:outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
-                  placeholder="e.g. Executive Engineering Standard"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-[#101828] mb-1.5">Rule Strategy Description</label>
-                <input
-                  type="text"
-                  value={form.description}
-                  onChange={e => setForm({ ...form, description: e.target.value })}
-                  className="w-full bg-white border border-[#EAECF0] rounded-xl px-4 py-2.5 text-xs font-semibold text-[#182230] focus:outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
-                  placeholder="Describe client specific criteria and requirements..."
-                />
+                <h3 className="text-base font-bold text-[#101828]">Connected Client Accounts ({clientAccounts.length})</h3>
+                <p className="text-xs text-[#667085]">Clients identified from current active job requisitions in HireIQ</p>
               </div>
             </div>
 
-            {/* Rules */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div className="bg-[#F8FAFC] border border-[#EAECF0] rounded-xl p-5">
-                <h3 className="text-[#101828] text-xs font-bold uppercase tracking-wider mb-4">Mandatory Compliance Rules</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <span id="strict-mandatory-label" className="min-w-0 text-slate-700 text-xs font-semibold">Strict mandatory enforcement</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-labelledby="strict-mandatory-label"
-                      aria-checked={form.strictMandatory}
-                      onClick={() => setForm(current => ({ ...current, strictMandatory: !current.strictMandatory }))}
-                      className={`relative block h-6 w-11 min-w-11 flex-none overflow-hidden rounded-full border-0 p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3563E9]/50 focus-visible:ring-offset-2 ${form.strictMandatory ? 'bg-[#3563E9]' : 'bg-slate-300'}`}
-                    >
-                      <span className={`absolute left-0.5 top-0.5 block h-5 w-5 rounded-full bg-white shadow-xs transition-transform ${form.strictMandatory ? 'translate-x-5' : 'translate-x-0'}`} />
-                    </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {clientAccounts.map(client => (
+                <div
+                  key={client.name}
+                  className="rounded-xl border border-[#EAECF0] bg-slate-50/60 p-4 flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <h4 className="text-xs font-bold text-[#101828] truncate">{client.name}</h4>
+                    <p className="text-[11px] text-[#667085] mt-0.5">
+                      {client.jobsCount} Requisition{client.jobsCount === 1 ? '' : 's'}
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span id="auto-reject-label" className="min-w-0 text-slate-700 text-xs font-semibold">Auto-disqualify candidate on mandatory failure</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-labelledby="auto-reject-label"
-                      aria-checked={form.autoReject}
-                      onClick={() => setForm(current => ({ ...current, autoReject: !current.autoReject }))}
-                      className={`relative block h-6 w-11 min-w-11 flex-none overflow-hidden rounded-full border-0 p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3563E9]/50 focus-visible:ring-offset-2 ${form.autoReject ? 'bg-[#3563E9]' : 'bg-slate-300'}`}
-                    >
-                      <span className={`absolute left-0.5 top-0.5 block h-5 w-5 rounded-full bg-white shadow-xs transition-transform ${form.autoReject ? 'translate-x-5' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenShareModal(client.name)}
+                    className="shrink-0 px-3 py-1.5 rounded-lg bg-white border border-[#EAECF0] hover:border-[#3563E9] text-[#3563E9] text-[11px] font-bold shadow-xs hover:bg-[#EFF4FF] transition-all cursor-pointer"
+                  >
+                    Share Portal Link
+                  </button>
                 </div>
-              </div>
-
-              <div className="bg-[#F8FAFC] border border-[#EAECF0] rounded-xl p-5">
-                <h3 className="text-[#101828] text-xs font-bold uppercase tracking-wider mb-4">Evaluation Weight Multipliers</h3>
-                <div className="space-y-3">
-                  {[
-                    { label: 'Technical Competency', key: 'techWeight' },
-                    { label: 'Experience Depth', key: 'expWeight' },
-                    { label: 'Certifications & Degree', key: 'certWeight' },
-                  ].map(row => (
-                    <div key={row.key} className="flex items-center justify-between gap-3">
-                      <span className="text-slate-700 text-xs font-semibold">{row.label}</span>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0.5"
-                        max="2.0"
-                        value={form[row.key as keyof typeof form] as number}
-                        onChange={e => setForm({ ...form, [row.key]: parseFloat(e.target.value) })}
-                        className="w-20 bg-white border border-[#EAECF0] rounded-xl px-2 py-1 text-xs font-bold text-[#101828] text-center focus:outline-none focus:border-[#3563E9]"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Scoring Weights */}
-            <div className="bg-[#F8FAFC] border border-[#EAECF0] rounded-xl p-5 mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[#101828] text-xs font-bold uppercase tracking-wider">Default Category Weights (Must sum to 100)</h3>
-                <span className={`text-xs font-extrabold px-3 py-1 rounded-full ${totalWeight === 100 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
-                  Sum: {totalWeight}/100
-                </span>
-              </div>
-              <div className="grid grid-cols-5 gap-3">
-                {[
-                  { label: 'Mandatory', key: 'mandatoryWeight' },
-                  { label: 'Skills Match', key: 'skillsWeight' },
-                  { label: 'Experience', key: 'experienceWeight' },
-                  { label: 'Responsibilities', key: 'responsibilitiesWeight' },
-                  { label: 'Preferred', key: 'preferredWeight' },
-                ].map(row => (
-                  <div key={row.key} className="text-center">
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={form[row.key as keyof typeof form] as number}
-                      onChange={e => setForm({ ...form, [row.key]: parseInt(e.target.value) || 0 })}
-                      className="w-full bg-white border border-[#EAECF0] rounded-xl px-2 py-2 text-xs font-bold text-[#101828] text-center focus:outline-none focus:ring-2 focus:ring-[#3563E9]/20 focus:border-[#3563E9] mb-1.5"
-                    />
-                    <p className="text-[#667085] text-[10px] font-bold uppercase tracking-wider">{row.label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="px-5 py-2.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 hover:bg-slate-200 transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={!form.clientName.trim() || !form.profileName.trim() || totalWeight !== 100}
-                className="px-6 py-2.5 bg-[#3563E9] hover:bg-[#2851D6] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer"
-              >
-                Save Client Profile
-              </button>
+              ))}
             </div>
           </div>
         )}
@@ -798,32 +641,6 @@ export default function ClientProfilesPage() {
                       + Create Another Link
                     </button>
                   </div>
-
-                  {/* Previously created links list */}
-                  {sharedLinks.length > 0 && (
-                    <div className="border-t border-[#EAECF0] pt-4 mt-4">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-[#667085] mb-2">
-                        Active Client Shared Links ({sharedLinks.length})
-                      </div>
-                      <div className="max-h-36 overflow-y-auto space-y-2">
-                        {sharedLinks.slice(0, 3).map(link => (
-                          <div key={link.id} className="flex items-center justify-between rounded-xl bg-slate-50 p-2.5 text-xs border border-[#EAECF0]">
-                            <div className="min-w-0 pr-2">
-                              <span className="font-bold text-[#101828] block truncate">{link.clientName}</span>
-                              <span className="text-[10px] text-[#667085] block truncate">{link.jobTitle} · Expires {link.expiresAt}</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyLink(link.shareUrl)}
-                              className="shrink-0 px-2.5 py-1 rounded-lg bg-white border border-[#EAECF0] hover:bg-slate-100 text-[11px] font-semibold text-[#182230] cursor-pointer"
-                            >
-                              Copy
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
 
                   <div className="flex items-center justify-end border-t border-[#EAECF0] pt-3">
                     <button
