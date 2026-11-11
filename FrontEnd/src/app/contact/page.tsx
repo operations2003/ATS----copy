@@ -389,37 +389,10 @@ export default function ContactPage() {
           </div>
         </section>
 
-        {/* Corporate Headquarters & Security Note */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12">
-          <div className="p-6 rounded-3xl bg-[#101828] text-white flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="space-y-1 text-center md:text-left">
-              <div className="text-xs font-bold uppercase tracking-widest text-brand-orange">
-                TaskNera Technologies • HireIQ Talent Intelligence
-              </div>
-              <h4 className="text-lg font-extrabold text-white">
-                Enterprise Autonomous Screening Infrastructure
-              </h4>
-              <p className="text-xs text-slate-400 max-w-xl">
-                Certified zero-hallucination deterministic evaluations, bias-guarded audit trails, and strict candidate data isolation.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-300">
-                SOC-2 Type II
-              </div>
-              <div className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-300">
-                100% Deterministic
-              </div>
-              <div className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-300">
-                ISO 27001
-              </div>
-            </div>
-          </div>
-        </section>
       </main>
 
       <Footer />
     </div>
   );
 }
+
