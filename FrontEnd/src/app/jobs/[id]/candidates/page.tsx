@@ -591,6 +591,22 @@ export default function JobCandidatesPage() {
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [newlyAddedCandidateId, setNewlyAddedCandidateId] = useState<string | null>(null);
+  const candidatesTableRef = useRef<HTMLDivElement>(null);
+
+  const scrollToCandidateTable = (candidateId?: string) => {
+    setShowUploadZone(false);
+    if (candidateId) {
+      setNewlyAddedCandidateId(candidateId);
+      setTimeout(() => setNewlyAddedCandidateId(null), 5000);
+    }
+    setTimeout(() => {
+      const tableEl = document.getElementById('candidates-table') || candidatesTableRef.current;
+      if (tableEl) {
+        tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
 
   // Filters, Sort & Selected Candidate Drawer
   const [searchQuery, setSearchQuery] = useState('');
@@ -630,6 +646,14 @@ export default function JobCandidatesPage() {
 
   useEffect(() => {
     setIsMounted(true);
+    if (typeof window !== 'undefined' && window.location.hash === '#candidates-table') {
+      setTimeout(() => {
+        const tableEl = document.getElementById('candidates-table') || candidatesTableRef.current;
+        if (tableEl) {
+          tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 400);
+    }
   }, []);
 
   // Lock background window scroll when candidate modal drawer is open
@@ -1493,6 +1517,7 @@ export default function JobCandidatesPage() {
   // ── Process Upload Queue in Batch ───────────────────────────────────────────
   const processUploadBatch = async (items: UploadQueueItem[]) => {
     setIsUploading(true);
+    let latestParsedCandidateId: string | undefined;
 
     try {
       const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null);
@@ -1537,6 +1562,10 @@ export default function JobCandidatesPage() {
           }
 
           const result = await res.json();
+
+          if (result.candidates && result.candidates.length > 0) {
+            latestParsedCandidateId = result.candidates[0]?.id;
+          }
 
           setUploadQueue(prev =>
             prev.map(q => {
@@ -1601,6 +1630,13 @@ export default function JobCandidatesPage() {
       }
 
       await fetchJobAndCandidates();
+
+      // Automatically shift screen directly to candidate table after CV upload
+      if (latestParsedCandidateId) {
+        setTimeout(() => {
+          scrollToCandidateTable(latestParsedCandidateId);
+        }, 800);
+      }
     } catch (err: any) {
       console.error('Upload failed:', err);
       setUploadQueue(prev =>
@@ -2122,16 +2158,47 @@ export default function JobCandidatesPage() {
                         <span className="font-bold text-slate-800 truncate">{item.name}</span>
                         <span className="text-[10px] text-slate-400">{formatBytes(item.size)}</span>
                       </div>
-                      <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
-                        item.status === 'PARSED' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
-                        item.status === 'DUPLICATE' ? 'bg-amber-50 text-amber-800 border border-amber-300' :
-                        item.status === 'FAILED' ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-blue-50 text-blue-800 border border-blue-200'
-                      }`}>
-                        {item.status === 'DUPLICATE' ? 'ALREADY UPLOADED (SKIPPED)' : item.status}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+                          item.status === 'PARSED' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
+                          item.status === 'DUPLICATE' ? 'bg-amber-50 text-amber-800 border border-amber-300' :
+                          item.status === 'FAILED' ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-blue-50 text-blue-800 border border-blue-200'
+                        }`}>
+                          {item.status === 'DUPLICATE' ? 'ALREADY UPLOADED (SKIPPED)' : item.status}
+                        </span>
+                        {item.status === 'PARSED' && (
+                          <button
+                            type="button"
+                            onClick={() => scrollToCandidateTable(item.candidateId)}
+                            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-[#3563E9] text-white hover:bg-[#2851D6] transition-colors cursor-pointer inline-flex items-center gap-1 shadow-xs"
+                            title="Shift view directly to this candidate in the table"
+                          >
+                            <span>View in Table</span>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
+
+                {uploadQueue.some(q => q.status === 'PARSED') && (
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-xs text-emerald-700 font-semibold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                      Parsing complete. Viewing candidate results below.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => scrollToCandidateTable()}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+                    >
+                      <span>Jump to Candidates Table ↓</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2206,7 +2273,7 @@ export default function JobCandidatesPage() {
 
         {/* ── CANDIDATES RANKED TABLE ── */}
         {filteredCandidates.length > 0 ? (
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden mb-8">
+          <div id="candidates-table" ref={candidatesTableRef} className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden mb-8 scroll-mt-24">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -2238,8 +2305,9 @@ export default function JobCandidatesPage() {
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {filteredCandidates.map((c) => {
                     const badge = statusBadge(c.parsingStatus);
+                    const isNewlyAdded = c.id === newlyAddedCandidateId;
                     return (
-                      <tr key={c.id} className="hover:bg-slate-50/70 transition-colors group">
+                      <tr key={c.id} className={`transition-all duration-700 group ${isNewlyAdded ? 'bg-emerald-50/80 ring-2 ring-emerald-500/60 shadow-xs' : 'hover:bg-slate-50/70'}`}>
                         {/* Selection Checkbox */}
                         <td className="px-4 py-4 text-center">
                           <input
@@ -2267,6 +2335,12 @@ export default function JobCandidatesPage() {
                                 >
                                   {c.name || c.fileName || 'Unnamed Candidate'}
                                 </button>
+                                {isNewlyAdded && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0 animate-pulse">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    Newly Parsed
+                                  </span>
+                                )}
                                 {c.source === 'public_application' && (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200 shrink-0" title="Applied via public job link">
                                     Public Applicant

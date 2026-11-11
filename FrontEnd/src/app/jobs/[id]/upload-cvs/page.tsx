@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { useAuth } from '@/context/AuthContext';
@@ -105,6 +105,7 @@ const getFileFormatBadge = (filename: string) => {
 };
 
 export default function BatchCVUploadPage() {
+  const router = useRouter();
   const params = useParams();
   const { token } = useAuth();
   const jobId = (params?.id as string) || '';
@@ -387,6 +388,11 @@ export default function BatchCVUploadPage() {
 
         if (isStillProcessing) {
           pollTimerRef.current = setTimeout(() => pollBatchStatus(batchId), 2500);
+        } else if (data.metrics && (data.metrics.parsedCount > 0 || data.metrics.completedCount > 0)) {
+          // Finished processing! Auto-shift directly to the candidates table
+          setTimeout(() => {
+            router.push(`/jobs/${jobId}/candidates#candidates-table`);
+          }, 1200);
         }
       }
     } catch (err) {
