@@ -33,14 +33,42 @@ export interface TeamMemberOption {
   team?: string;
 }
 
-const DEFAULT_ORGANIZATION_MEMBERS: TeamMemberOption[] = [
-  { id: 'tm-sarah', name: 'Sarah Jenkins', email: 'sarah.j@hireiq.internal', role: 'Senior Technical Recruiter', team: 'Core Engineering' },
-  { id: 'tm-alex', name: 'Alex Rivera', email: 'alex.r@hireiq.internal', role: 'Enterprise Delivery Lead', team: 'Client Solutions' },
-  { id: 'tm-david', name: 'David Kim', email: 'david.k@hireiq.internal', role: 'Technical Sourcing Lead', team: 'Cloud & Infrastructure' },
-  { id: 'tm-elena', name: 'Elena Rostova', email: 'elena.r@hireiq.internal', role: 'Senior Talent Partner', team: 'Executive & Product' },
-  { id: 'tm-marcus', name: 'Marcus Vance', email: 'marcus.v@hireiq.internal', role: 'Fullstack TA Specialist', team: 'Frontend & Mobile' },
-  { id: 'tm-priya', name: 'Priya Sharma', email: 'priya.s@hireiq.internal', role: 'AI & Data Recruiting Partner', team: 'Data & Analytics' },
-];
+const formatMemberRole = (role?: string, customRole?: string, team?: string): string => {
+  if (customRole && customRole !== 'General' && customRole !== 'MEMBER') return customRole;
+  const r = String(role || '').toUpperCase().trim();
+  if (r === 'CLIENT_ADMIN' || r === 'ADMIN') return 'Account Administrator';
+  if (r === 'SUPER_ADMIN') return 'Executive Leadership';
+  if (r === 'RECRUITER' || r === 'RECRUITER_MEMBER') return 'Technical Recruiter';
+  if (r === 'TEAM_LEAD') return 'Team Lead';
+  if (r === 'MEMBER') return 'Talent Partner';
+  if (team && team !== 'General') return team;
+  return 'Recruitment Partner';
+};
+
+const isDummyMember = (name?: string, email?: string): boolean => {
+  const n = String(name || '').toLowerCase().trim();
+  const e = String(email || '').toLowerCase().trim();
+  const dummyList = [
+    'sarah jenkins',
+    'alex rivera',
+    'david kim',
+    'elena rostova',
+    'marcus vance',
+    'priya sharma',
+    'sarah mitchell',
+    'david park',
+    'alex chen',
+    'john doe',
+    'elena r',
+    'marcus v',
+    'michael chen',
+    'james wilson'
+  ];
+  if (dummyList.includes(n)) return true;
+  if (e === 'admin@gmail.com' || e === 'operations@tasknera.com') return true;
+  if (n.includes('harsh') || e.includes('harsh') || n.includes('aditya') || e.includes('aditya')) return true;
+  return false;
+};
 
 const CLIENT_SHARES_STORAGE_KEY = 'tasknera_client_portal_shares_v1';
 
@@ -67,7 +95,7 @@ export default function ClientsPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Assign JD to Team Member Modal State
-  const [teamMembers, setTeamMembers] = useState<TeamMemberOption[]>(DEFAULT_ORGANIZATION_MEMBERS);
+  const [teamMembers, setTeamMembers] = useState<TeamMemberOption[]>([]);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [activeAssignLink, setActiveAssignLink] = useState<SharedClientLink | null>(null);
   const [selectedAssignMember, setSelectedAssignMember] = useState<string>('');
@@ -116,66 +144,101 @@ export default function ClientsPage() {
       // ignore
     }
 
-    // Load organization team members from atsStore and backend database
-    const atsRecruiters = atsStore.getRecruiters();
-    const mappedAts: TeamMemberOption[] = atsRecruiters.map(r => ({
-      id: r.id,
-      name: r.name,
-      email: r.email,
-      role: r.displayRole || r.customRole || r.role || 'Talent Acquisition Partner',
-      team: r.team || 'Core Sourcing'
-    }));
-
+    // Load genuine organization team members from backend database and atsStore
     const memberMap = new Map<string, TeamMemberOption>();
-    DEFAULT_ORGANIZATION_MEMBERS.forEach(m => memberMap.set(m.name.toLowerCase().trim(), m));
-    mappedAts.forEach(m => memberMap.set(m.name.toLowerCase().trim(), m));
 
-    // Try fetching live TA members from backend
-    const fetchBackendMembers = async () => {
+    // 1. Load real recruiters from atsStore (strictly non-dummy)
+    const atsRecruiters = atsStore.getRecruiters();
+    atsRecruiters.forEach(r => {
+      if (!isDummyMember(r.name, r.email) && r.name?.trim()) {
+        memberMap.set(r.name.toLowerCase().trim(), {
+          id: r.id,
+          name: r.name.trim(),
+          email: r.email,
+          role: formatMemberRole(r.role, r.customRole || r.displayRole, r.team),
+          team: r.team && r.team !== 'General' ? r.team : undefined
+        });
+      }
+    });
+
+    // 2. Fetch live users belonging to the current organization from backend
+    const fetchRealOrganizationUsers = async () => {
       try {
         const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
         const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
-        const res = await fetch(`${backendUrl}/users/ta-members`, {
-          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.members)) {
-            data.members.forEach((m: any) => {
-              const email = String(m.email || '').toLowerCase().trim();
-              const name = String(m.name || '').trim();
-              if (
-                email === 'admin@gmail.com' ||
-                email === 'operations@tasknera.com' ||
-                email.includes('harsh') ||
-                name.toLowerCase().includes('harsh') ||
-                email.includes('aditya') ||
-                name.toLowerCase().includes('aditya')
-              ) {
-                return;
-              }
-              if (name) {
-                memberMap.set(name.toLowerCase(), {
-                  id: m.id || `be-${email || name}`,
-                  name: name,
-                  email: m.email,
-                  role: m.displayRole || m.role || 'Talent Acquisition Partner',
-                  team: m.team || 'Talent Acquisition'
-                });
-              }
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+        // Fetch /users (organization users: client admin, recruiters, members)
+        try {
+          const usersRes = await fetch(`${backendUrl}/users`, { headers });
+          if (usersRes.ok) {
+            const data = await usersRes.json();
+            if (Array.isArray(data.users)) {
+              data.users.forEach((u: any) => {
+                if (isDummyMember(u.name, u.email)) return;
+                const name = String(u.name || '').trim();
+                if (name) {
+                  memberMap.set(name.toLowerCase(), {
+                    id: u.id,
+                    name: name,
+                    email: u.email,
+                    role: formatMemberRole(u.role, u.customRole, u.team),
+                    team: u.team && u.team !== 'General' ? u.team : undefined
+                  });
+                }
+              });
+            }
+          }
+        } catch (_) {}
+
+        // Fetch /users/ta-members (TA recruiters & members)
+        try {
+          const taRes = await fetch(`${backendUrl}/users/ta-members`, { headers });
+          if (taRes.ok) {
+            const data = await taRes.json();
+            if (Array.isArray(data.members)) {
+              data.members.forEach((m: any) => {
+                if (isDummyMember(m.name, m.email)) return;
+                const name = String(m.name || '').trim();
+                if (name && !memberMap.has(name.toLowerCase())) {
+                  memberMap.set(name.toLowerCase(), {
+                    id: m.id,
+                    name: name,
+                    email: m.email,
+                    role: formatMemberRole(m.role, m.customRole || m.displayRole, m.team),
+                    team: m.team && m.team !== 'General' ? m.team : undefined
+                  });
+                }
+              });
+            }
+          }
+        } catch (_) {}
+
+        // 3. Ensure current authenticated user is included
+        const currentName = user?.name || (typeof window !== 'undefined' ? localStorage.getItem('tasknera_name') : null);
+        const currentEmail = user?.email || (typeof window !== 'undefined' ? localStorage.getItem('tasknera_email') : null);
+        if (currentName && !isDummyMember(currentName, currentEmail || undefined)) {
+          const cleanName = currentName.trim();
+          if (!memberMap.has(cleanName.toLowerCase())) {
+            memberMap.set(cleanName.toLowerCase(), {
+              id: user?.id || 'current-user',
+              name: cleanName,
+              email: currentEmail || undefined,
+              role: formatMemberRole(user?.role || cachedRole || 'CLIENT_ADMIN'),
+              team: undefined
             });
-            setTeamMembers(Array.from(memberMap.values()));
-            return;
           }
         }
-      } catch {
-        // fallback to memberMap
+
+        setTeamMembers(Array.from(memberMap.values()));
+      } catch (err) {
+        console.warn('Failed to load organization members:', err);
+        setTeamMembers(Array.from(memberMap.values()));
       }
-      setTeamMembers(Array.from(memberMap.values()));
     };
 
-    fetchBackendMembers();
-  }, []);
+    fetchRealOrganizationUsers();
+  }, [user, cachedRole]);
 
   // Derives unique client names from shared links and existing ATS jobs
   const availableClientNames = useMemo(() => {
@@ -272,7 +335,7 @@ export default function ClientsPage() {
     } else {
       setIsCustomMember(false);
       setSelectedAssignMember(teamMembers[0]?.name || '');
-      setSelectedAssignRole(teamMembers[0]?.role || 'Senior Technical Recruiter');
+      setSelectedAssignRole(teamMembers[0]?.role || 'Talent Partner');
     }
     setSelectedJobScope('ALL');
     setAssignmentNote('');
@@ -1180,11 +1243,15 @@ export default function ClientsPage() {
                         className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
                       >
                         <option value="" disabled>-- Select Organization Member --</option>
-                        {teamMembers.map(member => (
-                          <option key={member.id} value={member.name}>
-                            {member.name} — {member.role} {member.team ? `(${member.team})` : ''}
-                          </option>
-                        ))}
+                        {teamMembers.length > 0 ? (
+                          teamMembers.map(member => (
+                            <option key={member.id} value={member.name}>
+                              {member.name} — {member.role} {member.team ? `(${member.team})` : ''}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="" disabled>No team members found in organization</option>
+                        )}
                       </select>
 
                       {/* Member Details Preview */}
@@ -1218,7 +1285,7 @@ export default function ClientsPage() {
                           type="text"
                           value={customMemberName}
                           onChange={e => setCustomMemberName(e.target.value)}
-                          placeholder="e.g. Priya Sharma"
+                          placeholder="e.g. Ashutosh, John, etc."
                           className="w-full rounded-xl border border-[#EAECF0] bg-white px-3 py-2 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9]"
                         />
                       </div>
