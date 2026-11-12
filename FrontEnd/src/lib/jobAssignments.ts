@@ -428,3 +428,4 @@ export function setJobAssignment(params: {
     window.dispatchEvent(new CustomEvent('tasknera_jobs_updated', { detail: record }));
   } catch {}
 }
+
