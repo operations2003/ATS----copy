@@ -1055,18 +1055,9 @@ export default function ClientsPage() {
                     <div>
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <a
-                            href={link.shareUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[#101828] hover:text-[#3563E9] font-bold text-base transition-colors inline-flex items-center gap-1.5 group cursor-pointer"
-                            title="Click to open client portal in new tab"
-                          >
-                            <span>{link.clientName}</span>
-                            <svg className="w-3.5 h-3.5 text-[#3563E9] opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </a>
+                          <span className="inline-flex items-center text-base font-bold text-[#101828]">
+                            {link.clientName}
+                          </span>
                           {link.contactName && (
                             <p className="text-xs text-[#3563E9] font-semibold mt-0.5">
                               Contact: {link.contactName}
@@ -1093,17 +1084,9 @@ export default function ClientsPage() {
                       <div className="mt-3 space-y-1.5 text-xs text-[#667085]">
                         <div className="flex items-center justify-between">
                           <span>JDs Uploaded:</span>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenJdViewer(link)}
-                            className="font-bold text-[#3563E9] hover:text-[#2851D6] hover:underline cursor-pointer inline-flex items-center gap-1 transition-all group"
-                            title="Click to open and view uploaded Job Description"
-                          >
-                            <span>{uploadedCount} Job Position{uploadedCount === 1 ? '' : 's'}</span>
-                            <svg className="w-3.5 h-3.5 text-[#3563E9] group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </button>
+                          <span className="font-semibold text-[#101828]">
+                            {uploadedCount} Job Position{uploadedCount === 1 ? '' : 's'}
+                          </span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span>Assigned To:</span>
@@ -1149,23 +1132,9 @@ export default function ClientsPage() {
                           type="text"
                           readOnly
                           value={link.shareUrl}
-                          onClick={() => window.open(link.shareUrl, '_blank')}
-                          title="Click to open portal in new tab"
-                          className="w-full bg-transparent text-[11px] font-mono text-[#667085] hover:text-[#3563E9] outline-none select-all truncate cursor-pointer"
+                          title="Client portal link"
+                          className="w-full bg-transparent text-[11px] font-mono text-[#667085] outline-none select-all truncate"
                         />
-                        <a
-                          href={link.shareUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="shrink-0 text-xs font-bold text-[#3563E9] hover:text-[#2851D6] hover:underline cursor-pointer inline-flex items-center gap-0.5"
-                          title="Open link in new tab"
-                        >
-                          <span>Open</span>
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </a>
-                        <span className="text-slate-300">|</span>
                         <button
                           type="button"
                           onClick={() => handleCopyLink(link.shareUrl)}
