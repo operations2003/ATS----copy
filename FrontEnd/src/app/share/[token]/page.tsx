@@ -502,7 +502,7 @@ function ClientSharePortalContent() {
       let resolvedNote = '';
       if (typeof window !== 'undefined') {
         try {
-          const sharesRaw = localStorage.getItem('tasknera_client_portal_shares_v1');
+          const sharesRaw = localStorage.getItem('tasknera_client_portal_shares_v1') || localStorage.getItem('tasknera_client_shares');
           if (sharesRaw) {
             const parsed = JSON.parse(sharesRaw);
             const found = Array.isArray(parsed) ? parsed.find(s => s.token === token) : null;
@@ -744,7 +744,7 @@ function ClientSharePortalContent() {
                     finalJobs.find(j => j.id === pc.requisitionId)?.title ||
                     'Requisition Role';
 
-                  const isApproved = pc.isRecruiterApproved === true || existing?.isRecruiterApproved === true;
+                  const isApproved = pc.isRecruiterApproved === true || (pc.isRecruiterApproved === undefined && existing?.isRecruiterApproved === true);
 
                   const item: CandidateItem = {
                     id: pc.id,

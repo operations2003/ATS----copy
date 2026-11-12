@@ -73,6 +73,7 @@ interface PipelineCandidate {
   recruiterApprovalStatus?: 'APPROVED' | 'PENDING_APPROVAL';
   recruiterApprovedBy?: string;
   recruiterApprovedAt?: string;
+  recruiterApprovalNotes?: string;
 }
 
 interface ScheduleForm {
@@ -491,6 +492,11 @@ export default function PipelinePage() {
           nextFollowUpDate: c.nextFollowUpDate,
           response: c.response,
           overallStatus: c.overallStatus,
+          isRecruiterApproved: c.isRecruiterApproved === true,
+          recruiterApprovalStatus: c.recruiterApprovalStatus || (c.isRecruiterApproved ? 'APPROVED' : 'PENDING_APPROVAL'),
+          recruiterApprovedBy: c.recruiterApprovedBy,
+          recruiterApprovedAt: c.recruiterApprovedAt,
+          recruiterApprovalNotes: c.recruiterApprovalNotes,
         });
       }
 
@@ -790,6 +796,8 @@ export default function PipelinePage() {
         c => c.id === candidate.id || c.name?.toLowerCase().trim() === candidate.name?.toLowerCase().trim()
       );
 
+      let candidateEntry: any = null;
+
       if (isShortlisted) {
         const totalExp = candidate.totalWorkExperience || fullCand?.exp || fullCand?.totalExperience || fullCand?.total_experience || '';
         const relExp = candidate.relevantWorkExperience || fullCand?.relevantWorkExperience || 'Pending Recruiter Input';
@@ -807,7 +815,7 @@ export default function PipelinePage() {
         const isApproved = candidate.isRecruiterApproved === true;
         const approvalStatus = isApproved ? 'APPROVED' : 'PENDING_APPROVAL';
 
-        const candidateEntry = {
+        candidateEntry = {
           id: candidate.id,
           name: candidate.name,
           email: fullCand?.email || candidate.emailId || '',
@@ -899,6 +907,45 @@ export default function PipelinePage() {
 
       localStorage.setItem(portalCandsStorageKey, JSON.stringify(portalCands));
 
+      // Also synchronize to matching active client shares
+      try {
+        const sharesRaw = localStorage.getItem('tasknera_client_portal_shares_v1') || localStorage.getItem('tasknera_client_shares');
+        if (sharesRaw) {
+          const shares = JSON.parse(sharesRaw);
+          if (Array.isArray(shares)) {
+            for (const s of shares) {
+              if (!s.clientName) continue;
+              const sKey = `tasknera_portal_cands_${s.clientName.replace(/\s+/g, '_')}`;
+              if (sKey !== portalCandsStorageKey) {
+                const sClientLower = s.clientName.toLowerCase().trim();
+                const cClientLower = clientName.toLowerCase().trim();
+                const isMatch = sClientLower === cClientLower ||
+                  sClientLower.includes(cClientLower) ||
+                  cClientLower.includes(sClientLower) ||
+                  (requisitionTitle && s.clientName && requisitionTitle.toLowerCase().includes(sClientLower));
+
+                if (isMatch) {
+                  const rawS = localStorage.getItem(sKey);
+                  let sCands = rawS ? JSON.parse(rawS) : [];
+                  if (!Array.isArray(sCands)) sCands = [];
+                  const sIdx = sCands.findIndex((c: any) => c.id === candidate.id || c.name === candidate.name);
+                  if (isShortlisted && candidateEntry) {
+                    if (sIdx >= 0) {
+                      sCands[sIdx] = { ...sCands[sIdx], ...candidateEntry, currentStatus: portalStatus };
+                    } else {
+                      sCands.unshift(candidateEntry);
+                    }
+                  } else if (sIdx >= 0) {
+                    sCands[sIdx] = { ...sCands[sIdx], currentStatus: 'Active Screening' };
+                  }
+                  localStorage.setItem(sKey, JSON.stringify(sCands));
+                }
+              }
+            }
+          }
+        }
+      } catch {}
+
       // 5. Add Transparency Activity Feed Item for Client Portal
       let portalActivities: any[] = [];
       try {
@@ -979,6 +1026,10 @@ export default function PipelinePage() {
                     stage: newStage,
                     decision: isShortlisted ? 'SUBMIT' : c.decision,
                     decisionTag: isShortlisted ? 'SHORTLIST' : c.decisionTag,
+                    isRecruiterApproved: candidate.isRecruiterApproved === true,
+                    recruiterApprovalStatus: candidate.isRecruiterApproved === true ? 'APPROVED' : 'PENDING_APPROVAL',
+                    recruiterApprovedBy: candidate.recruiterApprovedBy || recruiterName || 'Agency Recruiter',
+                    recruiterApprovedAt: candidate.recruiterApprovedAt,
                   };
                 }
                 return c;
@@ -2337,8 +2388,31 @@ export default function PipelinePage() {
           targetStage={dossierTargetStage}
           onSave={handleSaveDossier}
           assignedRecruiterName={dossierCandidate.recruiterName || user?.name || user?.email || 'Agency Recruiter'}
-          defaultClientName={dossierCandidate.clientName || 'Client Partner'}
-          defaultJdName={dossierCandidate.requisitionTitle || 'Requisition Role'}
+          defaultClientName={
+            dossierCandidate.clientName ||
+            (dossierCandidate as any).client ||
+            (() => {
+              const reqId = dossierCandidate.requisitionId;
+              const reqTitle = (dossierCandidate.requisitionTitle || dossierCandidate.jdName || '').toLowerCase().trim();
+              const storeJob = atsStore.getJobs().find(j => (reqId && reqId !== 'all' && j.id === reqId) || (reqTitle && j.title.toLowerCase().trim() === reqTitle));
+              if (storeJob?.client) return storeJob.client.trim();
+              try {
+                const created = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
+                const found = created.find((j: any) => (reqId && reqId !== 'all' && String(j.id) === String(reqId)) || (reqTitle && (j.title || j.position)?.toLowerCase().trim() === reqTitle));
+                if (found?.client || found?.company) return (found.client || found.company).trim();
+              } catch {}
+              try {
+                const shares = JSON.parse(localStorage.getItem('tasknera_client_portal_shares_v1') || '[]');
+                if (Array.isArray(shares) && shares.length > 0) {
+                  const match = shares.find((s: any) => reqTitle && s.clientName && reqTitle.includes(s.clientName.toLowerCase()));
+                  if (match?.clientName) return match.clientName.trim();
+                  if (shares.length === 1 && shares[0]?.clientName) return shares[0].clientName.trim();
+                }
+              } catch {}
+              return 'Client Partner';
+            })()
+          }
+          defaultJdName={dossierCandidate.requisitionTitle || dossierCandidate.jdName || 'Requisition Role'}
         />
       )}
     </>

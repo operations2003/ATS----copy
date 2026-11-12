@@ -800,7 +800,7 @@ export default function JobCandidatesPage() {
               atsScore: score,
               matchLevel: score >= 85 ? 'EXCELLENT MATCH' : 'STRONG MATCH',
               mandatoryPassed: true,
-              currentStatus: 'Shared with Client',
+              currentStatus: (targetCand as any).isRecruiterApproved === true ? 'Shared with Client' : 'Active Screening',
               lastUpdatedDate: 'Just now',
               hasResume: true,
               resumeFileName: targetCand.fileName || `${(targetCand.name || 'candidate').replace(/\s+/g, '_')}_CV.pdf`,
@@ -809,10 +809,18 @@ export default function JobCandidatesPage() {
               jobTitle: job?.position || 'Requisition Role',
               decision: 'SUBMIT',
               screeningEvidence: (targetCand as any).evidenceSnippets || (targetCand as any).evaluation?.evidence || [],
+              isRecruiterApproved: (targetCand as any).isRecruiterApproved === true,
+              recruiterApprovalStatus: (targetCand as any).isRecruiterApproved === true ? 'APPROVED' : 'PENDING_APPROVAL',
+              recruiterApprovedBy: (targetCand as any).recruiterApprovedBy,
+              recruiterApprovedAt: (targetCand as any).recruiterApprovedAt,
             };
 
             if (existingPortalIdx >= 0) {
-              portalCands[existingPortalIdx] = { ...portalCands[existingPortalIdx], ...newPortalCand, currentStatus: 'Shared with Client' };
+              portalCands[existingPortalIdx] = {
+                ...portalCands[existingPortalIdx],
+                ...newPortalCand,
+                currentStatus: (targetCand as any).isRecruiterApproved === true ? 'Shared with Client' : (portalCands[existingPortalIdx].isRecruiterApproved ? 'Shared with Client' : 'Active Screening')
+              };
             } else {
               portalCands.unshift(newPortalCand);
             }

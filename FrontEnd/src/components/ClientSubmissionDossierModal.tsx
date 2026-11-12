@@ -96,13 +96,13 @@ export default function ClientSubmissionDossierModal({
     overallStatus: '',
   });
 
-  const [isApproved, setIsApproved] = useState<boolean>(true);
+  const [isApproved, setIsApproved] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!candidate || !isOpen) return;
 
-    setIsApproved(candidate.isRecruiterApproved !== false);
+    setIsApproved(candidate.isRecruiterApproved === true);
 
     const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const yesterdayStr = new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });

@@ -138,6 +138,10 @@ export default function ClientShareCreateModal({
               jobId: job.id,
               jobTitle: job.position,
               decision: cand.decision || 'SUBMIT',
+              isRecruiterApproved: cand.isRecruiterApproved === true,
+              recruiterApprovalStatus: cand.isRecruiterApproved === true ? 'APPROVED' : 'PENDING_APPROVAL',
+              recruiterApprovedBy: cand.recruiterApprovedBy || (cand.isRecruiterApproved ? 'Recruiter' : undefined),
+              recruiterApprovedAt: cand.recruiterApprovedAt,
             };
 
             if (existsIdx >= 0) {
