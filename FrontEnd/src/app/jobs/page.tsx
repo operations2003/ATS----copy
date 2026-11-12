@@ -7,6 +7,13 @@ import Footer from '@/components/Footer';
 import { useAuth } from '@/context/AuthContext';
 import { atsStore } from '@/lib/atsStore';
 import CandidateLinkModal from '@/components/CandidateLinkModal';
+import {
+  getJobAssignment,
+  setJobAssignment,
+  CLIENT_SHARES_STORAGE_KEY,
+  LEGACY_CLIENT_SHARES_KEY,
+  isExcludedRecruiterName
+} from '@/lib/jobAssignments';
 
 interface JobWorker {
   id: string;
@@ -215,6 +222,22 @@ export default function JobsPage() {
   const [selectedJobForLink, setSelectedJobForLink] = useState<JobItem | null>(null);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
 
+  // Reassign TA Modal State
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [reassignJobItem, setReassignJobItem] = useState<JobItem | null>(null);
+  const [selectedTaMember, setSelectedTaMember] = useState('');
+  const [selectedTaRole, setSelectedTaRole] = useState('Technical Recruiter');
+  const [isCustomTa, setIsCustomTa] = useState(false);
+  const [customTaName, setCustomTaName] = useState('');
+  const [customTaRole, setCustomTaRole] = useState('Technical Recruiter');
+  const [teamMembers, setTeamMembers] = useState<{ id: string; name: string; role: string; email?: string }[]>([]);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
   const fetchJobs = async () => {
     try {
       setIsLoading(true);
@@ -328,22 +351,81 @@ export default function JobsPage() {
       const combinedMap = new Map<string, any>();
       for (const item of fetchedRaw) {
         if (!isBadJob(item)) {
+          const assignment = getJobAssignment(item);
+          if (assignment && assignment.assignedRecruiter && !isExcludedRecruiterName(assignment.assignedRecruiter)) {
+            item.assignedRecruiter = assignment.assignedRecruiter;
+            item.assignedTo = assignment.assignedRecruiter;
+            const assignedWorker: JobWorker = {
+              id: `rec-${assignment.assignedRecruiter.toLowerCase().replace(/\s+/g, '-')}`,
+              name: assignment.assignedRecruiter,
+              email: `${assignment.assignedRecruiter.toLowerCase().replace(/\s+/g, '.')}@tasknera.com`,
+              role: assignment.role || 'Technical Recruiter',
+              action: 'Assigned Lead',
+              isCreator: false
+            };
+            const existingWorkers = Array.isArray(item.workedBy) ? item.workedBy : [];
+            item.workedBy = [
+              assignedWorker,
+              ...existingWorkers.filter((w: any) => (w.name || '').toLowerCase().trim() !== assignment.assignedRecruiter.toLowerCase().trim())
+            ];
+          }
           combinedMap.set(String(item.id), item);
         }
       }
+
       for (const local of localCreatedJobs) {
-        if (!isBadJob(local) && !combinedMap.has(String(local.id))) {
-          // Avoid duplicate entry if a job with the same client and position title already exists
+        if (!isBadJob(local)) {
+          const localId = String(local.id);
           const localTitle = (local.position || local.title || '').trim().toLowerCase();
-          const localClient = (local.client || '').trim().toLowerCase();
-          const existsInCombined = Array.from(combinedMap.values()).some((existing: any) => {
-            const exTitle = (existing.position || existing.title || '').trim().toLowerCase();
-            const exClient = (existing.client || '').trim().toLowerCase();
+          const localClient = (local.client || local.company || '').trim().toLowerCase();
+
+          // Check if already in combinedMap by ID or client + title
+          const existing = combinedMap.get(localId) || Array.from(combinedMap.values()).find((ex: any) => {
+            const exTitle = (ex.position || ex.title || '').trim().toLowerCase();
+            const exClient = (ex.client || ex.company || '').trim().toLowerCase();
             return exTitle.length > 0 && exTitle === localTitle && exClient === localClient;
           });
 
-          if (!existsInCombined) {
-            combinedMap.set(String(local.id), local);
+          const localAssignment = getJobAssignment(local) || (local.assignedRecruiter && !isExcludedRecruiterName(local.assignedRecruiter) ? { assignedRecruiter: local.assignedRecruiter, role: 'Technical Recruiter' } : null);
+
+          if (existing) {
+            // Merge local assignments onto existing job!
+            if (localAssignment && localAssignment.assignedRecruiter && !isExcludedRecruiterName(localAssignment.assignedRecruiter)) {
+              existing.assignedRecruiter = localAssignment.assignedRecruiter;
+              existing.assignedTo = localAssignment.assignedRecruiter;
+              const assignedWorker: JobWorker = {
+                id: `rec-${localAssignment.assignedRecruiter.toLowerCase().replace(/\s+/g, '-')}`,
+                name: localAssignment.assignedRecruiter,
+                email: `${localAssignment.assignedRecruiter.toLowerCase().replace(/\s+/g, '.')}@tasknera.com`,
+                role: localAssignment.role || 'Technical Recruiter',
+                action: 'Assigned Lead',
+                isCreator: false
+              };
+              const exWorkers = Array.isArray(existing.workedBy) ? existing.workedBy : [];
+              existing.workedBy = [
+                assignedWorker,
+                ...exWorkers.filter((w: any) => (w.name || '').toLowerCase().trim() !== localAssignment.assignedRecruiter.toLowerCase().trim())
+              ];
+            }
+          } else {
+            if (localAssignment && localAssignment.assignedRecruiter && !isExcludedRecruiterName(localAssignment.assignedRecruiter)) {
+              local.assignedRecruiter = localAssignment.assignedRecruiter;
+              local.assignedTo = localAssignment.assignedRecruiter;
+              const assignedWorker: JobWorker = {
+                id: `rec-${localAssignment.assignedRecruiter.toLowerCase().replace(/\s+/g, '-')}`,
+                name: localAssignment.assignedRecruiter,
+                email: `${localAssignment.assignedRecruiter.toLowerCase().replace(/\s+/g, '.')}@tasknera.com`,
+                role: localAssignment.role || 'Technical Recruiter',
+                action: 'Assigned Lead',
+                isCreator: false
+              };
+              const exWorkers = Array.isArray(local.workedBy) ? local.workedBy : [];
+              local.workedBy = [
+                assignedWorker,
+                ...exWorkers.filter((w: any) => (w.name || '').toLowerCase().trim() !== localAssignment.assignedRecruiter.toLowerCase().trim())
+              ];
+            }
+            combinedMap.set(localId, local);
           }
         }
       }
@@ -351,7 +433,7 @@ export default function JobsPage() {
       // Reconcile client shares and uploaded JDs so assigned client positions appear immediately in the person's jobs
       if (typeof window !== 'undefined') {
         try {
-          const clientSharesRaw = localStorage.getItem('tasknera_client_shares');
+          const clientSharesRaw = localStorage.getItem(CLIENT_SHARES_STORAGE_KEY) || localStorage.getItem(LEGACY_CLIENT_SHARES_KEY);
           if (clientSharesRaw) {
             const clientShares = JSON.parse(clientSharesRaw);
             if (Array.isArray(clientShares)) {
@@ -381,21 +463,42 @@ export default function JobsPage() {
 
                   if (Array.isArray(cjList)) {
                     for (const cj of cjList) {
-                      const effectiveRecruiter = cj.assignedRecruiter || share.assignedMember;
-                      const effectiveRole = cj.assignedMemberRole || share.assignedMemberRole || 'Technical Recruiter';
+                      const shareAssignment = getJobAssignment({ client: share.clientName, title: cj.title || cj.name, id: cj.id });
+                      const effectiveRecruiter = shareAssignment?.assignedRecruiter || cj.assignedRecruiter || share.assignedMember;
+                      const effectiveRole = shareAssignment?.role || cj.assignedMemberRole || share.assignedMemberRole || 'Technical Recruiter';
                       const cjTitle = cj.title || cj.name || 'Job Requisition';
                       const cjId = String(cj.id || `job-client-${share.clientName}-${cjTitle}`);
 
-                      const alreadyInMap = Array.from(combinedMap.values()).some((existing: any) =>
-                        String(existing.id) === cjId ||
-                        ((existing.client || '').toLowerCase().trim() === share.clientName.toLowerCase().trim() &&
-                         (existing.position || existing.title || '').toLowerCase().trim() === cjTitle.toLowerCase().trim())
+                      // Check if already in combinedMap
+                      const existing = combinedMap.get(cjId) || Array.from(combinedMap.values()).find((ex: any) =>
+                        String(ex.id) === cjId ||
+                        ((ex.client || ex.company || '').toLowerCase().trim() === share.clientName.toLowerCase().trim() &&
+                         (ex.position || ex.title || '').toLowerCase().trim() === cjTitle.toLowerCase().trim())
                       );
 
-                      if (!alreadyInMap && !isBadJob(cj)) {
-                        const worker = effectiveRecruiter && effectiveRecruiter !== 'Unassigned' ? [{
+                      if (existing) {
+                        if (effectiveRecruiter && !isExcludedRecruiterName(effectiveRecruiter)) {
+                          existing.assignedRecruiter = effectiveRecruiter;
+                          existing.assignedTo = effectiveRecruiter;
+                          const assignedWorker: JobWorker = {
+                            id: `rec-${effectiveRecruiter.toLowerCase().replace(/\s+/g, '-')}`,
+                            name: effectiveRecruiter,
+                            email: `${effectiveRecruiter.toLowerCase().replace(/\s+/g, '.')}@tasknera.com`,
+                            role: effectiveRole,
+                            action: 'Assigned Lead',
+                            isCreator: false
+                          };
+                          const exWorkers = Array.isArray(existing.workedBy) ? existing.workedBy : [];
+                          existing.workedBy = [
+                            assignedWorker,
+                            ...exWorkers.filter((w: any) => (w.name || '').toLowerCase().trim() !== effectiveRecruiter.toLowerCase().trim())
+                          ];
+                        }
+                      } else if (!isBadJob(cj)) {
+                        const worker: JobWorker[] = effectiveRecruiter && !isExcludedRecruiterName(effectiveRecruiter) ? [{
                           id: `rec-${effectiveRecruiter.toLowerCase().replace(/\s+/g, '-')}`,
                           name: effectiveRecruiter,
+                          email: `${effectiveRecruiter.toLowerCase().replace(/\s+/g, '.')}@tasknera.com`,
                           role: effectiveRole,
                           action: 'Assigned Lead',
                           isCreator: false
@@ -415,8 +518,8 @@ export default function JobsPage() {
                           status: 'Active',
                           created_at: cj.createdAt || new Date().toISOString(),
                           createdAt: cj.createdAt || new Date().toISOString(),
-                          assignedRecruiter: effectiveRecruiter && effectiveRecruiter !== 'Unassigned' ? effectiveRecruiter : undefined,
-                          assignedTo: effectiveRecruiter && effectiveRecruiter !== 'Unassigned' ? effectiveRecruiter : undefined,
+                          assignedRecruiter: effectiveRecruiter && !isExcludedRecruiterName(effectiveRecruiter) ? effectiveRecruiter : undefined,
+                          assignedTo: effectiveRecruiter && !isExcludedRecruiterName(effectiveRecruiter) ? effectiveRecruiter : undefined,
                           workedBy: worker,
                           candidatesCount: 0,
                           candidates: 0,
@@ -442,17 +545,40 @@ export default function JobsPage() {
           if (!isBadJob(aj)) {
             const ajTitle = (aj.title || '').trim().toLowerCase();
             const ajClient = (aj.client || '').trim().toLowerCase();
-            const alreadyExists = Array.from(combinedMap.values()).some((existing: any) => {
-              const exTitle = (existing.position || existing.title || '').trim().toLowerCase();
-              const exClient = (existing.client || '').trim().toLowerCase();
-              return (exTitle && exTitle === ajTitle && exClient === ajClient) || String(existing.id) === String(aj.id);
+            const existing = combinedMap.get(String(aj.id)) || Array.from(combinedMap.values()).find((ex: any) => {
+              const exTitle = (ex.position || ex.title || '').trim().toLowerCase();
+              const exClient = (ex.client || ex.company || '').trim().toLowerCase();
+              return (exTitle && exTitle === ajTitle && exClient === ajClient) || String(ex.id) === String(aj.id);
             });
 
-            if (!alreadyExists) {
-              const worker = aj.assignedRecruiter ? [{
-                id: `rec-${aj.assignedRecruiter.toLowerCase().replace(/\s+/g, '-')}`,
-                name: aj.assignedRecruiter,
-                role: 'Lead Recruiter',
+            const ajAssignment = getJobAssignment({ client: aj.client, title: aj.title, id: aj.id });
+            const resolvedAjRecruiter = ajAssignment?.assignedRecruiter || aj.assignedRecruiter;
+            const resolvedAjRole = ajAssignment?.role || 'Technical Recruiter';
+
+            if (existing) {
+              if (resolvedAjRecruiter && !isExcludedRecruiterName(resolvedAjRecruiter)) {
+                existing.assignedRecruiter = resolvedAjRecruiter;
+                existing.assignedTo = resolvedAjRecruiter;
+                const assignedWorker: JobWorker = {
+                  id: `rec-${resolvedAjRecruiter.toLowerCase().replace(/\s+/g, '-')}`,
+                  name: resolvedAjRecruiter,
+                  email: `${resolvedAjRecruiter.toLowerCase().replace(/\s+/g, '.')}@tasknera.com`,
+                  role: resolvedAjRole,
+                  action: 'Assigned Lead',
+                  isCreator: false
+                };
+                const exWorkers = Array.isArray(existing.workedBy) ? existing.workedBy : [];
+                existing.workedBy = [
+                  assignedWorker,
+                  ...exWorkers.filter((w: any) => (w.name || '').toLowerCase().trim() !== resolvedAjRecruiter.toLowerCase().trim())
+                ];
+              }
+            } else {
+              const worker: JobWorker[] = resolvedAjRecruiter && !isExcludedRecruiterName(resolvedAjRecruiter) ? [{
+                id: `rec-${resolvedAjRecruiter.toLowerCase().replace(/\s+/g, '-')}`,
+                name: resolvedAjRecruiter,
+                email: `${resolvedAjRecruiter.toLowerCase().replace(/\s+/g, '.')}@tasknera.com`,
+                role: resolvedAjRole,
                 action: 'Assigned Lead',
                 isCreator: false
               }] : [];
@@ -470,7 +596,7 @@ export default function JobsPage() {
                 salary: aj.salary,
                 status: aj.status,
                 created_at: new Date(Date.now() - (aj.createdAtDaysAgo || 0) * 86400000).toISOString(),
-                assignedRecruiter: aj.assignedRecruiter,
+                assignedRecruiter: resolvedAjRecruiter && !isExcludedRecruiterName(resolvedAjRecruiter) ? resolvedAjRecruiter : undefined,
                 workedBy: aj.workedBy && aj.workedBy.length > 0 ? aj.workedBy : worker,
                 candidatesCount: aj.candidates || 0,
                 candidates: aj.candidates || 0,
@@ -499,52 +625,62 @@ export default function JobsPage() {
         const rawMode = (j.work_mode || j.workMode || 'Remote').trim();
         const normalizedMode = rawMode.charAt(0).toUpperCase() + rawMode.slice(1).toLowerCase();
 
-        // Compute workers from DB or assigned recruiter
-        const currentUserName = user?.name || (user?.email ? user.email.split('@')[0] : 'Ram Charan');
-        const currentUserRole = user?.role || 'MEMBER';
+        // Check authoritative assignment first
+        const assignment = getJobAssignment(j);
+        const resolvedRecruiter = assignment?.assignedRecruiter || j.assignedRecruiter || j.assignedTo;
+        const resolvedRole = assignment?.role || 'Technical Recruiter';
+        const hasValidAssignment = Boolean(resolvedRecruiter && !isExcludedRecruiterName(resolvedRecruiter));
+
+        const currentUserName = user?.name || (typeof window !== 'undefined' ? localStorage.getItem('tasknera_name') : null) || (user?.email ? user.email.split('@')[0] : 'Administrator');
+        const currentUserRole = user?.role || (typeof window !== 'undefined' ? localStorage.getItem('tasknera_role') : null) || 'MEMBER';
         const isCurrentAuthUser = (j.created_by && user?.id && j.created_by === user.id) ||
                                   (j.createdBy && user?.id && j.createdBy === user.id) ||
                                   (j.creatorEmail && user?.email && j.creatorEmail.toLowerCase() === user.email.toLowerCase());
 
-        const rawWorkedBy: JobWorker[] = Array.isArray(j.workedBy) && j.workedBy.length > 0
-          ? j.workedBy
-          : (j.user
-              ? [{
-                  id: j.user.id || (isCurrentAuthUser ? user?.id : 'usr-creator'),
-                  name: j.user.name || (j.user.email ? j.user.email.split('@')[0] : (isCurrentAuthUser ? currentUserName : 'Recruiter')),
-                  email: j.user.email || (isCurrentAuthUser ? user?.email : undefined),
-                  role: j.user.role || (isCurrentAuthUser ? currentUserRole : 'MEMBER'),
-                  action: 'Uploaded JD',
-                  isCreator: true
-                }]
-              : (j.assignedRecruiter
-                  ? j.assignedRecruiter.split(',').map((nameStr: string, idx: number) => {
-                      const trimmed = nameStr.trim();
-                      return {
-                        id: `rec-${idx}`,
-                        name: trimmed,
-                        email: `${trimmed.toLowerCase().replace(/\s+/g, '.')}@tasknera.com`,
-                        role: idx === 0 ? 'Lead Recruiter' : 'Recruiter',
-                        action: idx === 0 ? 'Job Lead' : 'Candidate Screener',
-                        isCreator: idx === 0
-                      };
-                    })
-                  : [{
-                      id: isCurrentAuthUser ? (user?.id || 'usr-creator') : 'usr-owner',
-                      name: isCurrentAuthUser ? currentUserName : (user?.name || 'Job Creator'),
-                      email: isCurrentAuthUser ? user?.email : 'recruiter@tasknera.com',
-                      role: isCurrentAuthUser ? currentUserRole : 'MEMBER',
-                      action: 'Uploaded JD',
-                      isCreator: true
-                    }]
-                )
-            );
+        let workedBy: JobWorker[] = [];
 
-        const workedBy: JobWorker[] = rawWorkedBy.filter(w => !isExcludedWorker(w));
+        if (hasValidAssignment && resolvedRecruiter) {
+          const assignedWorker: JobWorker = {
+            id: `rec-${resolvedRecruiter.toLowerCase().replace(/\s+/g, '-')}`,
+            name: resolvedRecruiter,
+            email: `${resolvedRecruiter.toLowerCase().replace(/\s+/g, '.')}@tasknera.com`,
+            role: resolvedRole,
+            action: 'Assigned Lead',
+            isCreator: false
+          };
+
+          // Find if there's a creator to keep as secondary
+          const creatorName = j.user?.name || (Array.isArray(j.workedBy) ? j.workedBy.find((w: any) => w.isCreator)?.name : null);
+          const creatorEmail = j.user?.email || (Array.isArray(j.workedBy) ? j.workedBy.find((w: any) => w.isCreator)?.email : null);
+          const hasDifferentCreator = creatorName && creatorName.toLowerCase().trim() !== resolvedRecruiter.toLowerCase().trim() && !isExcludedRecruiterName(creatorName);
+
+          const creatorWorker: JobWorker | null = hasDifferentCreator ? {
+            id: j.user?.id || 'usr-creator',
+            name: creatorName,
+            email: creatorEmail,
+            role: j.user?.role || 'ADMIN',
+            action: 'Uploaded JD',
+            isCreator: true
+          } : null;
+
+          workedBy = creatorWorker ? [assignedWorker, creatorWorker] : [assignedWorker];
+        } else if (Array.isArray(j.workedBy) && j.workedBy.length > 0) {
+          workedBy = j.workedBy.filter((w: any) => !isExcludedWorker(w));
+        } else if (j.user) {
+          workedBy = [{
+            id: j.user.id || (isCurrentAuthUser ? user?.id : 'usr-creator'),
+            name: j.user.name || (j.user.email ? j.user.email.split('@')[0] : (isCurrentAuthUser ? currentUserName : 'Recruiter')),
+            email: j.user.email || (isCurrentAuthUser ? user?.email : undefined),
+            role: j.user.role || (isCurrentAuthUser ? currentUserRole : 'MEMBER'),
+            action: 'Uploaded JD',
+            isCreator: true
+          }];
+        }
+
         if (workedBy.length === 0) {
           workedBy.push({
             id: user?.id || 'usr-creator',
-            name: user?.name || (user?.email ? user.email.split('@')[0] : 'Ram Charan'),
+            name: user?.name || (user?.email ? user.email.split('@')[0] : 'Administrator'),
             email: user?.email,
             role: user?.role || 'MEMBER',
             action: 'Uploaded JD',
@@ -552,8 +688,7 @@ export default function JobsPage() {
           });
         }
 
-        const validAssignedRecruiter = workedBy.map(w => w.name).join(', ') || (j.user?.name || user?.name || 'Job Creator');
-
+        const validAssignedRecruiter = hasValidAssignment ? resolvedRecruiter : (workedBy[0]?.name || (j.user?.name || user?.name || 'Job Creator'));
 
         let localCandCount = 0;
         if (typeof window !== 'undefined') {
@@ -610,7 +745,146 @@ export default function JobsPage() {
 
   useEffect(() => {
     fetchJobs();
+
+    const handleUpdate = () => {
+      fetchJobs();
+    };
+
+    window.addEventListener('tasknera_jobs_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    const unsubAts = atsStore.subscribe(handleUpdate);
+
+    return () => {
+      window.removeEventListener('tasknera_jobs_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+      unsubAts();
+    };
   }, [user]);
+
+  // Load genuine organization team members from backend and atsStore
+  useEffect(() => {
+    const fetchMembers = async () => {
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+      const memberMap = new Map<string, { id: string; name: string; role: string; email?: string }>();
+
+      // AtsStore recruiters
+      try {
+        atsStore.getRecruiters().forEach(r => {
+          if (!isExcludedRecruiterName(r.name) && r.name?.trim()) {
+            memberMap.set(r.name.toLowerCase().trim(), {
+              id: r.id,
+              name: r.name.trim(),
+              role: r.customRole || r.displayRole || 'Technical Recruiter',
+              email: r.email
+            });
+          }
+        });
+      } catch {}
+
+      try {
+        const res = await fetch(`${backendUrl}/users`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.users)) {
+            data.users.forEach((u: any) => {
+              if (u.name && !isExcludedRecruiterName(u.name)) {
+                memberMap.set(u.name.toLowerCase().trim(), {
+                  id: u.id,
+                  name: u.name.trim(),
+                  role: u.customRole || u.role || 'Technical Recruiter',
+                  email: u.email
+                });
+              }
+            });
+          }
+        }
+      } catch {}
+
+      try {
+        const res = await fetch(`${backendUrl}/users/ta-members`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.members)) {
+            data.members.forEach((m: any) => {
+              if (m.name && !isExcludedRecruiterName(m.name)) {
+                memberMap.set(m.name.toLowerCase().trim(), {
+                  id: m.id,
+                  name: m.name.trim(),
+                  role: m.role || 'Talent Acquisition',
+                  email: m.email
+                });
+              }
+            });
+          }
+        }
+      } catch {}
+
+      // Ensure current user is in team members list
+      const curName = user?.name || (typeof window !== 'undefined' ? localStorage.getItem('tasknera_name') : null);
+      const curEmail = user?.email || (typeof window !== 'undefined' ? localStorage.getItem('tasknera_email') : null);
+      if (curName && !isExcludedRecruiterName(curName)) {
+        memberMap.set(curName.toLowerCase().trim(), {
+          id: user?.id || 'current-user',
+          name: curName.trim(),
+          role: user?.role || 'Technical Recruiter',
+          email: curEmail || undefined
+        });
+      }
+
+      setTeamMembers(Array.from(memberMap.values()));
+    };
+
+    fetchMembers();
+  }, [user]);
+
+  const handleOpenReassignModal = (job: JobItem) => {
+    setReassignJobItem(job);
+    const currentName = job.assignedRecruiter || job.workedBy?.[0]?.name || '';
+    if (currentName && !isExcludedRecruiterName(currentName)) {
+      const match = teamMembers.find(m => m.name.toLowerCase().trim() === currentName.toLowerCase().trim());
+      if (match) {
+        setIsCustomTa(false);
+        setSelectedTaMember(match.name);
+        setSelectedTaRole(match.role);
+      } else {
+        setIsCustomTa(true);
+        setCustomTaName(currentName);
+        setCustomTaRole(job.workedBy?.[0]?.role || 'Technical Recruiter');
+      }
+    } else {
+      setIsCustomTa(false);
+      setSelectedTaMember(teamMembers[0]?.name || '');
+      setSelectedTaRole(teamMembers[0]?.role || 'Technical Recruiter');
+    }
+    setReassignModalOpen(true);
+  };
+
+  const handleConfirmReassign = () => {
+    if (!reassignJobItem) return;
+    const targetName = isCustomTa ? customTaName.trim() : selectedTaMember.trim();
+    const targetRole = isCustomTa ? (customTaRole.trim() || 'Technical Recruiter') : (selectedTaRole.trim() || 'Talent Acquisition Lead');
+    if (!targetName) return;
+
+    setJobAssignment({
+      jobId: reassignJobItem.id,
+      client: reassignJobItem.client,
+      title: reassignJobItem.title,
+      assignedRecruiter: targetName,
+      role: targetRole,
+      assignedBy: user?.name || 'Administrator'
+    });
+
+    try {
+      atsStore.reassignJob(reassignJobItem.id, targetName, user?.name || 'Administrator', targetRole);
+    } catch {}
+
+    setReassignModalOpen(false);
+    showToast(`✓ Assigned ${reassignJobItem.title} to ${targetName}`);
+    fetchJobs();
+  };
 
   const handleDeleteJob = async (id: string, title: string) => {
     if (!window.confirm(`Are you sure you want to delete "${title}"?`)) return;
@@ -691,12 +965,14 @@ export default function JobsPage() {
     }
   };
 
-  const currentUserName = user?.name || (user?.email ? user.email.split('@')[0] : '');
-  const currentUserEmail = user?.email?.toLowerCase() || '';
+  const cachedName = typeof window !== 'undefined' ? localStorage.getItem('tasknera_name') : '';
+  const cachedEmail = typeof window !== 'undefined' ? localStorage.getItem('tasknera_email') : '';
+  const currentUserName = user?.name || cachedName || (user?.email ? user.email.split('@')[0] : '');
+  const currentUserEmail = (user?.email || cachedEmail || '').toLowerCase().trim();
 
   const isAssignedToCurrentUser = (j: JobItem) => {
     if (!currentUserName && !currentUserEmail) return true;
-    const qName = currentUserName.toLowerCase();
+    const qName = currentUserName.toLowerCase().trim();
     const hasWorked = j.workedBy && j.workedBy.some(w => 
       (qName && w.name.toLowerCase().includes(qName)) ||
       (currentUserEmail && w.email && w.email.toLowerCase() === currentUserEmail)
@@ -887,7 +1163,19 @@ export default function JobsPage() {
                         <div className="text-xs text-slate-500 mt-0.5">{j.client} • {j.location}</div>
                       </td>
                       <td className="px-4 py-4">
-                        <WorkedByMembers workers={j.workedBy} />
+                        <div className="flex items-center gap-2 group/ta">
+                          <WorkedByMembers workers={j.workedBy} />
+                          <button
+                            type="button"
+                            onClick={() => handleOpenReassignModal(j)}
+                            className="opacity-0 group-hover/ta:opacity-100 p-1 text-slate-400 hover:text-brand-orange hover:bg-orange-50 rounded-lg transition-all cursor-pointer shrink-0"
+                            title="Assign / Reassign TA"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+                        </div>
                       </td>
                       <td className="px-4 py-4 hidden lg:table-cell">
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
@@ -1006,7 +1294,19 @@ export default function JobsPage() {
                   {/* Assigned Team Section */}
                   <div className="bg-slate-50/70 rounded-2xl p-2.5 border border-slate-100 flex items-center justify-between mb-4">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Assigned TA</span>
-                    <WorkedByMembers workers={j.workedBy} isCompact />
+                    <div className="flex items-center gap-1.5">
+                      <WorkedByMembers workers={j.workedBy} isCompact />
+                      <button
+                        type="button"
+                        onClick={() => handleOpenReassignModal(j)}
+                        className="p-1 text-slate-400 hover:text-brand-orange hover:bg-orange-50 rounded-lg transition-all cursor-pointer"
+                        title="Assign / Reassign TA"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1056,6 +1356,138 @@ export default function JobsPage() {
           jobId={selectedJobForLink?.id || ''}
           jobTitle={selectedJobForLink?.title || 'Job Requisition'}
         />
+
+        {/* Modal: Assign / Reassign TA */}
+        {reassignModalOpen && reassignJobItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
+            <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
+              {/* Header */}
+              <div className="px-6 py-5 border-b border-slate-100 bg-[#F8FAFC] flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-brand-orange">Requisition Assignment</div>
+                  <h3 className="text-base font-extrabold text-[#101828]">Assign Talent Acquisition Lead</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReassignModalOpen(false)}
+                  className="w-8 h-8 rounded-full bg-white hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 space-y-4">
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
+                  <div className="text-xs font-bold text-slate-800">{reassignJobItem.title}</div>
+                  <div className="text-[11px] text-slate-500">{reassignJobItem.client} • {reassignJobItem.location}</div>
+                  <div className="mt-2 text-[11px] text-slate-600 flex items-center gap-1.5">
+                    <span className="text-slate-400">Current Lead:</span>
+                    <span className="font-bold text-slate-800">{reassignJobItem.assignedRecruiter || 'Unassigned'}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-800">
+                      Assign To Organization Member <span className="text-brand-orange">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomTa(!isCustomTa)}
+                      className="text-[11px] font-bold text-brand-orange hover:underline cursor-pointer"
+                    >
+                      {isCustomTa ? '← Choose from Organization List' : '+ Enter Custom Member Name'}
+                    </button>
+                  </div>
+
+                  {!isCustomTa ? (
+                    <select
+                      value={selectedTaMember}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setSelectedTaMember(val);
+                        const match = teamMembers.find(m => m.name === val);
+                        if (match) setSelectedTaRole(match.role);
+                      }}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/20 cursor-pointer"
+                    >
+                      <option value="" disabled>-- Select Organization Member --</option>
+                      {teamMembers.map(m => (
+                        <option key={m.id || m.name} value={m.name}>
+                          {m.name} — {m.role} {m.email ? `(${m.email})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl border border-orange-200 bg-orange-50/40">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                          Member Full Name <span className="text-brand-orange">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={customTaName}
+                          onChange={e => setCustomTaName(e.target.value)}
+                          placeholder="e.g. Sarah Jenkins"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-brand-orange"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                          Role / Title
+                        </label>
+                        <input
+                          type="text"
+                          value={customTaRole}
+                          onChange={e => setCustomTaRole(e.target.value)}
+                          placeholder="e.g. Technical Recruiter"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-brand-orange"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-900 flex items-start gap-2">
+                  <svg className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>
+                    Deterministic assignment: This member will be set as the Assigned TA across all portals, audit trails, and client delivery reports.
+                  </span>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-slate-100 bg-[#F8FAFC] flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setReassignModalOpen(false)}
+                  className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmReassign}
+                  disabled={isCustomTa ? !customTaName.trim() : !selectedTaMember.trim()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-brand-orange px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-brand-orange-hover disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Confirm Assignment
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Global Toast Notification */}
+        {toastMessage && (
+          <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs font-bold px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200 border border-slate-700">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
       </main>
       <Footer />
     </div>

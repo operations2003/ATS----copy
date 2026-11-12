@@ -3,6 +3,11 @@
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { atsStore, JobItem as StoreJobItem } from '@/lib/atsStore';
+import {
+  getJobAssignment,
+  setJobAssignment,
+  isExcludedRecruiterName
+} from '@/lib/jobAssignments';
 import ClientSubmissionDossierModal, { SubmissionDossierData } from '@/components/ClientSubmissionDossierModal';
 import ClientLifecycleModal, { ClientLifecycleData } from '@/components/ClientLifecycleModal';
 
@@ -1010,6 +1015,17 @@ function ClientSharePortalContent() {
         };
 
         const effectiveRecruiter = assignedMember || 'Agency Delivery Team';
+
+        if (effectiveRecruiter && !isExcludedRecruiterName(effectiveRecruiter)) {
+          setJobAssignment({
+            jobId: newJob.id,
+            client: clientName,
+            title: newJob.title,
+            assignedRecruiter: effectiveRecruiter,
+            role: 'Technical Recruiter',
+            assignedBy: 'Client Portal Share'
+          });
+        }
 
         // 1. Add into ATS Store so recruiters immediately see it in the main ATS
         try {

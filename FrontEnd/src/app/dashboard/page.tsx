@@ -6,6 +6,11 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { useAuth } from '@/context/AuthContext';
 import { computeComprehensiveMatchScore } from '@/utils/requirementUtils';
+import {
+  getJobAssignment,
+  CLIENT_SHARES_STORAGE_KEY,
+  LEGACY_CLIENT_SHARES_KEY
+} from '@/lib/jobAssignments';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 interface JobItem {
@@ -355,7 +360,7 @@ export default function DashboardPage() {
         // 4b. Reconcile client shares and uploaded JDs into dashboard
         if (typeof window !== 'undefined') {
           try {
-            const clientSharesRaw = localStorage.getItem('tasknera_client_shares');
+            const clientSharesRaw = localStorage.getItem(CLIENT_SHARES_STORAGE_KEY) || localStorage.getItem(LEGACY_CLIENT_SHARES_KEY);
             if (clientSharesRaw) {
               const clientShares = JSON.parse(clientSharesRaw);
               if (Array.isArray(clientShares)) {
@@ -369,9 +374,10 @@ export default function DashboardPage() {
                     }
                     if (Array.isArray(cjList)) {
                       for (const cj of cjList) {
-                        const effectiveRecruiter = cj.assignedRecruiter || share.assignedMember;
                         const cjTitle = cj.title || cj.name || 'Job Requisition';
                         const cjId = String(cj.id || `job-client-${share.clientName}-${cjTitle}`);
+                        const assignment = getJobAssignment({ client: share.clientName, title: cjTitle, id: cjId });
+                        const effectiveRecruiter = assignment?.assignedRecruiter || cj.assignedRecruiter || share.assignedMember;
                         const currentUserName = user?.name || '';
                         const currentUserEmail = user?.email?.toLowerCase() || '';
                         const isAdmin = user?.role === 'ADMIN' || user?.role === 'CLIENT_ADMIN' || user?.role === 'SUPER_ADMIN';

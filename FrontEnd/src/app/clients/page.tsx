@@ -7,6 +7,11 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { useAuth } from '@/context/AuthContext';
 import { atsStore, JobItem } from '@/lib/atsStore';
+import {
+  getJobAssignment,
+  setJobAssignment,
+  isExcludedRecruiterName
+} from '@/lib/jobAssignments';
 
 interface SharedClientLink {
   id: string;
@@ -132,10 +137,6 @@ export default function ClientsPage() {
   }, [isClientLoaded, authLoading, isAdmin, router]);
 
   useEffect(() => {
-    // Load jobs from ATS Store
-    const loadedJobs = atsStore.getJobs();
-    setJobs(loadedJobs);
-
     // Load client share links from localStorage
     try {
       const stored = localStorage.getItem(CLIENT_SHARES_STORAGE_KEY);
@@ -148,6 +149,87 @@ export default function ClientsPage() {
     } catch {
       // ignore
     }
+
+    // Refresh all jobs from atsStore, localStorage, and backend API
+    const refreshJobs = async () => {
+      const combined = new Map<string, JobItem>();
+
+      // 1. atsStore jobs
+      try {
+        atsStore.getJobs().forEach(j => {
+          if (j.id) combined.set(String(j.id), j);
+        });
+      } catch {}
+
+      // 2. tasknera_created_jobs
+      try {
+        const rawCreated = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
+        if (Array.isArray(rawCreated)) {
+          rawCreated.forEach((cj: any) => {
+            if (cj.id && !combined.has(String(cj.id))) {
+              const assignment = getJobAssignment(cj);
+              combined.set(String(cj.id), {
+                id: String(cj.id),
+                title: cj.position || cj.title || 'Requisition Role',
+                client: cj.client || cj.company || 'Client',
+                location: cj.location || 'Remote / Hybrid',
+                mode: cj.work_mode || cj.mode || 'Hybrid',
+                salary: cj.salary || 'Competitive',
+                candidates: cj.candidates || 0,
+                topScore: cj.topScore || 0,
+                status: cj.status || 'Active',
+                assignedRecruiter: assignment?.assignedRecruiter || cj.assignedRecruiter,
+                workedBy: cj.workedBy || [],
+                pod: 'Client Portal Inflow',
+                mandatoryRequirementsCount: 3,
+                totalRequirementsCount: 6,
+                description: cj.description,
+                createdAtDaysAgo: 0
+              } as JobItem);
+            }
+          });
+        }
+      } catch {}
+
+      // 3. Backend jobs
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+        const res = await fetch(`${backendUrl}/jobs`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data.jobs) ? data.jobs : (Array.isArray(data.data) ? data.data : []);
+          list.forEach((bj: any) => {
+            const assignment = getJobAssignment(bj);
+            const resolvedAssigned = assignment?.assignedRecruiter || bj.assignedRecruiter;
+            combined.set(String(bj.id), {
+              id: String(bj.id),
+              title: bj.position || bj.title || 'Requisition Role',
+              client: bj.client || bj.company || 'Client',
+              location: bj.location || 'Remote / Hybrid',
+              mode: bj.work_mode || bj.workMode || 'Hybrid',
+              salary: bj.salary || 'Competitive',
+              candidates: bj.candidatesCount || bj.candidates || 0,
+              topScore: bj.topScore || 0,
+              status: bj.status || 'Active',
+              assignedRecruiter: resolvedAssigned,
+              workedBy: bj.workedBy || [],
+              pod: 'Enterprise Pipeline',
+              mandatoryRequirementsCount: 3,
+              totalRequirementsCount: 6,
+              description: bj.jd_text || bj.description,
+              createdAtDaysAgo: 0
+            } as JobItem);
+          });
+        }
+      } catch {}
+
+      setJobs(Array.from(combined.values()));
+    };
+
+    refreshJobs();
 
     // Load genuine organization team members from backend database and atsStore
     const memberMap = new Map<string, TeamMemberOption>();
@@ -243,6 +325,28 @@ export default function ClientsPage() {
     };
 
     fetchRealOrganizationUsers();
+
+    // Event listener for updates from jobs page or other tabs
+    const handleUpdate = () => {
+      refreshJobs();
+      try {
+        const stored = localStorage.getItem(CLIENT_SHARES_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) setSharedLinks(parsed);
+        }
+      } catch {}
+    };
+
+    window.addEventListener('tasknera_jobs_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    const unsub = atsStore.subscribe(handleUpdate);
+
+    return () => {
+      window.removeEventListener('tasknera_jobs_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+      unsub();
+    };
   }, [user, cachedRole]);
 
   // Derives unique client names from shared links and existing ATS jobs
@@ -303,42 +407,60 @@ export default function ClientsPage() {
 
   // Helper to retrieve detailed uploaded JDs for a client
   const getClientUploadedJds = (clientName: string): ClientJdItem[] => {
+    const cleanClient = clientName.toLowerCase().trim();
+    const resultList: ClientJdItem[] = [];
+    const seenIds = new Set<string>();
+
     if (typeof window !== 'undefined') {
       try {
         const raw = localStorage.getItem(`tasknera_client_jds_${clientName.replace(/\s+/g, '_')}`);
         if (raw) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed.map((item: any, idx: number) => ({
-              id: item.id || `jd-${idx}`,
-              title: item.title || item.name || 'Job Requisition',
-              assignedRecruiter: item.assignedRecruiter,
-              description: item.description,
-              location: item.location || 'Remote',
-              mode: item.workMode || item.mode || 'Hybrid',
-              salary: item.salary || 'Competitive',
-              createdAt: item.createdAt || 'Recently',
-              status: item.status || 'Active Screening',
-              mandatoryRequirementsCount: item.mandatoryRequirementsCount || 3
-            }));
+            parsed.forEach((item: any, idx: number) => {
+              const id = String(item.id || `jd-${idx}`);
+              seenIds.add(id);
+              const assignment = getJobAssignment({ client: clientName, title: item.title || item.name, id });
+              resultList.push({
+                id,
+                title: item.title || item.name || 'Job Requisition',
+                assignedRecruiter: assignment?.assignedRecruiter || item.assignedRecruiter,
+                description: item.description,
+                location: item.location || 'Remote',
+                mode: item.workMode || item.mode || 'Hybrid',
+                salary: item.salary || 'Competitive',
+                createdAt: item.createdAt || 'Recently',
+                status: item.status || 'Active Screening',
+                mandatoryRequirementsCount: item.mandatoryRequirementsCount || 3
+              });
+            });
           }
         }
       } catch {}
     }
-    return jobs
-      .filter(j => j.client?.toLowerCase().trim() === clientName.toLowerCase().trim())
-      .map(j => ({
-        id: j.id,
-        title: j.title,
-        assignedRecruiter: j.assignedRecruiter,
-        description: j.description,
-        location: j.location,
-        mode: j.mode,
-        salary: j.salary,
-        createdAt: 'In ATS',
-        status: j.status,
-        mandatoryRequirementsCount: j.mandatoryRequirementsCount
-      }));
+
+    jobs
+      .filter(j => (j.client?.toLowerCase().trim() === cleanClient || (cleanClient && j.client?.toLowerCase().includes(cleanClient))))
+      .forEach(j => {
+        if (!seenIds.has(String(j.id))) {
+          seenIds.add(String(j.id));
+          const assignment = getJobAssignment(j);
+          resultList.push({
+            id: String(j.id),
+            title: j.title,
+            assignedRecruiter: assignment?.assignedRecruiter || j.assignedRecruiter,
+            description: j.description,
+            location: j.location,
+            mode: j.mode,
+            salary: j.salary,
+            createdAt: 'In ATS',
+            status: j.status,
+            mandatoryRequirementsCount: j.mandatoryRequirementsCount
+          });
+        }
+      });
+
+    return resultList;
   };
 
   const handleOpenJdViewer = (link: SharedClientLink) => {
@@ -349,11 +471,15 @@ export default function ClientsPage() {
 
   // Helper to determine who is assigned to this client's JDs
   const getAssignedMemberForClient = (link: SharedClientLink): { name: string; role?: string } | null => {
-    if (link.assignedMember) {
+    const assignment = getJobAssignment({ client: link.clientName });
+    if (assignment?.assignedRecruiter && !isExcludedRecruiterName(assignment.assignedRecruiter)) {
+      return { name: assignment.assignedRecruiter, role: assignment.role };
+    }
+    if (link.assignedMember && !isExcludedRecruiterName(link.assignedMember)) {
       return { name: link.assignedMember, role: link.assignedMemberRole };
     }
     const clientJobs = getClientUploadedJds(link.clientName);
-    const withRecruiter = clientJobs.find(j => j.assignedRecruiter && j.assignedRecruiter !== 'Agency Delivery Team');
+    const withRecruiter = clientJobs.find(j => j.assignedRecruiter && !isExcludedRecruiterName(j.assignedRecruiter));
     if (withRecruiter?.assignedRecruiter) {
       return { name: withRecruiter.assignedRecruiter };
     }
@@ -476,6 +602,30 @@ export default function ClientsPage() {
     const clientName = activeAssignLink.clientName;
     const adminName = user?.name || cachedEmail?.split('@')[0] || 'Administrator';
 
+    const clientJds = getClientUploadedJds(clientName);
+
+    // 0. Set authoritative registry assignment in tasknera_job_assignments_v1
+    setJobAssignment({
+      client: clientName,
+      title: selectedJobScope !== 'ALL' ? clientJds.find(j => j.id === selectedJobScope)?.title : undefined,
+      assignedRecruiter: targetMember,
+      role: targetRole,
+      assignedBy: adminName
+    });
+
+    clientJds.forEach(item => {
+      if (selectedJobScope === 'ALL' || item.id === selectedJobScope) {
+        setJobAssignment({
+          jobId: item.id,
+          client: clientName,
+          title: item.title,
+          assignedRecruiter: targetMember,
+          role: targetRole,
+          assignedBy: adminName
+        });
+      }
+    });
+
     // 1. Update shared links in state & localStorage
     const updatedLinks = sharedLinks.map(l => {
       if (l.id === activeAssignLink.id || l.clientName.toLowerCase().trim() === clientName.toLowerCase().trim()) {
@@ -494,7 +644,6 @@ export default function ClientsPage() {
     } catch {}
 
     // 2. Reassign matching jobs in atsStore & ensure all client JDs exist in atsStore
-    const clientJds = getClientUploadedJds(clientName);
     const existingAtsJobs = atsStore.getJobs();
     
     // Sync each client JD into atsStore
