@@ -263,6 +263,11 @@ export function classifyEvidenceStatus(
   };
 }
 
+const isUuid = (val?: string): boolean => {
+  if (!val || typeof val !== "string") return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim());
+};
+
 /**
  * Builds the comprehensive HireIQ Decision Intelligence payload
  * using stored evaluation data or live requisition data.
@@ -273,34 +278,125 @@ export async function buildDecisionIntelligencePayload(
   userOrgId?: string,
   isSuperAdmin = false,
 ): Promise<DecisionIntelligencePayload | null> {
-  // 1. Fetch Candidate Record
-  const candidate = await prisma.candidate.findUnique({
-    where: { id: candidateId },
-    include: {
-      experiences: { orderBy: { created_at: "asc" } },
-      education: { orderBy: { created_at: "asc" } },
-      skills: true,
-      job: {
+  const candidateIdStr = String(candidateId || "").trim();
+  const jobIdStr = jobId ? String(jobId).trim() : undefined;
+
+  if (!candidateIdStr) return null;
+
+  let candidate: any = null;
+
+  // 1. Fetch Candidate Record from Prisma DB if candidateId is a valid UUID
+  if (isUuid(candidateIdStr)) {
+    const isJobUuid = isUuid(jobIdStr);
+    try {
+      candidate = await prisma.candidate.findUnique({
+        where: { id: candidateIdStr },
         include: {
-          requirements: true,
-        },
-      },
-      evaluations: {
-        where: jobId ? { jobId } : undefined,
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        include: {
+          experiences: { orderBy: { created_at: "asc" } },
+          education: { orderBy: { created_at: "asc" } },
+          skills: true,
           job: {
             include: {
               requirements: true,
             },
           },
-          creator: true,
+          evaluations: {
+            where: isJobUuid ? { jobId: jobIdStr } : undefined,
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            include: {
+              job: {
+                include: {
+                  requirements: true,
+                },
+              },
+              creator: true,
+            },
+          },
+          applications: isJobUuid ? { where: { job_id: jobIdStr } } : undefined,
         },
-      },
-      applications: jobId ? { where: { job_id: jobId } } : undefined,
-    },
-  });
+      });
+    } catch (dbErr) {
+      console.warn("[Decision Intelligence] Candidate DB lookup error:", dbErr);
+    }
+  }
+
+  // 1b. Fallback to memory store, persistent pool, or global store for non-UUID / cache candidates
+  if (!candidate) {
+    try {
+      const { findCandidateRecord, CANDIDATE_STORE, GLOBAL_CANDIDATES } = require("../controllers/candidateController");
+      let candRecord = await findCandidateRecord(candidateIdStr, jobIdStr, userOrgId);
+
+      if (!candRecord) {
+        candRecord = GLOBAL_CANDIDATES.get(candidateIdStr);
+      }
+      if (!candRecord && jobIdStr && CANDIDATE_STORE.has(jobIdStr)) {
+        candRecord = CANDIDATE_STORE.get(jobIdStr)?.find((c: any) => c.id === candidateIdStr);
+      }
+      if (!candRecord) {
+        for (const list of CANDIDATE_STORE.values()) {
+          const matched = list.find((c: any) => c.id === candidateIdStr);
+          if (matched) {
+            candRecord = matched;
+            break;
+          }
+        }
+      }
+
+      // Check persistent pool data file if still not found
+      if (!candRecord) {
+        try {
+          const fs = require("fs");
+          const path = require("path");
+          const poolFile = path.resolve(process.cwd(), "data", "candidates_pool.json");
+          if (fs.existsSync(poolFile)) {
+            const poolList = JSON.parse(fs.readFileSync(poolFile, "utf-8"));
+            if (Array.isArray(poolList)) {
+              candRecord = poolList.find((c: any) => c.id === candidateIdStr);
+            }
+          }
+        } catch {}
+      }
+
+      if (candRecord) {
+        candidate = {
+          id: candRecord.id,
+          name: candRecord.name,
+          email: candRecord.email,
+          phone: candRecord.phone,
+          location: candRecord.location,
+          current_title: candRecord.currentTitle || (candRecord as any).current_title,
+          current_company: candRecord.currentCompany || (candRecord as any).current_company,
+          total_experience: candRecord.totalExperience || (candRecord as any).total_experience || candRecord.exp,
+          organizationId: candRecord.organizationId || "org-tasknera",
+          job_id: candRecord.jobId,
+          experiences: (candRecord.experience || (candRecord as any).experiences || []).map((e: any) => ({
+            title: e.title || e.role || "",
+            company: e.company || "",
+            start_date: e.startDate || e.start_date || "",
+            end_date: e.endDate || e.end_date || "",
+            duration: e.duration || "",
+            description: e.description || "",
+          })),
+          education: (candRecord.education || []).map((ed: any) => ({
+            degree: ed.degree || "",
+            institution: ed.institution || ed.school || "",
+            field: ed.field || ed.major || "",
+            start_year: ed.year || ed.start_year || "",
+          })),
+          skills: (candRecord.skills || []).map((s: any) => ({
+            skill: typeof s === "string" ? s : s.skill || s.skill_name || s.name || "",
+          })),
+          evaluations: candRecord.evaluation ? [candRecord.evaluation] : [],
+          applications: candRecord.matchScore
+            ? [{ match_score: candRecord.matchScore, job_id: candRecord.jobId }]
+            : [],
+        };
+      }
+    } catch (storeErr) {
+      console.warn("[Decision Intelligence] Candidate store lookup error:", storeErr);
+    }
+  }
 
   if (!candidate) return null;
 
@@ -314,38 +410,56 @@ export async function buildDecisionIntelligencePayload(
 
   // 2. Resolve target Job
   const targetJobId =
-    jobId || candidate.evaluations[0]?.jobId || candidate.job_id || undefined;
-  let jobRecord: any = candidate.evaluations[0]?.job || candidate.job;
+    jobIdStr || candidate.evaluations?.[0]?.jobId || candidate.job_id || candidate.jobId || undefined;
+  let jobRecord: any = candidate.evaluations?.[0]?.job || candidate.job;
 
   if (
     (!jobRecord || (targetJobId && jobRecord.id !== targetJobId)) &&
     targetJobId
   ) {
-    jobRecord = await prisma.job.findUnique({
-      where: { id: targetJobId },
-      include: { requirements: true },
-    });
+    if (isUuid(targetJobId)) {
+      try {
+        jobRecord = await prisma.job.findUnique({
+          where: { id: targetJobId },
+          include: { requirements: true },
+        });
+      } catch (err) {
+        console.warn("[Decision Intelligence] Prisma job lookup error:", err);
+      }
+    }
+    if (!jobRecord) {
+      try {
+        const { GLOBAL_JOB_STORE } = require("../controllers/jobController");
+        jobRecord = GLOBAL_JOB_STORE.get(targetJobId);
+      } catch {}
+    }
   }
 
   // 3. Resolve Evaluation Record
-  const latestEval =
-    candidate.evaluations[0] ||
-    (targetJobId
-      ? await prisma.evaluation.findFirst({
-          where: { candidateId, jobId: targetJobId },
-          orderBy: { createdAt: "desc" },
-          include: { creator: true },
-        })
-      : null);
+  let latestEval = candidate.evaluations?.[0] || null;
+  if (!latestEval && targetJobId && isUuid(candidateIdStr) && isUuid(targetJobId)) {
+    try {
+      latestEval = await prisma.evaluation.findFirst({
+        where: { candidateId: candidateIdStr, jobId: targetJobId },
+        orderBy: { createdAt: "desc" },
+        include: { creator: true },
+      });
+    } catch (err) {
+      console.warn("[Decision Intelligence] Prisma evaluation lookup error:", err);
+    }
+  }
+  if (!latestEval && candidate.evaluation) {
+    latestEval = candidate.evaluation;
+  }
 
   const audit = (latestEval?.auditData as any) || {};
 
   // Resolve Candidate Profile Details
   const candidateName = candidate.name || audit.candidateName || "Candidate";
   const candidateRole =
-    candidate.current_title || audit.candidateRole || "Professional";
+    candidate.current_title || candidate.currentTitle || audit.candidateRole || "Professional";
   const candidateCompany =
-    candidate.current_company || audit.candidateCompany || "Enterprise";
+    candidate.current_company || candidate.currentCompany || audit.candidateCompany || "Enterprise";
   const candidateEmail = candidate.email || audit.candidateEmail || "";
   const candidatePhone = candidate.phone || audit.candidatePhone || "";
   const candidateLocation =
@@ -355,7 +469,9 @@ export async function buildDecisionIntelligencePayload(
   // Use explicit CV experience and verified non-overlapping
   // employment dates, avoiding the old experiences.length * 1.5 estimate.
 
-  const explicitExperienceText = String(candidate.total_experience || "");
+  const explicitExperienceText = String(
+    candidate.total_experience || candidate.totalExperience || candidate.exp || "",
+  );
 
   const explicitExperienceMatch =
     explicitExperienceText.match(/(\d+(?:\.\d+)?)/);
@@ -364,15 +480,17 @@ export async function buildDecisionIntelligencePayload(
     ? parseFloat(explicitExperienceMatch[1])
     : 0;
 
-  const normalizedExperiences = (candidate.experiences || []).map(
-    (exp: any) => ({
-      title: exp.title || "",
-      company: exp.company || "",
-      startDate: exp.start_date || exp.startDate || "",
-      endDate: exp.end_date || exp.endDate || "",
-      duration: exp.duration || "",
-    }),
-  );
+  const normalizedExperiences = (
+    candidate.experiences ||
+    candidate.experience ||
+    []
+  ).map((exp: any) => ({
+    title: exp.title || exp.role || "",
+    company: exp.company || "",
+    startDate: exp.start_date || exp.startDate || "",
+    endDate: exp.end_date || exp.endDate || "",
+    duration: exp.duration || "",
+  }));
 
   const verifiedExperienceMonths = calculateNonOverlappingExperienceMonths(
     normalizedExperiences,

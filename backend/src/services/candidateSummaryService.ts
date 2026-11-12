@@ -122,37 +122,129 @@ const cleanVal = (val?: string | null, fallback = 'Not available in resume'): st
   return val.trim();
 };
 
+const isUuid = (val?: string): boolean => {
+  if (!val || typeof val !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim());
+};
+
 /**
  * Fetch candidate and related evaluation / job records
  */
 async function fetchCandidateAndJobContext(candidateId: string, jobId?: string, userOrgId?: string, isSuperAdmin = false) {
-  const candidate = await prisma.candidate.findUnique({
-    where: { id: candidateId },
-    include: {
-      experiences: { orderBy: { created_at: 'asc' } },
-      education: { orderBy: { created_at: 'asc' } },
-      skills: true,
-      projects: true,
-      certifications: true,
-      job: {
+  const candidateIdStr = String(candidateId || '').trim();
+  const jobIdStr = jobId ? String(jobId).trim() : undefined;
+  if (!candidateIdStr) return null;
+
+  let candidate: any = null;
+
+  if (isUuid(candidateIdStr)) {
+    const isJobUuid = isUuid(jobIdStr);
+    try {
+      candidate = await prisma.candidate.findUnique({
+        where: { id: candidateIdStr },
         include: {
-          requirements: true
-        }
-      },
-      evaluations: {
-        where: jobId ? { jobId } : undefined,
-        orderBy: { createdAt: 'desc' },
-        take: 1,
-        include: {
+          experiences: { orderBy: { created_at: 'asc' } },
+          education: { orderBy: { created_at: 'asc' } },
+          skills: true,
+          projects: true,
+          certifications: true,
           job: {
             include: {
               requirements: true
             }
+          },
+          evaluations: {
+            where: isJobUuid ? { jobId: jobIdStr } : undefined,
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: {
+              job: {
+                include: {
+                  requirements: true
+                }
+              }
+            }
+          }
+        }
+      });
+    } catch (dbErr) {
+      console.warn('[Candidate Summary] Candidate DB lookup error:', dbErr);
+    }
+  }
+
+  // Fallback to memory store, persistent pool, or global store
+  if (!candidate) {
+    try {
+      const { findCandidateRecord, CANDIDATE_STORE, GLOBAL_CANDIDATES } = require('../controllers/candidateController');
+      let candRecord = await findCandidateRecord(candidateIdStr, jobIdStr, userOrgId);
+
+      if (!candRecord) {
+        candRecord = GLOBAL_CANDIDATES.get(candidateIdStr);
+      }
+      if (!candRecord && jobIdStr && CANDIDATE_STORE.has(jobIdStr)) {
+        candRecord = CANDIDATE_STORE.get(jobIdStr)?.find((c: any) => c.id === candidateIdStr);
+      }
+      if (!candRecord) {
+        for (const list of CANDIDATE_STORE.values()) {
+          const matched = list.find((c: any) => c.id === candidateIdStr);
+          if (matched) {
+            candRecord = matched;
+            break;
           }
         }
       }
+
+      // Check persistent pool file
+      if (!candRecord) {
+        try {
+          const fs = require('fs');
+          const path = require('path');
+          const poolFile = path.resolve(process.cwd(), 'data', 'candidates_pool.json');
+          if (fs.existsSync(poolFile)) {
+            const poolList = JSON.parse(fs.readFileSync(poolFile, 'utf-8'));
+            if (Array.isArray(poolList)) {
+              candRecord = poolList.find((c: any) => c.id === candidateIdStr);
+            }
+          }
+        } catch {}
+      }
+
+      if (candRecord) {
+        candidate = {
+          id: candRecord.id,
+          name: candRecord.name,
+          email: candRecord.email,
+          phone: candRecord.phone,
+          location: candRecord.location,
+          current_title: candRecord.currentTitle || (candRecord as any).current_title,
+          current_company: candRecord.currentCompany || (candRecord as any).current_company,
+          total_experience: candRecord.totalExperience || (candRecord as any).total_experience || candRecord.exp,
+          organizationId: candRecord.organizationId || 'org-tasknera',
+          job_id: candRecord.jobId,
+          experiences: (candRecord.experience || (candRecord as any).experiences || []).map((e: any) => ({
+            title: e.title || e.role || '',
+            company: e.company || '',
+            start_date: e.startDate || e.start_date || '',
+            end_date: e.endDate || e.end_date || '',
+            duration: e.duration || '',
+            description: e.description || '',
+          })),
+          education: (candRecord.education || []).map((ed: any) => ({
+            degree: ed.degree || '',
+            institution: ed.institution || ed.school || '',
+            field: ed.field || ed.major || '',
+            start_year: ed.year || ed.start_year || '',
+          })),
+          skills: (candRecord.skills || []).map((s: any) => ({
+            skill: typeof s === 'string' ? s : s.skill || s.skill_name || s.name || '',
+          })),
+          evaluations: candRecord.evaluation ? [candRecord.evaluation] : [],
+        };
+      }
+    } catch (storeErr) {
+      console.warn('[Candidate Summary] Candidate memory lookup error:', storeErr);
     }
-  });
+  }
 
   if (!candidate) return null;
 
@@ -163,15 +255,27 @@ async function fetchCandidateAndJobContext(candidateId: string, jobId?: string, 
   }
 
   // Determine relevant job and evaluation
-  let targetJob: any = candidate.evaluations[0]?.job || candidate.job;
-  if (!targetJob && jobId) {
-    targetJob = await prisma.job.findUnique({
-      where: { id: jobId },
-      include: { requirements: true }
-    });
+  let targetJob: any = candidate.evaluations?.[0]?.job || candidate.job;
+  if (!targetJob && jobIdStr) {
+    if (isUuid(jobIdStr)) {
+      try {
+        targetJob = await prisma.job.findUnique({
+          where: { id: jobIdStr },
+          include: { requirements: true }
+        });
+      } catch (err) {
+        console.warn('[Candidate Summary] Prisma job lookup error:', err);
+      }
+    }
+    if (!targetJob) {
+      try {
+        const { GLOBAL_JOB_STORE } = require('../controllers/jobController');
+        targetJob = GLOBAL_JOB_STORE.get(jobIdStr);
+      } catch {}
+    }
   }
 
-  const targetEval = candidate.evaluations[0] || null;
+  const targetEval = candidate.evaluations?.[0] || candidate.evaluation || null;
 
   return {
     candidate,

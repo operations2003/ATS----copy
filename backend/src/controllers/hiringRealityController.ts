@@ -15,10 +15,24 @@ export const getJobHiringRealityController = async (req: AuthRequest, res: Respo
       return;
     }
 
-    const job = await prisma.job.findUnique({
-      where: { id: jobId },
-      include: { requirements: true }
-    });
+    let job: any = null;
+    const isJobUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(jobId);
+    if (isJobUuid) {
+      try {
+        job = await prisma.job.findUnique({
+          where: { id: jobId },
+          include: { requirements: true }
+        });
+      } catch (err) {
+        console.warn('[Hiring Reality] Prisma findUnique job error:', err);
+      }
+    }
+    if (!job) {
+      try {
+        const { GLOBAL_JOB_STORE } = require('./jobController');
+        job = GLOBAL_JOB_STORE.get(jobId);
+      } catch {}
+    }
 
     if (!job) {
       res.status(404).json({ error: 'Job requisition not found.' });
