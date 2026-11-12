@@ -24,8 +24,8 @@ const FOOTER_NAV: {
   ],
   company: [
     { label: 'Settings', href: '/settings' },
-    { label: 'Book a Demo Session', href: 'mailto:operations@tasknera.com?subject=HireIQ%20Demo%20Session%20Request' },
-    { label: 'operations@tasknera.com', href: 'mailto:operations@tasknera.com' },
+    { label: 'Book a Demo Session', href: '/contact' },
+    { label: 'Contact Us', href: '/contact' },
   ],
 };
 
@@ -33,7 +33,7 @@ const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-[#0B132B] text-slate-300 border-t border-slate-800/80 mt-auto selection:bg-brand-orange-pale selection:text-brand-orange">
+    <footer className="bg-[#0C111D] text-[#98A2B3] border-t border-[#1D2939] mt-auto selection:bg-[#EFF4FF] selection:text-[#3563E9]">
       {/* Main Footer Container */}
       <div className="max-w-7xl mx-auto px-6 pt-12 pb-8">
         <div className="flex flex-col lg:flex-row justify-between items-start gap-10 lg:gap-16">
@@ -43,12 +43,12 @@ const Footer: React.FC = () => {
             <p className="text-sm font-semibold text-slate-200 mt-4 tracking-tight">
               Autonomous Talent Evaluation &amp; Bias-Guard Engine
             </p>
-            <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+            <p className="text-xs text-[#98A2B3] mt-1.5 leading-relaxed">
               Evidence-based candidate evaluation for smarter, faster hiring.
             </p>
             <div className="mt-4 flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/70 border border-slate-700/60 text-[11px] font-medium text-slate-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#1D2939] border border-[#344054] text-[11px] font-medium text-slate-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#15966A]"></span>
                 Enterprise Recruitment Platform
               </span>
             </div>

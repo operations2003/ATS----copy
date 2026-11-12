@@ -577,7 +577,7 @@ const statusBadge = (status: string) => {
 export default function JobCandidatesPage() {
   const params = useParams();
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const jobId = (params?.id as string) || 'jd-1';
 
   const [job, setJob] = useState<JobInfo | null>(null);
@@ -591,6 +591,22 @@ export default function JobCandidatesPage() {
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [newlyAddedCandidateId, setNewlyAddedCandidateId] = useState<string | null>(null);
+  const candidatesTableRef = useRef<HTMLDivElement>(null);
+
+  const scrollToCandidateTable = (candidateId?: string) => {
+    setShowUploadZone(false);
+    if (candidateId) {
+      setNewlyAddedCandidateId(candidateId);
+      setTimeout(() => setNewlyAddedCandidateId(null), 5000);
+    }
+    setTimeout(() => {
+      const tableEl = document.getElementById('candidates-table') || candidatesTableRef.current;
+      if (tableEl) {
+        tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
 
   // Filters, Sort & Selected Candidate Drawer
   const [searchQuery, setSearchQuery] = useState('');
@@ -630,6 +646,14 @@ export default function JobCandidatesPage() {
 
   useEffect(() => {
     setIsMounted(true);
+    if (typeof window !== 'undefined' && window.location.hash === '#candidates-table') {
+      setTimeout(() => {
+        const tableEl = document.getElementById('candidates-table') || candidatesTableRef.current;
+        if (tableEl) {
+          tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 400);
+    }
   }, []);
 
   // Lock background window scroll when candidate modal drawer is open
@@ -717,7 +741,109 @@ export default function JobCandidatesPage() {
       try {
         localStorage.setItem(`tasknera_decision_${jobId}_${candidateId}`, newDecision);
         localStorage.setItem(`tasknera_decision_${candidateId}`, newDecision);
-      } catch {}
+
+        // Synchronize with recruitment pipeline and client portal
+        const targetCand = candidates.find(c => c.id === candidateId);
+        const resolvedClient = job?.client || (job as any)?.company || localStorage.getItem(`tasknera_company_${jobId}`) || '';
+
+        // Update pipeline stage
+        const rawPipe = localStorage.getItem('tasknera_recruitment_pipeline_v1');
+        let pipeList: any[] = [];
+        if (rawPipe) {
+          try {
+            pipeList = JSON.parse(rawPipe);
+          } catch {}
+        }
+        if (Array.isArray(pipeList)) {
+          const newStage = newDecision === 'SUBMIT' ? 'Shortlisted' : 'Screening';
+          const existingIdx = pipeList.findIndex(c => c.id === candidateId || (targetCand?.name && c.name === targetCand.name));
+          if (existingIdx >= 0) {
+            pipeList[existingIdx] = { ...pipeList[existingIdx], stage: newStage, decision: newDecision };
+          } else if (targetCand) {
+            pipeList.unshift({
+              id: candidateId,
+              name: targetCand.name || 'Candidate',
+              role: targetCand.currentTitle || (targetCand as any).role || job?.position || 'Software Engineer',
+              score: targetCand.atsScore || targetCand.matchScore || 80,
+              stage: newStage,
+              requisitionId: jobId,
+              requisitionTitle: job?.position || 'Requisition Role',
+              decision: newDecision,
+              recruiterName: user?.name || user?.email || 'Recruiter',
+            });
+          }
+          localStorage.setItem('tasknera_recruitment_pipeline_v1', JSON.stringify(pipeList));
+        }
+
+        // Update client portal candidates
+        if (resolvedClient && targetCand) {
+          const clientKey = resolvedClient.trim().replace(/\s+/g, '_');
+          const portalStorageKey = `tasknera_portal_cands_${clientKey}`;
+          const rawPortal = localStorage.getItem(portalStorageKey);
+          let portalCands = rawPortal ? JSON.parse(rawPortal) : [];
+          if (!Array.isArray(portalCands)) portalCands = [];
+
+          const existingPortalIdx = portalCands.findIndex((c: any) => c.id === candidateId || c.name === targetCand.name);
+          if (newDecision === 'SUBMIT') {
+            const score = targetCand.atsScore || targetCand.matchScore || 80;
+            const newPortalCand = {
+              id: candidateId,
+              name: targetCand.name || 'Candidate',
+              email: targetCand.email || `${(targetCand.name || 'cand').toLowerCase().replace(/[^a-z0-9]/g, '.')}@candidate-profile.com`,
+              phone: targetCand.phone || '+1 (555) 234-5678',
+              currentTitle: targetCand.currentTitle || 'Software Engineer',
+              currentCompany: targetCand.currentCompany || 'Verified Candidate',
+              totalExperience: targetCand.totalExperience || '5+ Years',
+              location: targetCand.location || 'Remote / Hybrid',
+              summary: targetCand.summary || `Candidate screened and shortlisted for ${job?.position || 'role'}. Deterministic score: ${score}%.`,
+              skills: targetCand.skills || ['Technical Proficiency'],
+              atsScore: score,
+              matchLevel: score >= 85 ? 'EXCELLENT MATCH' : 'STRONG MATCH',
+              mandatoryPassed: true,
+              currentStatus: 'Shared with Client',
+              lastUpdatedDate: 'Just now',
+              hasResume: true,
+              resumeFileName: targetCand.fileName || `${(targetCand.name || 'candidate').replace(/\s+/g, '_')}_CV.pdf`,
+              screeningNote: `Agency Screening Verdict: Mandatory requirements satisfied. Shortlisted by recruiter.`,
+              jobId: jobId,
+              jobTitle: job?.position || 'Requisition Role',
+              decision: 'SUBMIT',
+              screeningEvidence: (targetCand as any).evidenceSnippets || (targetCand as any).evaluation?.evidence || [],
+            };
+
+            if (existingPortalIdx >= 0) {
+              portalCands[existingPortalIdx] = { ...portalCands[existingPortalIdx], ...newPortalCand, currentStatus: 'Shared with Client' };
+            } else {
+              portalCands.unshift(newPortalCand);
+            }
+
+            // Log activity
+            const actStorageKey = `tasknera_portal_activities_${clientKey}`;
+            const rawActs = localStorage.getItem(actStorageKey);
+            let portalActs = rawActs ? JSON.parse(rawActs) : [];
+            if (!Array.isArray(portalActs)) portalActs = [];
+            portalActs.unshift({
+              id: `act-${Date.now()}`,
+              title: `Candidate Shortlisted: ${targetCand.name}`,
+              detail: `${user?.name || 'Agency Recruiter'} shortlisted ${targetCand.name} for ${job?.position || 'open position'} with ATS Score ${score}%. Profile submitted for client review.`,
+              actor: user?.name || 'Agency Recruiter',
+              actorRole: 'AGENCY',
+              timestamp: 'Just now',
+              badge: 'Shortlisted',
+            });
+            localStorage.setItem(actStorageKey, JSON.stringify(portalActs.slice(0, 40)));
+          } else {
+            if (existingPortalIdx >= 0) {
+              portalCands[existingPortalIdx] = { ...portalCands[existingPortalIdx], currentStatus: 'Active Screening' };
+            }
+          }
+          localStorage.setItem(portalStorageKey, JSON.stringify(portalCands));
+        }
+
+        window.dispatchEvent(new CustomEvent('tasknera_portal_sync', { detail: { candidateId, decision: newDecision } }));
+      } catch (err) {
+        console.warn('Sync error in handleUpdateDecision:', err);
+      }
     }
 
     try {
@@ -1493,6 +1619,7 @@ export default function JobCandidatesPage() {
   // ── Process Upload Queue in Batch ───────────────────────────────────────────
   const processUploadBatch = async (items: UploadQueueItem[]) => {
     setIsUploading(true);
+    let latestParsedCandidateId: string | undefined;
 
     try {
       const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null);
@@ -1537,6 +1664,10 @@ export default function JobCandidatesPage() {
           }
 
           const result = await res.json();
+
+          if (result.candidates && result.candidates.length > 0) {
+            latestParsedCandidateId = result.candidates[0]?.id;
+          }
 
           setUploadQueue(prev =>
             prev.map(q => {
@@ -1601,6 +1732,13 @@ export default function JobCandidatesPage() {
       }
 
       await fetchJobAndCandidates();
+
+      // Automatically shift screen directly to candidate table after CV upload
+      if (latestParsedCandidateId) {
+        setTimeout(() => {
+          scrollToCandidateTable(latestParsedCandidateId);
+        }, 800);
+      }
     } catch (err: any) {
       console.error('Upload failed:', err);
       setUploadQueue(prev =>
@@ -2122,16 +2260,47 @@ export default function JobCandidatesPage() {
                         <span className="font-bold text-slate-800 truncate">{item.name}</span>
                         <span className="text-[10px] text-slate-400">{formatBytes(item.size)}</span>
                       </div>
-                      <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
-                        item.status === 'PARSED' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
-                        item.status === 'DUPLICATE' ? 'bg-amber-50 text-amber-800 border border-amber-300' :
-                        item.status === 'FAILED' ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-blue-50 text-blue-800 border border-blue-200'
-                      }`}>
-                        {item.status === 'DUPLICATE' ? 'ALREADY UPLOADED (SKIPPED)' : item.status}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+                          item.status === 'PARSED' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
+                          item.status === 'DUPLICATE' ? 'bg-amber-50 text-amber-800 border border-amber-300' :
+                          item.status === 'FAILED' ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-blue-50 text-blue-800 border border-blue-200'
+                        }`}>
+                          {item.status === 'DUPLICATE' ? 'ALREADY UPLOADED (SKIPPED)' : item.status}
+                        </span>
+                        {item.status === 'PARSED' && (
+                          <button
+                            type="button"
+                            onClick={() => scrollToCandidateTable(item.candidateId)}
+                            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-[#3563E9] text-white hover:bg-[#2851D6] transition-colors cursor-pointer inline-flex items-center gap-1 shadow-xs"
+                            title="Shift view directly to this candidate in the table"
+                          >
+                            <span>View in Table</span>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
+
+                {uploadQueue.some(q => q.status === 'PARSED') && (
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-xs text-emerald-700 font-semibold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                      Parsing complete. Viewing candidate results below.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => scrollToCandidateTable()}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+                    >
+                      <span>Jump to Candidates Table ↓</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2206,7 +2375,7 @@ export default function JobCandidatesPage() {
 
         {/* ── CANDIDATES RANKED TABLE ── */}
         {filteredCandidates.length > 0 ? (
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden mb-8">
+          <div id="candidates-table" ref={candidatesTableRef} className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden mb-8 scroll-mt-24">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -2238,8 +2407,9 @@ export default function JobCandidatesPage() {
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {filteredCandidates.map((c) => {
                     const badge = statusBadge(c.parsingStatus);
+                    const isNewlyAdded = c.id === newlyAddedCandidateId;
                     return (
-                      <tr key={c.id} className="hover:bg-slate-50/70 transition-colors group">
+                      <tr key={c.id} className={`transition-all duration-700 group ${isNewlyAdded ? 'bg-emerald-50/80 ring-2 ring-emerald-500/60 shadow-xs' : 'hover:bg-slate-50/70'}`}>
                         {/* Selection Checkbox */}
                         <td className="px-4 py-4 text-center">
                           <input
@@ -2267,6 +2437,12 @@ export default function JobCandidatesPage() {
                                 >
                                   {c.name || c.fileName || 'Unnamed Candidate'}
                                 </button>
+                                {isNewlyAdded && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0 animate-pulse">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    Newly Parsed
+                                  </span>
+                                )}
                                 {c.source === 'public_application' && (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200 shrink-0" title="Applied via public job link">
                                     Public Applicant

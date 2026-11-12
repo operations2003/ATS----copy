@@ -208,7 +208,7 @@ export default function JobsPage() {
   const canUploadJd = isSuperAdmin || user?.allowJdUpload !== false;
   const [allJobs, setAllJobs] = useState<JobItem[]>([]);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'All' | 'Active' | 'Draft' | 'Closed'>('All');
+  const [filter, setFilter] = useState<'All' | 'MyJobs' | 'Active' | 'Draft' | 'Closed'>('All');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -229,7 +229,9 @@ export default function JobsPage() {
           id === 'b069cc8a-8e5d-47e4-8444-1c9ed2a0258b' ||
           id === '83838c13-a542-457c-a696-1289c9734869' ||
           id.includes('1788597184624') ||
-          id.startsWith('jd-') ||
+          id.startsWith('jd-mock') ||
+          id.startsWith('jd-dummy') ||
+          id.startsWith('jd-test') ||
           client === 'test client' ||
           client === 'test client 2' ||
           client.includes('test client') ||
@@ -246,6 +248,7 @@ export default function JobsPage() {
           const raw = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
           const currentUserId = user?.id;
           const currentUserEmail = user?.email?.toLowerCase();
+          const currentUserName = user?.name || (user?.email ? user.email.split('@')[0] : '');
           const isAdmin = user?.role === 'ADMIN' || user?.role === 'CLIENT_ADMIN' || user?.role === 'SUPER_ADMIN';
 
           // Clean legacy test/bad jobs out of localStorage permanently & sanitize messy titles
@@ -284,10 +287,20 @@ export default function JobsPage() {
             const jOrgId = j.organizationId || 'org-tasknera';
             if (!isSuperAdmin && jOrgId !== currentOrgId) return false;
             if (isAdmin) return true;
-            if (!currentUserId && !currentUserEmail) return false;
+            if (!currentUserId && !currentUserEmail && !currentUserName) return false;
             const jUserId = j.created_by || j.createdBy;
             const jEmail = (j.creatorEmail || j.email || '').toLowerCase();
-            return (currentUserId && jUserId === currentUserId) || (currentUserEmail && jEmail === currentUserEmail);
+            const jAssigned = (j.assignedRecruiter || j.assignedTo || '').toLowerCase();
+            const jWorkers = Array.isArray(j.workedBy) ? j.workedBy : [];
+            const isAssigned = (
+              (currentUserName && jAssigned.includes(currentUserName.toLowerCase())) ||
+              (currentUserEmail && jAssigned.includes(currentUserEmail)) ||
+              jWorkers.some((w: any) =>
+                (currentUserName && w.name && w.name.toLowerCase().includes(currentUserName.toLowerCase())) ||
+                (currentUserEmail && w.email && w.email.toLowerCase() === currentUserEmail)
+              )
+            );
+            return (currentUserId && jUserId === currentUserId) || (currentUserEmail && jEmail === currentUserEmail) || isAssigned;
           });
         } catch (e) {}
       }
@@ -333,6 +346,142 @@ export default function JobsPage() {
             combinedMap.set(String(local.id), local);
           }
         }
+      }
+
+      // Reconcile client shares and uploaded JDs so assigned client positions appear immediately in the person's jobs
+      if (typeof window !== 'undefined') {
+        try {
+          const clientSharesRaw = localStorage.getItem('tasknera_client_shares');
+          if (clientSharesRaw) {
+            const clientShares = JSON.parse(clientSharesRaw);
+            if (Array.isArray(clientShares)) {
+              for (const share of clientShares) {
+                if (share.clientName) {
+                  const clientKey = `tasknera_client_jds_${share.clientName.replace(/\s+/g, '_')}`;
+                  const cjRaw = localStorage.getItem(clientKey);
+                  let cjList: any[] = [];
+                  if (cjRaw) {
+                    try { cjList = JSON.parse(cjRaw); } catch {}
+                  }
+                  if (!Array.isArray(cjList) || cjList.length === 0) {
+                    // Check atsStore
+                    const atsMatching = atsStore.getJobs().filter(j => j.client?.toLowerCase().trim() === share.clientName.toLowerCase().trim());
+                    if (atsMatching.length > 0) {
+                      cjList = atsMatching.map(m => ({
+                        id: m.id,
+                        title: m.title,
+                        assignedRecruiter: m.assignedRecruiter,
+                        location: m.location,
+                        mode: m.mode,
+                        salary: m.salary,
+                        description: m.description
+                      }));
+                    }
+                  }
+
+                  if (Array.isArray(cjList)) {
+                    for (const cj of cjList) {
+                      const effectiveRecruiter = cj.assignedRecruiter || share.assignedMember;
+                      const effectiveRole = cj.assignedMemberRole || share.assignedMemberRole || 'Technical Recruiter';
+                      const cjTitle = cj.title || cj.name || 'Job Requisition';
+                      const cjId = String(cj.id || `job-client-${share.clientName}-${cjTitle}`);
+
+                      const alreadyInMap = Array.from(combinedMap.values()).some((existing: any) =>
+                        String(existing.id) === cjId ||
+                        ((existing.client || '').toLowerCase().trim() === share.clientName.toLowerCase().trim() &&
+                         (existing.position || existing.title || '').toLowerCase().trim() === cjTitle.toLowerCase().trim())
+                      );
+
+                      if (!alreadyInMap && !isBadJob(cj)) {
+                        const worker = effectiveRecruiter && effectiveRecruiter !== 'Unassigned' ? [{
+                          id: `rec-${effectiveRecruiter.toLowerCase().replace(/\s+/g, '-')}`,
+                          name: effectiveRecruiter,
+                          role: effectiveRole,
+                          action: 'Assigned Lead',
+                          isCreator: false
+                        }] : [];
+
+                        combinedMap.set(cjId, {
+                          id: cjId,
+                          position: cjTitle,
+                          title: cjTitle,
+                          client: share.clientName,
+                          company: share.clientName,
+                          location: cj.location || 'Remote / Hybrid',
+                          work_mode: cj.workMode || cj.mode || 'Hybrid',
+                          workMode: cj.workMode || cj.mode || 'Hybrid',
+                          mode: cj.workMode || cj.mode || 'Hybrid',
+                          salary: cj.salary || 'Competitive Market Rate',
+                          status: 'Active',
+                          created_at: cj.createdAt || new Date().toISOString(),
+                          createdAt: cj.createdAt || new Date().toISOString(),
+                          assignedRecruiter: effectiveRecruiter && effectiveRecruiter !== 'Unassigned' ? effectiveRecruiter : undefined,
+                          assignedTo: effectiveRecruiter && effectiveRecruiter !== 'Unassigned' ? effectiveRecruiter : undefined,
+                          workedBy: worker,
+                          candidatesCount: 0,
+                          candidates: 0,
+                          topScore: null,
+                          description: cj.description || `Requisition intake for ${share.clientName}`
+                        });
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Client share reconcile warning:', e);
+        }
+      }
+
+      // Reconcile any remaining atsStore jobs
+      try {
+        const atsJobs = atsStore.getJobs();
+        for (const aj of atsJobs) {
+          if (!isBadJob(aj)) {
+            const ajTitle = (aj.title || '').trim().toLowerCase();
+            const ajClient = (aj.client || '').trim().toLowerCase();
+            const alreadyExists = Array.from(combinedMap.values()).some((existing: any) => {
+              const exTitle = (existing.position || existing.title || '').trim().toLowerCase();
+              const exClient = (existing.client || '').trim().toLowerCase();
+              return (exTitle && exTitle === ajTitle && exClient === ajClient) || String(existing.id) === String(aj.id);
+            });
+
+            if (!alreadyExists) {
+              const worker = aj.assignedRecruiter ? [{
+                id: `rec-${aj.assignedRecruiter.toLowerCase().replace(/\s+/g, '-')}`,
+                name: aj.assignedRecruiter,
+                role: 'Lead Recruiter',
+                action: 'Assigned Lead',
+                isCreator: false
+              }] : [];
+
+              combinedMap.set(String(aj.id), {
+                id: aj.id,
+                position: aj.title,
+                title: aj.title,
+                client: aj.client,
+                company: aj.client,
+                location: aj.location,
+                work_mode: aj.mode,
+                workMode: aj.mode,
+                mode: aj.mode,
+                salary: aj.salary,
+                status: aj.status,
+                created_at: new Date(Date.now() - (aj.createdAtDaysAgo || 0) * 86400000).toISOString(),
+                assignedRecruiter: aj.assignedRecruiter,
+                workedBy: aj.workedBy && aj.workedBy.length > 0 ? aj.workedBy : worker,
+                candidatesCount: aj.candidates || 0,
+                candidates: aj.candidates || 0,
+                topScore: aj.topScore || null,
+                description: aj.description
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('atsStore merge warning:', err);
       }
       const combined = Array.from(combinedMap.values());
 
@@ -542,19 +691,46 @@ export default function JobsPage() {
     }
   };
 
+  const currentUserName = user?.name || (user?.email ? user.email.split('@')[0] : '');
+  const currentUserEmail = user?.email?.toLowerCase() || '';
+
+  const isAssignedToCurrentUser = (j: JobItem) => {
+    if (!currentUserName && !currentUserEmail) return true;
+    const qName = currentUserName.toLowerCase();
+    const hasWorked = j.workedBy && j.workedBy.some(w => 
+      (qName && w.name.toLowerCase().includes(qName)) ||
+      (currentUserEmail && w.email && w.email.toLowerCase() === currentUserEmail)
+    );
+    const hasAssigned = j.assignedRecruiter && (
+      (qName && j.assignedRecruiter.toLowerCase().includes(qName)) ||
+      (currentUserEmail && j.assignedRecruiter.toLowerCase().includes(currentUserEmail))
+    );
+    return Boolean(hasWorked || hasAssigned);
+  };
+
   const filtered = allJobs.filter(j => {
     const q = search.toLowerCase();
     const matchesSearch =
       j.title.toLowerCase().includes(q) ||
       j.client.toLowerCase().includes(q) ||
       j.location.toLowerCase().includes(q) ||
-      (j.workedBy && j.workedBy.some(w => w.name.toLowerCase().includes(q)));
-    const matchesFilter = filter === 'All' || j.status === filter;
+      (j.workedBy && j.workedBy.some(w => w.name.toLowerCase().includes(q))) ||
+      (j.assignedRecruiter && j.assignedRecruiter.toLowerCase().includes(q));
+
+    let matchesFilter = true;
+    if (filter === 'MyJobs') {
+      matchesFilter = isAssignedToCurrentUser(j);
+    } else if (filter !== 'All') {
+      matchesFilter = j.status === filter;
+    }
     return matchesSearch && matchesFilter;
   });
 
+  const myJobsCount = allJobs.filter(isAssignedToCurrentUser).length;
+
   const counts = {
     All: allJobs.length,
+    MyJobs: myJobsCount,
     Active: allJobs.filter(j => j.status === 'Active').length,
     Draft: allJobs.filter(j => j.status === 'Draft').length,
     Closed: allJobs.filter(j => j.status === 'Closed').length,
@@ -578,12 +754,12 @@ export default function JobsPage() {
 
           {canUploadJd && (
             <div className="flex flex-wrap items-center gap-3">
-            <Link href="/jobs/generate" className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-orange-200 bg-white hover:bg-orange-50 text-[#E04826] text-xs font-bold shadow-xs transition-all duration-200 whitespace-nowrap active:scale-95">
+            <Link href="/jobs/generate" className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold shadow-xs transition-all duration-200 whitespace-nowrap active:scale-95">
               <span aria-hidden="true">✦</span><span>Create JD with AI</span>
             </Link>
             <Link
               href="/jobs/create"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#FF5A36] hover:bg-[#E04826] text-white text-xs font-bold shadow-xs transition-all duration-200 whitespace-nowrap active:scale-95"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold shadow-xs transition-all duration-200 whitespace-nowrap active:scale-95"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -634,17 +810,23 @@ export default function JobsPage() {
 
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
             <div className="flex items-center gap-1 bg-[#F8FAFC] p-1 rounded-xl border border-slate-200">
-              {(['All', 'Active', 'Draft', 'Closed'] as const).map(tab => (
+              {([
+                { key: 'All', label: 'All Jobs' },
+                { key: 'MyJobs', label: 'Assigned to Me' },
+                { key: 'Active', label: 'Active' },
+                { key: 'Draft', label: 'Draft' },
+                { key: 'Closed', label: 'Closed' },
+              ] as const).map(tab => (
                 <button
-                  key={tab}
-                  onClick={() => setFilter(tab)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    filter === tab
+                  key={tab.key}
+                  onClick={() => setFilter(tab.key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    filter === tab.key
                       ? 'bg-brand-orange text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-white'
                   }`}
                 >
-                  {tab} ({counts[tab]})
+                  {tab.label} ({counts[tab.key]})
                 </button>
               ))}
             </div>

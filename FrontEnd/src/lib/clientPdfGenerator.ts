@@ -127,13 +127,13 @@ export function buildExecutiveSummaryPdf(summary: CandidateSummaryData): Uint8Ar
   };
 
   // Theme Colors
-  const cOrange = '0.9176 0.3451 0.0471';   // #EA580C
-  const cPrimary = '0.0588 0.0902 0.1647';  // #0F172A
-  const cGray = '0.2784 0.3333 0.4118';     // #475569
-  const cLightBg = '0.9725 0.9804 0.9882';  // #F8FAFC
-  const cBorder = '0.8863 0.9098 0.9412';   // #E2E8F0
-  const cGreen = '0.0824 0.5020 0.2392';    // #15803D
-  const cRed = '0.8627 0.1490 0.1490';      // #DC2626
+  const cOrange = '0.2078 0.3882 0.9137';   // #3563E9 Royal Blue
+  const cPrimary = '0.0627 0.0941 0.1569';  // #101828 Primary Navy
+  const cGray = '0.4000 0.4392 0.5216';     // #667085 Secondary Text
+  const cLightBg = '0.9686 0.9725 0.9882';  // #F7F8FC
+  const cBorder = '0.9176 0.9255 0.9412';   // #EAECF0
+  const cGreen = '0.0824 0.5882 0.4157';    // #15966A
+  const cRed = '0.8510 0.2824 0.2824';      // #D94848
   const cDarkRed = '0.7255 0.1098 0.1098';  // #B91C1C
   const cMuted = '0.5804 0.6392 0.7216';    // #94A3B8
 

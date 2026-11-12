@@ -19,18 +19,18 @@ export async function generateCandidateSummaryPdfBuffer(summary: CandidateSummar
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', err => reject(err));
 
-      const primaryColor = '#0F172A'; // Slate-900
-      const orangeColor = '#EA580C';  // Brand Orange
-      const grayText = '#475569';      // Slate-600
-      const lightBg = '#F8FAFC';       // Slate-50
-      const borderColor = '#E2E8F0';   // Slate-200
+      const primaryColor = '#101828'; // Navy
+      const blueColor = '#3563E9';    // Royal Blue
+      const grayText = '#667085';      // Secondary Text
+      const lightBg = '#F7F8FC';       // Slate-50
+      const borderColor = '#EAECF0';   // Border
 
       // ── HEADER BRANDING ──
-      doc.rect(40, 40, doc.page.width - 80, 5).fill(orangeColor);
+      doc.rect(40, 40, doc.page.width - 80, 5).fill(blueColor);
       doc.moveDown(0.8);
 
       doc.fontSize(18).fillColor(primaryColor).font('Helvetica-Bold').text('EXECUTIVE CANDIDATE EVALUATION REPORT', 40, 55);
-      doc.fontSize(9).fillColor(orangeColor).font('Helvetica-Bold').text('TASKNERA ATS • EVIDENCE-GROUNDED CANDIDATE SUMMARY', 40, 78, { characterSpacing: 1 });
+      doc.fontSize(9).fillColor(blueColor).font('Helvetica-Bold').text('TASKNERA ATS • EVIDENCE-GROUNDED CANDIDATE SUMMARY', 40, 78, { characterSpacing: 1 });
 
       // ── CANDIDATE OVERVIEW & ATS SCORE CARD ──
       const cardTop = 98;
@@ -74,7 +74,7 @@ export async function generateCandidateSummaryPdfBuffer(summary: CandidateSummar
       doc.fillColor(primaryColor).fontSize(11).font('Helvetica-Bold').text('2. KEY STRENGTHS & EVIDENCE', 40, splitY);
       let prosY = splitY + 18;
       (summary.pros || []).slice(0, 4).forEach((pro) => {
-        doc.circle(46, prosY + 4, 2.5).fill(orangeColor);
+        doc.circle(46, prosY + 4, 2.5).fill(blueColor);
         doc.fillColor(grayText).fontSize(8).font('Helvetica').text(pro, 55, prosY, { width: colWidth - 25, lineGap: 2 });
         prosY = doc.y + 6;
       });
@@ -134,7 +134,7 @@ export async function generateCandidateSummaryPdfBuffer(summary: CandidateSummar
       doc.fillColor(primaryColor).fontSize(10).font('Helvetica-Bold').text('6. FINAL RECRUITER ASSESSMENT', 50, assessTop + 10);
       doc.fontSize(8.5).font('Helvetica').fillColor(grayText);
       doc.text(`Classification: ${summary.finalAssessment?.classification || 'Assessed'} | Suggested Action: `, 50, assessTop + 24, { continued: true });
-      doc.font('Helvetica-Bold').fillColor(orangeColor).text(summary.finalAssessment?.suggestedNextStep || 'Recruiter Review');
+      doc.font('Helvetica-Bold').fillColor(blueColor).text(summary.finalAssessment?.suggestedNextStep || 'Recruiter Review');
       
       doc.font('Helvetica').fontSize(7.5).fillColor(grayText).text(
         summary.finalAssessment?.disclaimer || 'Assistive recruitment evaluation strictly grounded in submitted evidence.',

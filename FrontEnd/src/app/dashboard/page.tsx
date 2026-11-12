@@ -195,7 +195,9 @@ export default function DashboardPage() {
             title === 'test engineer' ||
             title.includes('test engineer') ||
             id === '83838c13-a542-457c-a696-1289c9734869' ||
-            id.startsWith('jd-')
+            id.startsWith('jd-mock') ||
+            id.startsWith('jd-dummy') ||
+            id.startsWith('jd-test')
           );
         };
 
@@ -206,6 +208,7 @@ export default function DashboardPage() {
             const raw = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
             const currentUserId = user?.id;
             const currentUserEmail = user?.email?.toLowerCase();
+            const currentUserName = user?.name || (user?.email ? user.email.split('@')[0] : '');
             const isAdmin = user?.role === 'ADMIN' || user?.role === 'CLIENT_ADMIN' || user?.role === 'SUPER_ADMIN';
             const currentOrgId = user?.organizationId || 'org-tasknera';
             const isSuperAdmin = user?.role === 'SUPER_ADMIN';
@@ -215,10 +218,20 @@ export default function DashboardPage() {
               const jOrgId = j.organizationId || 'org-tasknera';
               if (!isSuperAdmin && jOrgId !== currentOrgId) return false;
               if (isAdmin) return true;
-              if (!currentUserId && !currentUserEmail) return false;
+              if (!currentUserId && !currentUserEmail && !currentUserName) return false;
               const jUserId = j.created_by || j.createdBy;
               const jEmail = (j.creatorEmail || j.email || '').toLowerCase();
-              return (currentUserId && jUserId === currentUserId) || (currentUserEmail && jEmail === currentUserEmail);
+              const jAssigned = (j.assignedRecruiter || j.assignedTo || '').toLowerCase();
+              const jWorkers = Array.isArray(j.workedBy) ? j.workedBy : [];
+              const isAssigned = (
+                (currentUserName && jAssigned.includes(currentUserName.toLowerCase())) ||
+                (currentUserEmail && jAssigned.includes(currentUserEmail)) ||
+                jWorkers.some((w: any) =>
+                  (currentUserName && w.name && w.name.toLowerCase().includes(currentUserName.toLowerCase())) ||
+                  (currentUserEmail && w.email && w.email.toLowerCase() === currentUserEmail)
+                )
+              );
+              return (currentUserId && jUserId === currentUserId) || (currentUserEmail && jEmail === currentUserEmail) || isAssigned;
             });
           } catch {}
         }
@@ -337,6 +350,58 @@ export default function DashboardPage() {
               created: lj.created_at ? new Date(lj.created_at).toLocaleDateString() : 'Recent'
             });
           }
+        }
+
+        // 4b. Reconcile client shares and uploaded JDs into dashboard
+        if (typeof window !== 'undefined') {
+          try {
+            const clientSharesRaw = localStorage.getItem('tasknera_client_shares');
+            if (clientSharesRaw) {
+              const clientShares = JSON.parse(clientSharesRaw);
+              if (Array.isArray(clientShares)) {
+                for (const share of clientShares) {
+                  if (share.clientName) {
+                    const clientKey = `tasknera_client_jds_${share.clientName.replace(/\s+/g, '_')}`;
+                    const cjRaw = localStorage.getItem(clientKey);
+                    let cjList: any[] = [];
+                    if (cjRaw) {
+                      try { cjList = JSON.parse(cjRaw); } catch {}
+                    }
+                    if (Array.isArray(cjList)) {
+                      for (const cj of cjList) {
+                        const effectiveRecruiter = cj.assignedRecruiter || share.assignedMember;
+                        const cjTitle = cj.title || cj.name || 'Job Requisition';
+                        const cjId = String(cj.id || `job-client-${share.clientName}-${cjTitle}`);
+                        const currentUserName = user?.name || '';
+                        const currentUserEmail = user?.email?.toLowerCase() || '';
+                        const isAdmin = user?.role === 'ADMIN' || user?.role === 'CLIENT_ADMIN' || user?.role === 'SUPER_ADMIN';
+
+                        const isAssigned = (
+                          isAdmin ||
+                          (effectiveRecruiter && currentUserName && effectiveRecruiter.toLowerCase().includes(currentUserName.toLowerCase())) ||
+                          (effectiveRecruiter && currentUserEmail && effectiveRecruiter.toLowerCase().includes(currentUserEmail))
+                        );
+
+                        if (isAssigned && !jobMap.has(cjId)) {
+                          jobMap.set(cjId, {
+                            id: cjId,
+                            title: formatCleanPositionTitle(cjTitle),
+                            client: share.clientName,
+                            location: cj.location || 'Remote / Hybrid',
+                            mode: cj.workMode || cj.mode || 'Hybrid',
+                            candidates: 0,
+                            topScore: null,
+                            status: 'Active',
+                            created: 'Recent'
+                          });
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } catch {}
         }
 
         // Ingest all candidate evaluations stored in localStorage across all jobs
@@ -578,7 +643,7 @@ export default function DashboardPage() {
   const maxFunnelValue = Math.max(1, ...dashboardFunnel.map(stage => stage.value));
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#1E293B] flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F7F8FC] text-[#1E293B] flex flex-col font-sans">
       <Header />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 flex-1 w-full">
@@ -614,15 +679,15 @@ export default function DashboardPage() {
                 <AreaChart data={screeningVolume} margin={{ top: 6, right: 4, bottom: 0, left: -14 }}>
                   <defs>
                     <linearGradient id="screeningVolumeFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#FF5A36" stopOpacity={0.18} />
-                      <stop offset="100%" stopColor="#FF5A36" stopOpacity={0.01} />
+                      <stop offset="0%" stopColor="#3563E9" stopOpacity={0.18} />
+                      <stop offset="100%" stopColor="#3563E9" stopOpacity={0.01} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid vertical={false} stroke="#E2E8F0" strokeDasharray="3 5" />
                   <XAxis dataKey="label" interval={4} tick={{ fill: '#64748B', fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis allowDecimals={false} width={28} tick={{ fill: '#64748B', fontSize: 10 }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#E2E8F0', fontSize: 12 }} formatter={value => [value, 'Evaluations']} />
-                  <Area type="monotone" dataKey="count" stroke="#FF5A36" strokeWidth={2} fill="url(#screeningVolumeFill)" activeDot={{ r: 4 }} />
+                  <Area type="monotone" dataKey="count" stroke="#3563E9" strokeWidth={2} fill="url(#screeningVolumeFill)" activeDot={{ r: 4 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -658,7 +723,7 @@ export default function DashboardPage() {
                 <div key={item.stage} className="grid grid-cols-[minmax(95px,0.8fr)_minmax(0,1fr)_26px] items-center gap-3 text-xs">
                   <span className="truncate text-slate-500">{item.stage}</span>
                   <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-                    {item.value > 0 && <div className="h-full rounded-full bg-[#F07F67] transition-[width] duration-500" style={{ width: `${Math.max(3, (item.value / maxFunnelValue) * 100)}%` }} />}
+                    {item.value > 0 && <div className="h-full rounded-full bg-[#3563E9] transition-[width] duration-500" style={{ width: `${Math.max(3, (item.value / maxFunnelValue) * 100)}%` }} />}
                   </div>
                   <span className="text-right font-semibold text-slate-800">{item.value}</span>
                 </div>
@@ -683,7 +748,7 @@ export default function DashboardPage() {
                   placeholder="Filter positions..."
                   value={jobSearch}
                   onChange={e => setJobSearch(e.target.value)}
-                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#FF5A36] w-44"
+                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#3563E9] w-44"
                 />
               )}
             </div>

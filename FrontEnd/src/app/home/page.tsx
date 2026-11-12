@@ -455,15 +455,15 @@ export default function HomePage() {
                 </svg>
                 <span>Book a Demo Session</span>
               </button>
-              <a
-                href="mailto:operations@tasknera.com?subject=HireIQ%20Demo%20Session%20Request&body=Hi%20HireIQ%20Team%2C%0A%0AI%20would%20like%20to%20schedule%20a%20demo%20session%20for%20HireIQ.%0A%0ACompany%3A%20%0AName%3A%20%0APreferred%20Date%2FTime%3A%20"
+              <Link
+                href="/contact"
                 className="flex items-center gap-2 px-6 py-3.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold rounded-xl transition-all text-sm"
               >
                 <svg className="w-4 h-4 text-brand-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
-                <span>Email operations@tasknera.com</span>
-              </a>
+                <span>Contact Operations Desk</span>
+              </Link>
             </div>
           </div>
         </section>

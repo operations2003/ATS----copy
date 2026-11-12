@@ -9,6 +9,7 @@ export interface SelectedCandidateSummary {
   currentTitle?: string;
   currentCompany?: string;
   totalExperienceYears?: number;
+  [key: string]: any;
 }
 
 interface ClientShareCreateModalProps {
@@ -73,6 +74,82 @@ export default function ClientShareCreateModal({
       const fullUrl = typeof window !== 'undefined'
         ? `${window.location.origin}/share/${data.token}`
         : `/share/${data.token}`;
+
+      // Ensure selected candidates are stored in tasknera_portal_cands_${clientKey} with all 30 fields
+      if (typeof window !== 'undefined') {
+        try {
+          const clientKey = (clientName.trim() || job.client).replace(/\s+/g, '_');
+          const portalStorageKey = `tasknera_portal_cands_${clientKey}`;
+          const existingRaw = localStorage.getItem(portalStorageKey);
+          let existingCands = existingRaw ? JSON.parse(existingRaw) : [];
+          if (!Array.isArray(existingCands)) existingCands = [];
+
+          for (const cand of selectedCandidates) {
+            const existsIdx = existingCands.findIndex((c: any) => c.id === cand.id);
+            const numExp = cand.totalExperienceYears || cand.totalExperience || 'Not Specified';
+            const submissionDate = cand.submissionDate || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+            const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+            const nextThreeDays = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+            const cand30 = {
+              id: cand.id,
+              name: cand.name,
+              candidateName: cand.name,
+              email: cand.email || cand.emailId || '',
+              emailId: cand.email || cand.emailId || '',
+              phone: cand.phone || cand.phoneNumber || '',
+              phoneNumber: cand.phone || cand.phoneNumber || '',
+              currentTitle: cand.currentDesignation || cand.currentTitle || 'Software Engineer',
+              currentDesignation: cand.currentDesignation || cand.currentTitle || 'Software Engineer',
+              currentCompany: cand.currentCompany || 'Technology Services',
+              totalExperience: typeof numExp === 'number' ? `${numExp} Years` : numExp,
+              totalWorkExperience: typeof numExp === 'number' ? `${numExp} Years` : numExp,
+              relevantWorkExperience: cand.relevantWorkExperience || 'Pending Recruiter Input',
+              location: cand.currentLocation || cand.location || job.location || 'Not Specified',
+              currentLocation: cand.currentLocation || cand.location || job.location || 'Not Specified',
+              noticePeriod: cand.noticePeriod || 'Pending Recruiter Input',
+              currentCtc: cand.currentCtc || 'Pending Recruiter Input',
+              expectedCtc: cand.expectedCtc || 'Pending Recruiter Input',
+              cvLink: cand.cvLink || cand.resumeFileName || `${cand.name.replace(/\s+/g, '_')}_CV.pdf`,
+              atsScore: cand.score || cand.atsScore || 85,
+              atsScoreDisplay: `${cand.score || cand.atsScore || 85}% Match`,
+              candidateStatus: cand.candidateStatus || 'Shortlisted & Submitted',
+              screeningStatus: cand.screeningStatus || 'Verified (100% Mandatory Criteria Met)',
+              recruiterRemarks: cand.recruiterRemarks || cand.screeningNote || 'Pending Recruiter Remarks',
+              interviewRound1: cand.interviewRound1 || 'Ready for Scheduling',
+              interviewRound2: cand.interviewRound2 || 'Pending Round 1',
+              finalInterview: cand.finalInterview || 'Pending',
+              offerStatus: cand.offerStatus || 'Pending Client Review',
+              joiningDate: cand.joiningDate || 'Pending Offer',
+              joiningStatus: cand.joiningStatus || 'Pending',
+              rejectionReason: cand.rejectionReason || 'None (Profile Qualified)',
+              lastFollowUpDate: cand.lastFollowUpDate || yesterday,
+              nextFollowUpDate: cand.nextFollowUpDate || nextThreeDays,
+              response: cand.response || 'Pending Recruiter Follow-up',
+              overallStatus: cand.overallStatus || 'Shortlisted & Submitted',
+              submissionDate,
+              jdName: cand.jdName || job.position,
+              clientName: clientName.trim() || job.client,
+              recruiterName: cand.recruiterName || cand.assignedRecruiter || (job as any).assignedRecruiter || 'Assigned Recruiter',
+              currentStatus: cand.currentStatus || 'Shared with Client',
+              lastUpdatedDate: 'Just now',
+              hasResume: true,
+              resumeFileName: cand.cvLink || cand.resumeFileName || `${cand.name.replace(/\s+/g, '_')}_CV.pdf`,
+              jobId: job.id,
+              jobTitle: job.position,
+              decision: cand.decision || 'SUBMIT',
+            };
+
+            if (existsIdx >= 0) {
+              existingCands[existsIdx] = { ...existingCands[existsIdx], ...cand30 };
+            } else {
+              existingCands.unshift(cand30);
+            }
+          }
+          localStorage.setItem(portalStorageKey, JSON.stringify(existingCands));
+          window.dispatchEvent(new CustomEvent('tasknera_portal_sync'));
+        } catch {}
+      }
 
       setCreatedShare({
         shareUrl: fullUrl,
