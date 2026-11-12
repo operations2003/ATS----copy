@@ -596,9 +596,9 @@ function ClientSharePortalContent() {
         workMode: sj.mode || 'Hybrid',
         salary: sj.salary || 'Competitive',
         status: sj.status === 'Active' ? 'Active Screening' : 'Shortlist Delivered',
-        sourcedCount: sj.candidates ? sj.candidates * 2 : 0,
-        screenedCount: sj.candidates ? Math.round(sj.candidates * 1.2) : 0,
-        submittedCount: sj.candidates || 0,
+        sourcedCount: sj.candidates || 0,
+        screenedCount: sj.candidates || 0,
+        submittedCount: 0,
         createdAt: 'Recently',
         description: sj.description,
         priority: 'High',
@@ -1599,8 +1599,39 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
   }, [candidates, selectedJobId, statusFilter, searchQuery]);
 
   const totalProfilesScreened = useMemo(() => {
-    return jobs.reduce((acc, j) => acc + (j.screenedCount || 0), 0);
-  }, [jobs]);
+    let count = 0;
+    const countedIds = new Set<string>();
+
+    for (const j of jobs) {
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem(`tasknera_candidates_${j.id}`);
+          if (raw) {
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+              list.forEach((c: any) => {
+                const key = c?.id || c?.name;
+                if (key && !countedIds.has(key)) {
+                  countedIds.add(key);
+                  count++;
+                }
+              });
+            }
+          }
+        } catch {}
+      }
+    }
+
+    candidates.forEach(c => {
+      const key = c?.id || c?.name;
+      if (key && !countedIds.has(key)) {
+        countedIds.add(key);
+        count++;
+      }
+    });
+
+    return count > 0 ? count : jobs.reduce((acc, j) => acc + (j.screenedCount || 0), 0);
+  }, [jobs, candidates]);
 
   const totalProfilesSubmitted = candidates.length;
   const inInterviewCount = candidates.filter(c => c.currentStatus.includes('Scheduled') || c.currentStatus.includes('Interview') || c.currentStatus.includes('Round')).length;
@@ -1729,7 +1760,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                 Profiles Screened by Agency
               </div>
               <div className="text-2xl sm:text-3xl font-extrabold text-[#101828]">
-                {totalProfilesScreened > 0 ? `${totalProfilesScreened}+` : '0'}
+                {totalProfilesScreened}
               </div>
               <p className="text-[11px] text-slate-500 mt-1">Resumes evaluated against criteria</p>
             </div>
