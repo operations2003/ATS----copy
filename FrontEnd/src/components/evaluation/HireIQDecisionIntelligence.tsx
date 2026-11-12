@@ -674,7 +674,9 @@ export default function HireIQDecisionIntelligence({
                 <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">25% weight</span>
               </div>
               <div className="text-lg font-black text-slate-900 mt-1 flex items-center justify-between">
-                <span>{data.breakdown.experience.text}</span>
+                <span>
+                  {`${Number(data.breakdown.experience.candidateYears || 0).toFixed(1).replace(/\.0$/, '')} ${Number(data.breakdown.experience.candidateYears) === 1 ? 'year' : 'years'}`}
+                </span>
                 <span
                   className={`text-xs px-2 py-0.5 rounded font-bold ${
                     data.breakdown.experience.meets

@@ -540,9 +540,10 @@ export async function generateOrGetCandidateSummary(
   // 2. Build baseline deterministic summary
   const baseline = buildDeterministicSummary(candidate, targetJob, targetEval, recruiterId);
 
-  // 3. Attempt Gemini Enhancement if API key is configured
+  // GET requests return this deterministic baseline immediately. AI enhancement is
+  // reserved for an explicit regenerate request so opening the summary stays fast.
   const apiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
-  if (apiKey && (candidate.raw_text || targetJob?.jd_text)) {
+  if (forceRegenerate && apiKey && (candidate.raw_text || targetJob?.jd_text)) {
     try {
       const prompt = `You are a Senior Talent Acquisition Executive. Generate a factual, strictly evidence-grounded Executive Candidate Summary for this candidate against the specified Job Description.
 

@@ -1381,7 +1381,7 @@ export default function CandidatesPage() {
             onClick={() => setSelectedCandidate(null)}
           >
             <div
-              className="w-full max-w-3xl bg-white h-full overflow-y-auto shadow-2xl flex flex-col justify-between"
+              className="w-full max-w-5xl bg-white h-full overflow-y-auto shadow-2xl flex flex-col justify-between"
               onClick={(e) => e.stopPropagation()}
             >
               <div>
@@ -1533,6 +1533,7 @@ export default function CandidatesPage() {
                         candidateId={selectedCandidate.id}
                         jobId={decisionJobId || (candidateHistory.length > 0 ? candidateHistory[0].jobId : selectedCandidate.jobId || undefined)}
                         candidateName={selectedCandidate.name}
+                        fallbackCandidate={selectedCandidate}
                       />
                     </div>
                   )}

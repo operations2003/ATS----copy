@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@/context/AuthContext';
 import { buildExecutiveSummaryPdf } from '@/lib/clientPdfGenerator';
 
 export interface CandidateOverview {
@@ -116,16 +115,127 @@ interface CandidateExecutiveSummaryProps {
   candidateId: string;
   jobId?: string;
   candidateName?: string;
+  fallbackCandidate?: Record<string, any>;
+}
+
+const summaryCache = new Map<string, CandidateSummaryData>();
+const summaryRequests = new Map<string, Promise<CandidateSummaryData>>();
+
+function getSummaryCacheKey(candidateId: string, jobId?: string) {
+  return `${candidateId}:${jobId || 'candidate'}`;
+}
+
+function buildProfileSummary(
+  candidateId: string,
+  jobId: string | undefined,
+  candidateName: string | undefined,
+  source: Record<string, any>
+): CandidateSummaryData {
+  const candidate = source.rawCandidate || source;
+  const rawSkills = Array.isArray(candidate.skills) && candidate.skills.length ? candidate.skills : source.skills || [];
+  const skills = (Array.isArray(rawSkills) ? rawSkills : [])
+    .map((item: any) => typeof item === 'string' ? item : item?.skill || item?.skill_name || item?.name)
+    .filter((item: any): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map((item: string) => item.trim());
+  const rawExperience = candidate.experiences?.length ? candidate.experiences : candidate.experience?.length ? candidate.experience : source.experience || [];
+  const rawEducation = candidate.education?.length ? candidate.education : source.education || [];
+  const rawProjects = candidate.projects || source.projects || [];
+  const fullName = candidate.name || source.name || candidateName || 'Candidate';
+  const currentDesignation = candidate.current_title || candidate.currentTitle || candidate.role || source.role || 'Not listed';
+  const currentCompany = candidate.current_company || candidate.currentCompany || source.currentCompany || 'Not listed';
+  const totalExperience = String(candidate.totalExperienceYears ?? candidate.total_experience ?? candidate.totalExperience ?? source.totalExperience ?? source.exp ?? 'Not listed');
+  const score = Number(candidate.atsScore ?? candidate.matchScore ?? candidate.match ?? source.atsScore ?? source.matchScore ?? 0) || 0;
+  const education = Array.isArray(rawEducation) ? rawEducation : [];
+  const experience = Array.isArray(rawExperience) ? rawExperience : [];
+  const qualification = education[0]?.degree || education[0]?.qualification || 'Not listed';
+  const primarySkills = skills.slice(0, 6);
+  const generatedAt = new Date().toISOString();
+  const profileSummary = candidate.professionalSummary || candidate.summary || source.summary;
+  const classification: FinalAssessment['classification'] = score >= 80 ? 'Strong Match' : score >= 60 ? 'Potential Match' : 'Low Evidence of Match';
+  const suggestedNextStep: FinalAssessment['suggestedNextStep'] = score >= 80 ? 'Shortlist for Interview' : score >= 60 ? 'Recruiter Review Required' : 'Not Recommended for This JD';
+
+  return {
+    candidateId,
+    jobId,
+    jobTitle: candidate.jobTitle || candidate.job?.position || source.jobTitle,
+    jobClient: candidate.jobClient || candidate.job?.client,
+    atsScore: score,
+    overview: {
+      fullName,
+      email: candidate.email || source.email || 'Not listed',
+      phone: candidate.phone || source.phone || 'Not listed',
+      location: candidate.location || source.location || 'Not listed',
+      currentDesignation,
+      currentCompany,
+      totalExperience,
+      relevantExperience: 'Not assessed against a requisition',
+      highestQualification: qualification,
+      primarySkills,
+      noticePeriod: 'Not listed',
+      expectedSalary: 'Not listed',
+      resumeFileName: candidate.fileName || candidate.resume_file_url || source.fileName || 'Not listed',
+      generatedAt,
+    },
+    professionalSummary: typeof profileSummary === 'string' && profileSummary.trim()
+      ? profileSummary.trim()
+      : `${fullName} is listed as ${currentDesignation} at ${currentCompany}. The available profile records ${totalExperience} of experience${primarySkills.length ? ` and skills including ${primarySkills.join(', ')}` : ''}. Verify these details against the original CV and active job requirements.`,
+    experienceAnalysis: {
+      totalExperience,
+      relevantExperience: 'Not assessed against a requisition',
+      roles: experience.map((role: any) => ({
+        title: role.title || role.role || role.position || 'Role not listed',
+        company: role.company || 'Company not listed',
+        period: role.duration || [role.startDate || role.start_date, role.endDate || role.end_date].filter(Boolean).join(' – ') || 'Dates not listed',
+        responsibilities: Array.isArray(role.highlights) ? role.highlights : Array.isArray(role.responsibilities) ? role.responsibilities : [],
+        technologies: Array.isArray(role.technologies) ? role.technologies : [],
+        achievements: Array.isArray(role.achievements) ? role.achievements : [],
+      })),
+    },
+    keySkills: { requiredSkillsFound: [], preferredSkillsFound: [], additionalRelevantSkills: skills, requiredSkillsNotFound: [], skillsRequiringVerification: [] },
+    pros: [
+      ...(primarySkills.length ? [`Profile lists skills including ${primarySkills.join(', ')}.`] : []),
+      ...(experience.length ? [`Profile contains ${experience.length} experience record${experience.length === 1 ? '' : 's'}.`] : []),
+      ...(qualification !== 'Not listed' ? [`Education listed: ${qualification}.`] : []),
+    ],
+    cons: ['Verify experience, skills, and education against the original CV and job requirements.'],
+    jdMatchAnalysis: {
+      atsScore: score,
+      jobTitle: candidate.jobTitle || candidate.job?.position || source.jobTitle || 'Not linked',
+      requiredSkillsMatched: [],
+      requiredSkillsNotEvidenced: [],
+      preferredSkillsMatched: [],
+      experienceComparison: 'Not assessed against a requisition',
+      educationMatched: 'Not assessed against a requisition',
+      suitabilityExplanation: 'A job-specific assessment is not available for this locally stored candidate profile.',
+    },
+    projects: Array.isArray(rawProjects) ? rawProjects : [],
+    education: education.map((item: any) => ({
+      degree: item.degree || item.qualification || 'Qualification not listed',
+      institution: item.institution || item.school || 'Institution not listed',
+      year: String(item.year || item.graduation_date || ''),
+      certifications: [],
+    })),
+    interviewQuestions: [],
+    finalAssessment: {
+      classification,
+      topReasons: ['Based on candidate profile information currently available in this workspace.'],
+      mainConcerns: ['Review the original CV and confirm fit against the requisition before making a decision.'],
+      suggestedNextStep,
+      disclaimer: 'Profile-based summary only. It is not a substitute for a job-specific evaluation or review of the original CV.',
+    },
+    metadata: { generatedAt, sourceResumeFile: candidate.fileName || candidate.resume_file_url || source.fileName || 'Not listed', aiModel: 'Candidate Profile Summary', isCached: false },
+  };
 }
 
 export default function CandidateExecutiveSummary({
   candidateId,
   jobId,
-  candidateName
+  candidateName,
+  fallbackCandidate,
 }: CandidateExecutiveSummaryProps) {
-  const { user } = useAuth();
-  const [summary, setSummary] = useState<CandidateSummaryData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const cacheKey = getSummaryCacheKey(candidateId, jobId);
+  const [summary, setSummary] = useState<CandidateSummaryData | null>(() => summaryCache.get(cacheKey) || null);
+  const [loading, setLoading] = useState<boolean>(() => !summaryCache.has(cacheKey));
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [downloadingFormat, setDownloadingFormat] = useState<'pdf' | 'docx' | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>('');
@@ -160,75 +270,96 @@ export default function CandidateExecutiveSummary({
 
   const fetchSummary = useCallback(async (forceRegen = false) => {
     if (!candidateId) return;
+    const requestKey = getSummaryCacheKey(candidateId, jobId);
+    if (!forceRegen) {
+      const cachedSummary = summaryCache.get(requestKey);
+      if (cachedSummary) {
+        setSummary(cachedSummary);
+        setErrorMsg('');
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       if (forceRegen) {
         setIsGenerating(true);
-      } else {
+      } else if (!fallbackCandidate) {
         setLoading(true);
       }
       setErrorMsg('');
 
-      const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      const query = jobId ? `?jobId=${encodeURIComponent(jobId)}` : '';
+      // Use the same API base as the candidate list and history requests. The
+      // Next.js proxy can point at a different backend in local deployments.
+      const targetUrl = `${getResolvedBackendUrl()}/candidates/${encodeURIComponent(candidateId)}/summary${query}`;
+      const token = localStorage.getItem('tasknera_token');
+      const request = async () => {
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), 20000);
+        try {
+          const res = await fetch(targetUrl, {
+            method: forceRegen ? 'POST' : 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            ...(forceRegen ? { body: JSON.stringify({ jobId, regenerate: true }) } : {}),
+            signal: controller.signal,
+            cache: 'no-store',
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.summary) {
+            throw new Error(data.error || `Summary request failed (${res.status})`);
+          }
+          return data.summary as CandidateSummaryData;
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
       };
 
-      const primaryBase = getResolvedBackendUrl();
-      const query = jobId ? `?jobId=${encodeURIComponent(jobId)}` : '';
-
-      // Multi-layer endpoint candidates (Next.js same-origin proxy on Vercel -> Normalized Remote Backend -> Fallback URL)
-      const candidateUrls = [
-        `/api/candidates/${encodeURIComponent(candidateId)}/summary${query}`,
-        `${primaryBase}/candidates/${encodeURIComponent(candidateId)}/summary${query}`,
-        `https://ats-d4tv.onrender.com/api/candidates/${encodeURIComponent(candidateId)}/summary${query}`,
-        `https://ats-d4tv.onrender.com/candidates/${encodeURIComponent(candidateId)}/summary${query}`,
-      ];
-
-      let lastError: any = null;
-      let fetchedSuccessfully = false;
-
-      for (const targetUrl of candidateUrls) {
+      let result: CandidateSummaryData;
+      if (!forceRegen && summaryRequests.has(requestKey)) {
+        result = await summaryRequests.get(requestKey)!;
+      } else {
+        const pending = request();
+        if (!forceRegen) summaryRequests.set(requestKey, pending);
         try {
-          let res: Response;
-          if (forceRegen) {
-            res = await fetch(targetUrl, {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({ jobId, regenerate: true })
-            });
-          } else {
-            res = await fetch(targetUrl, { headers });
-          }
-
-          if (res.ok) {
-            const data = await res.json();
-            if (data.summary) {
-              setSummary(data.summary);
-              fetchedSuccessfully = true;
-              break;
-            }
-          }
-        } catch (fetchErr: any) {
-          lastError = fetchErr;
+          result = await pending;
+        } finally {
+          if (summaryRequests.get(requestKey) === pending) summaryRequests.delete(requestKey);
         }
       }
-
-      if (!fetchedSuccessfully) {
-        setErrorMsg(lastError?.message || 'Unable to connect to candidate summary service. Please try again.');
-      }
+      summaryCache.set(requestKey, result);
+      setSummary(result);
     } catch (err: any) {
-      console.error('[Candidate Summary Error]:', err);
-      setErrorMsg(err?.message || 'Network error loading executive summary');
+      console.warn('[Candidate Summary Error]:', err);
+      if (!forceRegen && fallbackCandidate) {
+        const localSummary = buildProfileSummary(candidateId, jobId, candidateName, fallbackCandidate);
+        summaryCache.set(requestKey, localSummary);
+        setSummary(localSummary);
+        setErrorMsg('');
+        return;
+      }
+      setErrorMsg(err?.name === 'AbortError'
+        ? 'The summary service took too long to respond. Please try again.'
+        : err?.message || 'Network error loading executive summary');
     } finally {
       setLoading(false);
       setIsGenerating(false);
     }
-  }, [candidateId, jobId]);
+  }, [candidateId, jobId, candidateName, fallbackCandidate]);
 
   useEffect(() => {
-    fetchSummary(false);
-  }, [fetchSummary]);
+    const cachedSummary = summaryCache.get(cacheKey) || null;
+    const initialSummary = cachedSummary || (fallbackCandidate
+      ? buildProfileSummary(candidateId, jobId, candidateName, fallbackCandidate)
+      : null);
+    setSummary(initialSummary);
+    setErrorMsg('');
+    setLoading(!initialSummary);
+    if (!cachedSummary) fetchSummary(false);
+  }, [cacheKey, candidateId, jobId, candidateName, fallbackCandidate, fetchSummary]);
 
   const handleDownload = async (format: 'pdf' | 'docx') => {
     try {
@@ -347,10 +478,6 @@ export default function CandidateExecutiveSummary({
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   if (loading) {
     return (
       <div className="p-8 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-6 animate-pulse">
@@ -391,74 +518,8 @@ export default function CandidateExecutiveSummary({
 
   if (!summary) return null;
 
-  const atsScore = summary.atsScore || 0;
-  const isHighFit = atsScore >= 70;
-  const isLowFit = atsScore < 50;
-
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden print:border-none print:shadow-none space-y-6 p-6 sm:p-8">
-      {/* ── ACTION BAR (Header) ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-slate-200/80 print:hidden">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-brand-orange animate-pulse" />
-            <h3 className="text-lg font-black text-slate-900 tracking-tight">Candidate Executive Summary</h3>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-              {summary.metadata.aiModel}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1 font-medium">
-            Evidence-grounded recruitment synthesis • Generated on {new Date(summary.metadata.generatedAt).toLocaleDateString()}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Regenerate Button */}
-          <button
-            onClick={() => fetchSummary(true)}
-            disabled={isGenerating}
-            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-200 cursor-pointer flex items-center gap-1.5"
-            title="Re-run synthesis against latest CV and JD requirements"
-          >
-            <span className={isGenerating ? 'animate-spin' : ''}>🔄</span>
-            <span>{isGenerating ? 'Generating...' : 'Regenerate'}</span>
-          </button>
-
-          {/* Download PDF Button */}
-          <button
-            onClick={() => handleDownload('pdf')}
-            disabled={downloadingFormat === 'pdf'}
-            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
-            title="Download clean multi-page PDF executive report"
-          >
-            <span>📄</span>
-            <span>{downloadingFormat === 'pdf' ? 'Exporting PDF...' : 'Download PDF'}</span>
-          </button>
-
-          {/* Download DOCX Button */}
-          <button
-            onClick={() => handleDownload('docx')}
-            disabled={downloadingFormat === 'docx'}
-            className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
-            title="Download editable Microsoft Word document"
-          >
-            <span>📝</span>
-            <span>{downloadingFormat === 'docx' ? 'Exporting DOCX...' : 'Download DOCX'}</span>
-          </button>
-
-          {/* Print Button */}
-          <button
-            onClick={handlePrint}
-            className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer border border-slate-200"
-            title="Print or Save via Browser"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
       {/* ── CANDIDATE OVERVIEW & ATS SCORE CARD ── */}
       <div className="p-6 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-2xl shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div className="space-y-1.5">
@@ -480,20 +541,15 @@ export default function CandidateExecutiveSummary({
           </div>
         </div>
 
-        {/* ATS Score Gauge Box */}
-        <div className="flex-shrink-0 bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/15 text-center min-w-[130px]">
-          <span className="text-[10px] font-black uppercase tracking-wider text-slate-300 block mb-1">
-            ATS Score
-          </span>
-          <span className={`text-3xl font-black font-mono block ${
-            isHighFit ? 'text-emerald-400' : isLowFit ? 'text-rose-400' : 'text-amber-400'
-          }`}>
-            {atsScore}%
-          </span>
-          <span className="text-[10px] font-bold text-slate-300 block mt-1">
-            {summary.jobTitle || 'Requisition Profile'}
-          </span>
-        </div>
+        <button
+          onClick={() => handleDownload('pdf')}
+          disabled={downloadingFormat === 'pdf'}
+          className="flex-shrink-0 px-4 py-2.5 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-2 print:hidden"
+          title="Download executive summary as PDF"
+        >
+          <span>📄</span>
+          <span>{downloadingFormat === 'pdf' ? 'Preparing...' : 'Download PDF'}</span>
+        </button>
       </div>
 
       {/* ── SECTION 1: PROFESSIONAL SUMMARY ── */}
@@ -549,52 +605,58 @@ export default function CandidateExecutiveSummary({
           <span>Requisition Technical Skills Matrix</span>
         </h4>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs items-stretch">
           {/* Matched Required Skills */}
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 block">
+          <div className="h-40 min-h-40 p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col overflow-hidden">
+            <span className="min-h-8 text-[10px] font-black uppercase tracking-wider text-emerald-700 block">
               ✓ Required Skills Evidenced ({summary.keySkills.requiredSkillsFound.length})
             </span>
-            <div className="flex flex-wrap gap-1.5">
-              {summary.keySkills.requiredSkillsFound.map((s, i) => (
-                <span key={i} className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  {s.name}
-                </span>
-              ))}
-              {summary.keySkills.requiredSkillsFound.length === 0 && (
-                <span className="text-slate-400 text-xs">None explicitly evidenced</span>
-              )}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+              <div className="flex flex-wrap content-start gap-1.5">
+                {summary.keySkills.requiredSkillsFound.map((s, i) => (
+                  <span key={i} className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    {s.name}
+                  </span>
+                ))}
+                {summary.keySkills.requiredSkillsFound.length === 0 && (
+                  <span className="text-slate-400 text-xs">None explicitly evidenced</span>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Missing Required Skills */}
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-rose-700 block">
+          <div className="h-40 min-h-40 p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col overflow-hidden">
+            <span className="min-h-8 text-[10px] font-black uppercase tracking-wider text-rose-700 block">
               ✗ Missing / Unverified Skills ({summary.keySkills.requiredSkillsNotFound.length})
             </span>
-            <div className="flex flex-wrap gap-1.5">
-              {summary.keySkills.requiredSkillsNotFound.map((s, i) => (
-                <span key={i} className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                  {s}
-                </span>
-              ))}
-              {summary.keySkills.requiredSkillsNotFound.length === 0 && (
-                <span className="text-emerald-700 text-xs font-bold">All mandatory skills matched</span>
-              )}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+              <div className="flex flex-wrap content-start gap-1.5">
+                {summary.keySkills.requiredSkillsNotFound.map((s, i) => (
+                  <span key={i} className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                    {s}
+                  </span>
+                ))}
+                {summary.keySkills.requiredSkillsNotFound.length === 0 && (
+                  <span className="text-emerald-700 text-xs font-bold">All mandatory skills matched</span>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Additional Skills */}
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-600 block">
+          <div className="h-40 min-h-40 p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col overflow-hidden">
+            <span className="min-h-8 text-[10px] font-black uppercase tracking-wider text-slate-600 block">
               💡 Additional Tech Skills ({summary.keySkills.additionalRelevantSkills.length})
             </span>
-            <div className="flex flex-wrap gap-1.5">
-              {summary.keySkills.additionalRelevantSkills.map((s, i) => (
-                <span key={i} className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-white text-slate-700 border border-slate-200">
-                  {s}
-                </span>
-              ))}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+              <div className="flex flex-wrap content-start gap-1.5">
+                {summary.keySkills.additionalRelevantSkills.map((s, i) => (
+                  <span key={i} className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-white text-slate-700 border border-slate-200">
+                    {s}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -628,32 +690,6 @@ export default function CandidateExecutiveSummary({
         </div>
       </div>
 
-      {/* ── SECTION 6: FINAL ASSESSMENT & NEXT STEP ── */}
-      <div className="p-5 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-2xl space-y-3">
-        <div className="flex items-center justify-between">
-          <h4 className="text-xs font-black uppercase tracking-wider text-slate-200 flex items-center gap-2">
-            <span>🏁</span>
-            <span>Final Recruiter Assessment &amp; Recommendation</span>
-          </h4>
-          <span className="px-3 py-1 rounded-xl text-xs font-black bg-brand-orange text-white">
-            {summary.finalAssessment.suggestedNextStep}
-          </span>
-        </div>
-
-        <div className="space-y-1.5 text-xs text-slate-300">
-          <span className="text-[10px] uppercase font-bold text-slate-400 block">Top Supporting Reasons:</span>
-          {summary.finalAssessment.topReasons.map((r, i) => (
-            <div key={i} className="flex items-start gap-2">
-              <span className="text-brand-orange font-bold">✓</span>
-              <span>{r}</span>
-            </div>
-          ))}
-        </div>
-
-        <p className="text-[10px] text-slate-400 pt-2 border-t border-white/10 italic">
-          {summary.finalAssessment.disclaimer}
-        </p>
-      </div>
     </div>
   );
 }

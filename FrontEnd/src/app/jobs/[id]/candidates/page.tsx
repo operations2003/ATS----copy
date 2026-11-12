@@ -22,8 +22,6 @@ import {
 } from '@/utils/requirementUtils';
 import CandidateLinkModal from '@/components/CandidateLinkModal';
 import HireIQCandidateCompareAndSubmitModal, { CandidateComparisonItem } from '@/components/evaluation/HireIQCandidateCompareAndSubmitModal';
-import ClientShareCreateModal, { SelectedCandidateSummary } from '@/components/ClientShareCreateModal';
-import ClientShareManagerModal from '@/components/ClientShareManagerModal';
 import { RequirementStatus, ConfidenceLevel } from '@/types';
 
 
@@ -614,11 +612,7 @@ export default function JobCandidatesPage() {
   const [sortField, setSortField] = useState<'score' | 'date' | 'name' | 'experience'>('score');
   const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
   const [selectedCandidate, setSelectedCandidate] = useState<any | null>(null);
-  const [activeModalTab, setActiveModalTab] = useState<'decision' | 'summary' | 'match' | 'profile' | 'raw'>('decision');
-  const [showCandidateMeta, setShowCandidateMeta] = useState(false);
-  const [showComplianceDropdown, setShowComplianceDropdown] = useState(false);
-  const [copiedRawText, setCopiedRawText] = useState(false);
-  const [copiedEmail, setCopiedEmail] = useState(false);
+  const [activeModalTab, setActiveModalTab] = useState<'decision' | 'summary'>('decision');
   const [isMounted, setIsMounted] = useState(false);
 
   // Manual Candidate Decision Tags ('REVIEW' | 'SUBMIT' | 'REJECT')
@@ -635,8 +629,6 @@ export default function JobCandidatesPage() {
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
   const [compareModalTab, setCompareModalTab] = useState<'compare' | 'submit'>('compare');
-  const [isClientShareModalOpen, setIsClientShareModalOpen] = useState(false);
-  const [isClientShareManagerOpen, setIsClientShareManagerOpen] = useState(false);
 
   const handleToggleSelectCandidate = (candId: string) => {
     setSelectedCandidateIds(prev =>
@@ -715,14 +707,8 @@ export default function JobCandidatesPage() {
   const getCandidateDecision = useCallback((c: any): 'REVIEW' | 'SUBMIT' | 'REJECT' => {
     if (!c) return 'REVIEW';
     if (c.id && candidateDecisions[c.id]) return candidateDecisions[c.id];
-    if (typeof window !== 'undefined' && c.id) {
-      try {
-        const stored = localStorage.getItem(`tasknera_decision_${jobId}_${c.id}`) || localStorage.getItem(`tasknera_decision_${c.id}`);
-        if (stored && ['REVIEW', 'SUBMIT', 'REJECT'].includes(stored)) {
-          return stored as 'REVIEW' | 'SUBMIT' | 'REJECT';
-        }
-      } catch {}
-    }
+    const score = Number(c.atsScore ?? c.matchScore ?? c.evaluation?.atsScore ?? c.evaluation?.score);
+    if (Number.isFinite(score)) return score >= 80 ? 'SUBMIT' : score >= 60 ? 'REVIEW' : 'REJECT';
     const raw = String(c.decision || c.recommendation || '').toUpperCase();
     if (raw === 'ACCEPT' || raw === 'SUBMIT') return 'SUBMIT';
     if (raw === 'REJECT' || raw === 'DO NOT SUBMIT') return 'REJECT';
@@ -1525,13 +1511,12 @@ export default function JobCandidatesPage() {
         'MINIMAL MATCH'
       );
 
-      const backendDecision = (c as any).decision || (c as any).recommendation || (c as any).evaluation?.recommendation;
       const autoDecision: 'SUBMIT' | 'REVIEW' | 'REJECT' =
-        finalScore >= 75 ? 'SUBMIT' :
-        finalScore >= 50 ? 'REVIEW' :
+        finalScore >= 80 ? 'SUBMIT' :
+        finalScore >= 60 ? 'REVIEW' :
         'REJECT';
 
-      const effectiveDecision = backendDecision || autoDecision;
+      const effectiveDecision = autoDecision;
 
       const expDetails = getNumericExperienceDetails(c);
 
@@ -1816,8 +1801,8 @@ export default function JobCandidatesPage() {
 
       if (statusFilter === 'ALL') return true;
       if (statusFilter === 'STRONG_MATCH') return (c.matchScore ?? 0) >= 80;
-      if (statusFilter === 'GOOD_MATCH') return (c.matchScore ?? 0) >= 50 && (c.matchScore ?? 0) < 80;
-      if (statusFilter === 'LOW_FIT') return (c.matchScore ?? 0) < 50;
+      if (statusFilter === 'GOOD_MATCH') return (c.matchScore ?? 0) >= 60 && (c.matchScore ?? 0) < 80;
+      if (statusFilter === 'LOW_FIT') return (c.matchScore ?? 0) < 60;
       return c.parsingStatus === statusFilter;
     })
 
@@ -1853,7 +1838,7 @@ export default function JobCandidatesPage() {
           location: c.location,
           totalExperienceYears: expInfo.years || 0,
           score: c.matchScore ?? 0,
-          decisionTag: candidateDecisions[c.id],
+          decisionTag: getCandidateDecision(c),
           matchResult: (c as any).matchResult,
           skills: c.skills || [],
           noticePeriod: (c as any).noticePeriod || '30 Days',
@@ -1866,25 +1851,7 @@ export default function JobCandidatesPage() {
           },
         };
       });
-  }, [filteredCandidates, selectedCandidateIds, candidateDecisions]);
-
-  // Selected candidates mapped for Client Share Link creation
-  const selectedCandidateSummaries: SelectedCandidateSummary[] = useMemo(() => {
-    return filteredCandidates
-      .filter(c => selectedCandidateIds.includes(c.id))
-      .map(c => {
-        const score = Math.round(c.matchScore ?? 85);
-        return {
-          id: c.id,
-          name: c.name || (c as any).fileName || 'Candidate',
-          score,
-          currentTitle: c.currentTitle,
-          currentCompany: c.currentCompany,
-          totalExperienceYears: c.totalExperienceYears,
-        };
-      });
-  }, [filteredCandidates, selectedCandidateIds]);
-
+  }, [filteredCandidates, selectedCandidateIds, getCandidateDecision]);
 
   const parsedCount = candidates.filter(c => c.parsingStatus === 'PARSED').length;
   const strongMatchCount = candidatesWithMatch.filter(c => (c.matchScore ?? 0) >= 80).length;
@@ -2077,12 +2044,6 @@ export default function JobCandidatesPage() {
 
             {/* Action Buttons: Clean, concise & aligned */}
             <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-              <Link
-                href={`/jobs/${jobId}/requirements`}
-                className="px-3.5 py-2 bg-white/10 hover:bg-white/15 text-white text-xs font-semibold rounded-xl border border-white/15 transition-all cursor-pointer backdrop-blur-sm"
-              >
-                Criteria Matrix
-              </Link>
               <button
                 type="button"
                 onClick={() => setIsCandidateLinkOpen(true)}
@@ -2093,15 +2054,6 @@ export default function JobCandidatesPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                 </svg>
                 <span>Candidate Link</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsClientShareManagerOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600/30 hover:bg-blue-600/40 text-white text-xs font-semibold rounded-xl border border-blue-400/30 transition-all cursor-pointer backdrop-blur-sm"
-                title="Share shortlist with client"
-              >
-                <span>🌐</span>
-                <span>Share Shortlist</span>
               </button>
               {candidates.length > 0 && (
                 <button
@@ -2336,8 +2288,8 @@ export default function JobCandidatesPage() {
               {[
                 { id: 'ALL', label: 'All Candidates' },
                 { id: 'STRONG_MATCH', label: '≥80% Match' },
-                { id: 'GOOD_MATCH', label: '50-79%' },
-                { id: 'LOW_FIT', label: '<50%' },
+                { id: 'GOOD_MATCH', label: '60-79%' },
+                { id: 'LOW_FIT', label: '<60%' },
                 { id: 'PARSED', label: 'Parsed' },
               ].map(f => (
                 <button
@@ -2439,7 +2391,7 @@ export default function JobCandidatesPage() {
                                 <button
                                   onClick={() => {
                                     setSelectedCandidate(c);
-                                    setActiveModalTab('match');
+                                    setActiveModalTab('decision');
                                   }}
                                   className="font-extrabold text-slate-900 group-hover:text-brand-orange transition-colors text-left cursor-pointer text-sm tracking-tight"
                                 >
@@ -2513,8 +2465,8 @@ export default function JobCandidatesPage() {
                         <td className="px-6 py-4 text-center">
                           {(() => {
                             const score = Math.round(c.matchScore ?? (c as any).atsScore ?? 0);
-                            const isHigh = score >= 70;
-                            const isLow = score < 50;
+                            const isHigh = score >= 80;
+                            const isLow = score < 60;
                             return (
                               <div className="inline-flex items-center justify-center">
                                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black font-mono border shadow-2xs ${
@@ -2642,7 +2594,7 @@ export default function JobCandidatesPage() {
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-4xl xl:max-w-5xl bg-white flex flex-col shadow-2xl border-l border-slate-200 overflow-hidden relative overscroll-none select-text"
+              className="w-full max-w-5xl bg-white flex flex-col shadow-2xl border-l border-slate-200 overflow-hidden relative overscroll-none select-text"
               style={{ height: '100vh', maxHeight: '100vh' }}
             >
               {/* 1. PERMANENTLY FIXED TOP HEADER SECTION */}
@@ -2663,66 +2615,7 @@ export default function JobCandidatesPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2.5 flex-shrink-0">
-                    {(() => {
-                      const modalScore = Math.round(selectedCandidate.matchScore ?? selectedCandidate.atsScore ?? 0);
-                      const isModalHigh = modalScore >= 70;
-                      const isModalLow = modalScore < 50;
-
-                      return (
-                        <div className="flex items-center gap-2.5">
-                          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900 text-white border border-slate-800 shadow-xs">
-                            <span className="text-xs text-slate-400 font-medium">ATS:</span>
-                            <span className={`text-sm font-black font-mono ${
-                              isModalHigh ? 'text-emerald-400' : isModalLow ? 'text-rose-400' : 'text-amber-400'
-                            }`}>
-                              {modalScore}%
-                            </span>
-                          </div>
-
-                          {/* Decision Tag Dropdown */}
-                          <DecisionTagDropdown
-                            value={getCandidateDecision(selectedCandidate)}
-                            onChange={(newVal) => handleUpdateDecision(selectedCandidate.id, newVal)}
-                          />
-                        </div>
-                      );
-                    })()}
-
-                    <button
-                      onClick={() => setShowCandidateMeta(prev => !prev)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
-                        showCandidateMeta
-                          ? 'bg-slate-900 text-white border-slate-900'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span>{showCandidateMeta ? 'Hide Meta' : 'Candidate Details'}</span>
-                      <svg
-                        className={`w-3.5 h-3.5 transition-transform duration-200 ease-out ${
-                          showCandidateMeta ? 'rotate-180 text-white' : 'text-slate-400'
-                        }`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(`${selectedCandidate.name} | ${selectedCandidate.email} | ${selectedCandidate.phone}`);
-                        setCopiedEmail(true);
-                        setTimeout(() => setCopiedEmail(false), 2000);
-                      }}
-                      className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
-                      title="Copy contact details"
-                    >
-                      <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                      </svg>
-                      {copiedEmail ? 'Copied' : 'Copy'}
-                    </button>
+                  <div className="flex items-center flex-shrink-0">
                     <button
                       onClick={(e) => handleDeleteCandidate(selectedCandidate.id, e)}
                       className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-xs font-semibold transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
@@ -2733,68 +2626,8 @@ export default function JobCandidatesPage() {
                       </svg>
                       Delete
                     </button>
-                    <button
-                      onClick={() => setSelectedCandidate(null)}
-                      className="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 flex items-center justify-center text-sm cursor-pointer transition-colors shadow-2xs"
-                    >
-                      ✕
-                    </button>
                   </div>
                 </div>
-
-                {/* Collapsible Candidate Key Metrics Dropdown Drawer */}
-                {showCandidateMeta && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 px-6 py-3.5 border-b border-slate-200/80 bg-slate-50/90 text-xs animate-fadeIn">
-                    <div>
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Total Experience</span>
-                      {(() => {
-                        const expInfo = getNumericExperienceDetails(selectedCandidate);
-                        return (
-                          <div className="mt-0.5 flex items-center gap-1.5">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold font-mono bg-white text-slate-900 border border-slate-200">
-                              {expInfo.badgeText}
-                            </span>
-                            {expInfo.months > 0 && (
-                              <span className="text-[11px] font-semibold text-slate-500">
-                                ({expInfo.subText})
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Career Gap Status</span>
-                      {(() => {
-                        const gapInfo = getCandidateCareerGaps(selectedCandidate);
-                        return (
-                          <div className="mt-0.5">
-                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-bold border ${
-                              gapInfo.hasGap
-                                ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                            }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${gapInfo.hasGap ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                              {gapInfo.hasGap ? `${gapInfo.totalGapMonths} mos Gap` : 'Continuous'}
-                            </span>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Email Address</span>
-                      <p className="text-xs font-semibold text-slate-800 mt-0.5 truncate" title={selectedCandidate.email}>
-                        {selectedCandidate.email || '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Location</span>
-                      <p className="text-xs font-semibold text-slate-800 mt-0.5 truncate" title={selectedCandidate.location}>
-                        {selectedCandidate.location || '—'}
-                      </p>
-                    </div>
-                  </div>
-                )}
 
                 {/* Segmented Pill Tab Switcher */}
                 <div className="px-6 py-2.5 bg-slate-50/70 flex items-center justify-between">
@@ -2820,36 +2653,6 @@ export default function JobCandidatesPage() {
                     >
                       <span>Executive Summary</span>
                     </button>
-                    <button
-                      onClick={() => setActiveModalTab('match')}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        activeModalTab === 'match'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Match & Criteria Breakdown
-                    </button>
-                    <button
-                      onClick={() => setActiveModalTab('profile')}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        activeModalTab === 'profile'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Structured Profile
-                    </button>
-                    <button
-                      onClick={() => setActiveModalTab('raw')}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        activeModalTab === 'raw'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Raw CV & Extraction
-                    </button>
                   </div>
                 </div>
               </div>
@@ -2874,396 +2677,11 @@ export default function JobCandidatesPage() {
                     candidateId={selectedCandidate.id}
                     jobId={jobId as string}
                     candidateName={selectedCandidate.name}
+                    fallbackCandidate={selectedCandidate}
                   />
                 )}
 
-                {/* Tab 1: Match & Criteria Breakdown */}
-                {activeModalTab === 'match' && (
-                  <div className="space-y-6">
-                    {/* 1. Executive 4-Pillar Metric ScoreCards (Directly on Display) */}
-                    {selectedCandidate.matchBreakdown && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        <ScoreCard
-                          score={selectedCandidate.matchBreakdown.skills.score}
-                          maxScore={100}
-                          label="Core Skills"
-                          percentage={selectedCandidate.matchBreakdown.skills.score}
-                          description={`${selectedCandidate.matchBreakdown.skills.matchedSkills.length} competencies matched`}
-                        />
-                        <ScoreCard
-                          score={selectedCandidate.matchBreakdown.experience.score}
-                          maxScore={100}
-                          label="Experience"
-                          percentage={selectedCandidate.matchBreakdown.experience.score}
-                          description={`${selectedCandidate.matchBreakdown.experience.candidateYears}y / ${selectedCandidate.matchBreakdown.experience.requiredYears}y required`}
-                        />
-                        <ScoreCard
-                          score={selectedCandidate.matchBreakdown.education.score}
-                          maxScore={100}
-                          label="Education"
-                          percentage={selectedCandidate.matchBreakdown.education.score}
-                          description={selectedCandidate.matchBreakdown.education.candidateDegrees[0] || 'Degree Match'}
-                        />
-                        <ScoreCard
-                          score={selectedCandidate.matchBreakdown.keywords.score}
-                          maxScore={100}
-                          label=" MATCHED AREAS"
-                          percentage={selectedCandidate.matchBreakdown.keywords.score}
-                          description={`${Math.round(selectedCandidate.matchBreakdown.keywords.cosineSimilarity * 100)}% Cosine Similarity`}
-                        />
-                      </div>
-                    )}
 
-                    {/* 2. Employment Continuity & Career Gap Audit (Directly on Display) */}
-                    {(() => {
-                      const gapInfo = getCandidateCareerGaps(selectedCandidate);
-                      return (
-                        <div className={`border rounded-2xl p-5 transition-all shadow-2xs ${
-                          gapInfo.hasGap
-                            ? 'bg-amber-50/60 border-amber-200'
-                            : 'bg-white border-slate-200'
-                        }`}>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
-                                gapInfo.hasGap
-                                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                              }`}>
-                                {gapInfo.hasGap ? '⚠️' : '✓'}
-                              </div>
-                              <div>
-                                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                                  Employment Continuity & Career Gap Audit
-                                </h4>
-                                <p className="text-xs text-slate-600 font-medium mt-0.5">{gapInfo.statusText}</p>
-                              </div>
-                            </div>
-                            <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${
-                              gapInfo.hasGap
-                                ? 'bg-amber-100 text-amber-950 border-amber-300'
-                                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                            }`}>
-                              {gapInfo.hasGap ? `${gapInfo.totalGapMonths} mos Total Gap` : 'Verified Continuous'}
-                            </span>
-                          </div>
-                          {gapInfo.hasGap && gapInfo.gaps.length > 0 && (
-                            <div className="mt-3 pt-3 border-t border-amber-200 space-y-2">
-                              {gapInfo.gaps.map((g, gi) => (
-                                <div key={gi} className="text-xs text-amber-950 bg-white border border-amber-200 px-3 py-2 rounded-lg flex items-center justify-between">
-                                  <span className="font-semibold">{g.gapLabel}</span>
-                                  <span className="text-[11px] font-mono text-slate-500 font-semibold">{g.startDate} → {g.endDate}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                    {/* 3. Matched vs Missing Skills Alignment (Directly on Display) */}
-                    {selectedCandidate.matchBreakdown && (
-                      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs">
-                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3.5">
-                          Technical & Competency Alignment Breakdown
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                          <div>
-                            <div className="text-xs font-bold text-emerald-800 mb-2 flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                              Matched Criteria ({selectedCandidate.matchBreakdown.skills.matchedSkills.length})
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {selectedCandidate.matchBreakdown.skills.matchedSkills.length > 0 ? (
-                                selectedCandidate.matchBreakdown.skills.matchedSkills.map((s: string, i: number) => (
-                                  <span key={i} className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-semibold rounded-md">
-                                    ✓ {s}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-xs text-slate-400 italic">No direct required skill matches.</span>
-                              )}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-rose-800 mb-2 flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
-                              Missing / Gap Criteria ({selectedCandidate.matchBreakdown.skills.missingSkills.length})
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {selectedCandidate.matchBreakdown.skills.missingSkills.length > 0 ? (
-                                selectedCandidate.matchBreakdown.skills.missingSkills.map((s: string, i: number) => (
-                                  <span key={i} className="px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-900 text-xs font-semibold rounded-md">
-                                    ✕ {s}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-xs text-emerald-700 font-semibold">✓ No critical skill gaps identified.</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 4. Job Requirement Compliance Audit (In Collapsible Dropdown Accordion) */}
-                    {selectedCandidate.requirementEvals && (
-                      <div className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-2xs">
-                        <button
-                          onClick={() => setShowComplianceDropdown(prev => !prev)}
-                          className="w-full px-5 py-4 flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 transition-colors text-left cursor-pointer"
-                        >
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-800">
-                              Job Requirement Compliance Audit
-                            </span>
-                            <span className="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 font-mono font-bold text-xs">
-                              {selectedCandidate.requirementEvals.length} Criteria Evaluated
-                            </span>
-                          </div>
-                          <div className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${
-                            showComplianceDropdown
-                              ? 'bg-orange-50 text-orange-900 border border-orange-200 shadow-2xs'
-                              : 'bg-white text-slate-700 hover:text-orange-900 border border-slate-200 hover:border-orange-200 shadow-2xs'
-                          }`}>
-                            <span>{showComplianceDropdown ? 'Hide Audit Criteria' : 'View Audit Criteria'}</span>
-                            <svg
-                              className={`w-3.5 h-3.5 transition-transform duration-200 ease-out ${
-                                showComplianceDropdown ? 'rotate-180 text-orange-600' : 'text-slate-400'
-                              }`}
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </div>
-                        </button>
-
-                        {showComplianceDropdown && (
-                          <div className="p-5 sm:p-6 border-t border-slate-200 bg-slate-50/30 animate-fadeIn">
-                            <RequirementTable evaluations={selectedCandidate.requirementEvals} showEvidence={true} />
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Tab 2: Structured Profile View */}
-                {activeModalTab === 'profile' && (
-                  <div className="space-y-6">
-                    {/* Professional Summary */}
-                    {(selectedCandidate.professionalSummary || selectedCandidate.summary) && (
-                      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
-                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Professional Summary</h3>
-                        <p className="text-xs text-slate-700 leading-relaxed font-normal">
-                          {selectedCandidate.professionalSummary || selectedCandidate.summary}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Extracted Competencies & Tech Stack */}
-                    {(() => {
-                      const effectiveSkills = getEffectiveSkills(selectedCandidate);
-                      if (effectiveSkills.length === 0) return null;
-                      return (
-                        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
-                          <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tech Stack & Competencies</h3>
-                            <span className="text-[11px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{effectiveSkills.length} Identified</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {effectiveSkills.map((s, i) => (
-                              <span key={i} className="px-2.5 py-1 bg-slate-50 border border-slate-200/90 rounded-md text-xs font-semibold text-slate-800 hover:border-slate-300 transition-colors">
-                                {s}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Experience Timeline */}
-                    {selectedCandidate.experience && selectedCandidate.experience.length > 0 && (
-                      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Work History & Roles</h3>
-                          {(() => {
-                            const expInfo = getNumericExperienceDetails(selectedCandidate);
-                            return (
-                              <span className="text-xs font-bold font-mono text-slate-900 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-md">
-                                Total: {expInfo.fullLabel}
-                              </span>
-                            );
-                          })()}
-                        </div>
-                        <div className="space-y-3">
-                          {selectedCandidate.experience.map((exp: CandidateExperience, i: number) => {
-                            const titleText = (exp.title && exp.title.toLowerCase() !== 'role') ? exp.title : (selectedCandidate.currentTitle || 'Role / Position');
-                            const durMonths = parseMonthsFromText(exp.duration || (exp.startDate && exp.endDate ? `${exp.startDate} - ${exp.endDate}` : ''));
-                            const durPill = durMonths > 0 ? (durMonths < 12 ? `${durMonths} mos` : `${parseFloat((durMonths/12).toFixed(1))} yrs`) : null;
-                            return (
-                              <div key={i} className="bg-slate-50/60 border border-slate-200/80 rounded-xl p-4">
-                                <div className="flex items-start justify-between">
-                                  <h4 className="text-xs font-bold text-slate-900">{titleText}</h4>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-[11px] font-mono text-slate-500 font-semibold">
-                                      {exp.duration || (exp.startDate && exp.endDate ? `${exp.startDate} – ${exp.endDate}` : exp.startDate || exp.endDate || '')}
-                                    </span>
-                                    {durPill && !exp.duration?.includes('•') && (
-                                      <span className="px-1.5 py-0.5 rounded bg-slate-200 text-[10px] font-bold text-slate-700">
-                                        {durPill}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                {exp.company && <p className="text-xs text-brand-orange font-bold mt-0.5">{exp.company}</p>}
-                                {exp.description && <p className="text-xs text-slate-600 mt-2 leading-relaxed whitespace-pre-line">{exp.description}</p>}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Education */}
-                    {selectedCandidate.education && selectedCandidate.education.length > 0 && (
-                      <div>
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Education</h3>
-                        <div className="space-y-2.5">
-                          {selectedCandidate.education.map((edu: CandidateEducation, i: number) => (
-                            <div key={i} className="bg-[#F8FAFC] border border-slate-200 rounded-2xl p-3.5 flex items-start justify-between">
-                              <div>
-                                <h4 className="text-xs font-bold text-slate-800">{edu.degree}</h4>
-                                <p className="text-[11px] text-slate-500">
-                                  {edu.institution} {edu.year ? `• ${edu.year}` : ''} {edu.details ? `• ${edu.details}` : ''}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Projects */}
-                    {selectedCandidate.projects && selectedCandidate.projects.length > 0 && (
-                      <div>
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Key Projects</h3>
-                        <div className="space-y-3">
-                          {selectedCandidate.projects.map((proj: CandidateProject, i: number) => (
-                            <div key={i} className="bg-[#F8FAFC] border border-slate-200 rounded-2xl p-4">
-                              <div className="flex items-start justify-between">
-                                <h4 className="text-xs font-bold text-[#1E293B]">{proj.name}</h4>
-                              </div>
-                              {proj.technologies && proj.technologies.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-1.5 mb-2">
-                                  {proj.technologies.map((t: string, ti: number) => (
-                                    <span key={ti} className="px-2 py-0.5 bg-slate-200/70 rounded text-[10px] font-medium text-slate-700">
-                                      {t}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                              {proj.description && (
-                                <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">{proj.description}</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Certifications & Languages */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {selectedCandidate.certifications && selectedCandidate.certifications.length > 0 && (
-                        <div>
-                          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Certifications</h3>
-                          <ul className="space-y-1 text-xs text-slate-700">
-                            {selectedCandidate.certifications.map((c: string, i: number) => (
-                              <li key={i} className="flex items-center gap-1.5 bg-[#F8FAFC] border border-slate-200 p-2 rounded-xl">
-                                <span className="text-emerald-500 font-bold">✓</span> <span>{c}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {selectedCandidate.languages && selectedCandidate.languages.length > 0 && (
-                        <div>
-                          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Languages</h3>
-                          <ul className="space-y-1 text-xs text-slate-700">
-                            {selectedCandidate.languages.map((l: string, i: number) => (
-                              <li key={i} className="flex items-center gap-1.5 bg-[#F8FAFC] border border-slate-200 p-2 rounded-xl">
-                                <span className="text-brand-orange">🌐</span> <span>{l}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Tab 3: Raw CV Extraction & Diagnostics */}
-                {activeModalTab === 'raw' && (
-                  <div className="space-y-5">
-                    {/* Metadata Box */}
-                    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
-                      <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">Document Extraction Diagnostics</h3>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                        <div>
-                          <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">File Name</span>
-                          <p className="font-semibold text-slate-800 font-mono truncate">{selectedCandidate.parsingMetadata?.fileName || selectedCandidate.fileName}</p>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">File Type</span>
-                          <p className="font-semibold text-slate-800 font-mono truncate">{selectedCandidate.parsingMetadata?.fileType || 'PDF'}</p>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Page Count</span>
-                          <p className="font-semibold text-slate-800 font-mono">{selectedCandidate.parsingMetadata?.pageCount || 1}</p>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Extraction Method</span>
-                          <p className="font-semibold text-slate-800 font-mono">{selectedCandidate.parsingMetadata?.extractionMethod || 'nextjs-ats-engine'}</p>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">OCR Used</span>
-                          <p className="font-semibold text-slate-800 font-mono">{selectedCandidate.parsingMetadata?.ocrUsed ? 'Yes' : 'No'}</p>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Characters / Words</span>
-                          <p className="font-semibold text-slate-800 font-mono">
-                            {selectedCandidate.parsingMetadata?.characterCount || 0} / {selectedCandidate.parsingMetadata?.wordCount || 0}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Raw Text Viewer */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">Raw Extracted Document Text</h4>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(selectedCandidate.rawText || '');
-                            setCopiedRawText(true);
-                            setTimeout(() => setCopiedRawText(false), 2000);
-                          }}
-                          className="px-2.5 py-1 text-xs font-semibold bg-white border border-slate-200 rounded-md text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-1 shadow-2xs"
-                        >
-                          <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                          </svg>
-                          {copiedRawText ? 'Copied' : 'Copy Plaintext'}
-                        </button>
-                      </div>
-                      <pre className="p-4 bg-slate-950 text-slate-200 font-mono text-[11px] rounded-xl border border-slate-800 overflow-x-auto max-h-96 leading-relaxed whitespace-pre-wrap select-all">
-                        {selectedCandidate.rawText || 'No raw document text available for candidate.'}
-                      </pre>
-                    </div>
-                  </div>
-                )}
               </div>
 
 
@@ -3336,13 +2754,6 @@ export default function JobCandidatesPage() {
                 )}
               </button>
 
-              <button
-                onClick={() => setIsClientShareModalOpen(true)}
-                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-                title="Generate secure client sharing portal for selected candidates"
-              >
-                <span>🔗 Create Client Sharing Link</span>
-              </button>
 
               <button
                 onClick={() => {
@@ -3385,33 +2796,6 @@ export default function JobCandidatesPage() {
           defaultTab={compareModalTab}
         />
 
-        {/* Client Candidate Sharing Link Creation Modal */}
-        <ClientShareCreateModal
-          isOpen={isClientShareModalOpen}
-          onClose={() => setIsClientShareModalOpen(false)}
-          job={{
-            id: jobId as string,
-            position: job?.position || 'Job Requisition',
-            client: job?.client || 'Hiring Organization',
-            location: job?.location,
-          }}
-          selectedCandidates={selectedCandidateSummaries}
-        />
-
-        {/* Client Shortlist & Interview Tracking Manager Modal */}
-        <ClientShareManagerModal
-          isOpen={isClientShareManagerOpen}
-          onClose={() => setIsClientShareManagerOpen(false)}
-          jobId={jobId as string}
-          jobPosition={job?.position || 'Job Requisition'}
-          onOpenCreateModal={() => {
-            if (selectedCandidateIds.length > 0) {
-              setIsClientShareModalOpen(true);
-            } else {
-              alert('Please select one or more candidates from the list to create a client sharing link.');
-            }
-          }}
-        />
       </main>
 
       <Footer />
