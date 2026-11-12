@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'reac
 import { useParams, useSearchParams } from 'next/navigation';
 import { atsStore, JobItem as StoreJobItem } from '@/lib/atsStore';
 import ClientSubmissionDossierModal, { SubmissionDossierData } from '@/components/ClientSubmissionDossierModal';
+import ClientLifecycleModal, { ClientLifecycleData } from '@/components/ClientLifecycleModal';
 
 const STATUS_OPTIONS = [
   'Shared with Client',
@@ -362,6 +363,113 @@ function ClientSharePortalContent() {
     showToast(`Updated 30-field dossier for ${editingDossierCandidate.name}`);
     setIsDossierModalOpen(false);
     setEditingDossierCandidate(null);
+  };
+
+  // 7.2 Client Interview & Lifecycle Modal (Fields 20 to 30)
+  const [lifecycleCandidate, setLifecycleCandidate] = useState<CandidateItem | null>(null);
+
+  const handleSaveClientLifecycle = (data: ClientLifecycleData) => {
+    if (!lifecycleCandidate) return;
+
+    const updated = candidates.map(c => {
+      if (c.id === lifecycleCandidate.id) {
+        const updatedTimeline = [
+          {
+            status: data.overallStatus || c.currentStatus,
+            createdAt: new Date().toISOString(),
+            updatedBy: data.clientReviewerName || `${clientName} Reviewer`,
+            feedback: `Client updated Lifecycle & Interview stages: Round 1: ${data.interviewRound1}, Offer: ${data.offerStatus}, Status: ${data.overallStatus}`,
+          },
+          ...(c.timeline || [])
+        ];
+
+        return {
+          ...c,
+          interviewRound1: data.interviewRound1,
+          interviewRound2: data.interviewRound2,
+          finalInterview: data.finalInterview,
+          offerStatus: data.offerStatus,
+          joiningDate: data.joiningDate,
+          joiningStatus: data.joiningStatus,
+          rejectionReason: data.rejectionReason,
+          lastFollowUpDate: data.lastFollowUpDate,
+          nextFollowUpDate: data.nextFollowUpDate,
+          response: data.response,
+          overallStatus: data.overallStatus,
+          currentStatus: data.overallStatus || c.currentStatus,
+          candidateStatus: data.overallStatus || c.candidateStatus,
+          latestFeedback: data.response || `Updated to ${data.overallStatus}`,
+          lastUpdatedDate: 'Just now',
+          timeline: updatedTimeline,
+        };
+      }
+      return c;
+    });
+
+    setCandidates(updated);
+
+    // Save to client portal storage
+    const storageKey = `tasknera_portal_cands_${clientName.replace(/\s+/g, '_')}`;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+    } catch {}
+
+    // Two-way sync with recruiter pipeline
+    try {
+      const pipelineRaw = localStorage.getItem('tasknera_recruitment_pipeline_v1');
+      if (pipelineRaw) {
+        const pipeCands = JSON.parse(pipelineRaw);
+        if (Array.isArray(pipeCands)) {
+          const updatedPipe = pipeCands.map((p: any) => {
+            if (p.id === lifecycleCandidate.id || p.name === lifecycleCandidate.name) {
+              const stageMapping =
+                data.overallStatus === 'Round 1 Phase Scheduled' ? 'Round 1 Phase' :
+                data.overallStatus === 'Round 2 Phase Scheduled' ? 'Round 2 Phase' :
+                data.overallStatus === 'Interview Completed' ? 'Interviewing' :
+                data.overallStatus === 'Selected / Offer' ? 'Selected' :
+                data.overallStatus === 'Joined' ? 'Joined' :
+                data.overallStatus === 'Not a Fit' ? 'Rejected' : p.stage;
+
+              return {
+                ...p,
+                stage: stageMapping,
+                interviewRound1: data.interviewRound1,
+                interviewRound2: data.interviewRound2,
+                finalInterview: data.finalInterview,
+                offerStatus: data.offerStatus,
+                joiningDate: data.joiningDate,
+                joiningStatus: data.joiningStatus,
+                rejectionReason: data.rejectionReason,
+                lastFollowUpDate: data.lastFollowUpDate,
+                nextFollowUpDate: data.nextFollowUpDate,
+                response: data.response,
+                overallStatus: data.overallStatus,
+                notes: data.response || p.notes,
+                ...(data.overallStatus === 'Not a Fit' ? { decision: 'DO NOT SUBMIT' } : {})
+              };
+            }
+            return p;
+          });
+          localStorage.setItem('tasknera_recruitment_pipeline_v1', JSON.stringify(updatedPipe));
+        }
+      }
+    } catch {}
+
+    // Add to Transparency Activity Feed
+    const newActivity: TransparencyActivityItem = {
+      id: `act-${Date.now()}`,
+      title: `Client Updated Lifecycle: ${lifecycleCandidate.name} (${data.overallStatus})`,
+      detail: `Round 1: ${data.interviewRound1} • Offer: ${data.offerStatus} • Joining: ${data.joiningDate}`,
+      actor: data.clientReviewerName || `${clientName} Team`,
+      actorRole: 'CLIENT',
+      timestamp: 'Just now',
+      badge: 'Lifecycle Updated'
+    };
+    setActivities(prev => [newActivity, ...prev]);
+
+    window.dispatchEvent(new CustomEvent('tasknera_portal_sync'));
+    showToast(`✓ Updated Interview & Lifecycle for ${lifecycleCandidate.name}`);
+    setLifecycleCandidate(null);
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -2026,6 +2134,14 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                             <div className="flex items-center justify-end gap-1.5">
                               <button
                                 type="button"
+                                onClick={() => setLifecycleCandidate(cand)}
+                                className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                                title="Fill or update interview rounds, offer status, and lifecycle decisions (Client)"
+                              >
+                                <span>📝 Lifecycle</span>
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => {
                                   setEditingDossierCandidate(cand);
                                   setIsDossierModalOpen(true);
@@ -2118,6 +2234,15 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
 
                         {/* Action Buttons */}
                         <div className="flex items-center gap-2 self-stretch sm:self-auto shrink-0 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => setLifecycleCandidate(cand)}
+                            className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                            title="Fill or update interview rounds, offer status, and lifecycle decisions (Client)"
+                          >
+                            <span>📝 Update Lifecycle (Client)</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => {
@@ -2404,8 +2529,16 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
 
                               {/* Group 6: Interview Pipeline & Lifecycle */}
                               <div className="bg-white border border-[#EAECF0] rounded-xl p-3.5 space-y-2.5 shadow-xs">
-                                <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#3563E9] flex items-center gap-1.5 border-b border-slate-100 pb-1.5">
-                                  <span>📅 Interview &amp; Lifecycle</span>
+                                <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#3563E9] flex items-center justify-between border-b border-slate-100 pb-1.5">
+                                  <span className="flex items-center gap-1.5">📅 Interview &amp; Lifecycle</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setLifecycleCandidate(cand)}
+                                    className="px-2 py-0.5 bg-[#EFF4FF] hover:bg-[#D1E0FF] text-[#3563E9] border border-[#D1E0FF] rounded-md text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                                    title="Fill or update interview rounds, offer status, joining date, and decisions (Client)"
+                                  >
+                                    <span>✏️ Fill / Update (Client)</span>
+                                  </button>
                                 </div>
                                 <div className="space-y-1.5 text-xs">
                                   <div>
@@ -2456,6 +2589,16 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                                       {cand.overallStatus || cand.currentStatus}
                                     </span>
                                   </div>
+                                </div>
+                                <div className="pt-2 mt-1 border-t border-slate-100">
+                                  <button
+                                    type="button"
+                                    onClick={() => setLifecycleCandidate(cand)}
+                                    className="w-full py-2 bg-[#3563E9] hover:bg-[#2851D6] text-white rounded-xl text-xs font-bold transition shadow-xs hover:shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                                    title="Click to fill or update interview rounds, offer details, and lifecycle status"
+                                  >
+                                    <span>📝 Fill / Update Interview &amp; Lifecycle (Client)</span>
+                                  </button>
                                 </div>
                               </div>
                             </div>
@@ -2979,6 +3122,17 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
           assignedRecruiterName={assignedMember || 'Senior Recruiter'}
           defaultClientName={clientName}
           defaultJdName={editingDossierCandidate.jdName || (jobs[0]?.title ?? 'Requisition Role')}
+        />
+      )}
+
+      {/* Client Interview & Lifecycle Modal (Fields 20 to 30) */}
+      {lifecycleCandidate && (
+        <ClientLifecycleModal
+          isOpen={!!lifecycleCandidate}
+          onClose={() => setLifecycleCandidate(null)}
+          candidate={lifecycleCandidate}
+          clientName={clientName}
+          onSave={handleSaveClientLifecycle}
         />
       )}
 
