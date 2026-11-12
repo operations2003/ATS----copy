@@ -1260,8 +1260,8 @@ export default function ClientsPage() {
                     </select>
                   </div>
 
-                  {/* Row 5: Link Expiry & Security */}
-                  <div className="grid grid-cols-2 gap-3">
+                  {/* Row 5: Link Expiry */}
+                  <div className="grid grid-cols-1 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-[#101828] mb-1.5">Link Validity</label>
                       <select
@@ -1275,15 +1275,6 @@ export default function ClientsPage() {
                         <option value={90}>90 Days</option>
                         <option value={0}>No Expiration (Permanent)</option>
                       </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-[#101828] mb-1.5">Access Security</label>
-                      <div className="h-[38px] rounded-xl bg-slate-50 border border-[#EAECF0] px-3 flex items-center gap-1.5 text-[11px] font-semibold text-[#667085]">
-                        <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                        <span>Token-Protected Direct Access</span>
-                      </div>
                     </div>
                   </div>
 
