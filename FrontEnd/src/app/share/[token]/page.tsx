@@ -98,9 +98,10 @@ interface ClientPortalJob {
   workMode: 'Hybrid' | 'Remote' | 'Onsite';
   salary: string;
   status: 'Agency Sourcing Candidates' | 'Active Screening' | 'Shortlist Delivered' | 'Closed';
-  sourcedCount: number;
+  sourcedCount?: number;
   screenedCount: number;
   submittedCount: number;
+  joinedCount?: number;
   createdAt: string;
   description?: string;
   priority?: 'Standard' | 'High' | 'Urgent';
@@ -603,17 +604,52 @@ function ClientSharePortalContent() {
         priority: 'High',
       }));
 
-      // Combined unique jobs
+      // Combined unique jobs - deduplicate strictly by normalized title to prevent identical JDs showing twice
+      const normalizeJobTitle = (t: string) =>
+        (t || '')
+          .toLowerCase()
+          .replace(/\b(jd|job|description|spec|specs|final|v\d+)\b/gi, '')
+          .replace(/[^a-z0-9]/g, '')
+          .trim();
+
       const combinedJobsMap = new Map<string, ClientPortalJob>();
-      mappedStoreJobs.forEach(j => combinedJobsMap.set(j.id, j));
-      createdJobsForClient.forEach(j => {
-        if (!combinedJobsMap.has(j.id)) combinedJobsMap.set(j.id, j);
-      });
-      uploadedJds.forEach(j => combinedJobsMap.set(j.id, j));
+      const titleToKeyMap = new Map<string, string>();
+
+      const registerJob = (j: ClientPortalJob) => {
+        if (!j || !j.title) return;
+        const normKey = normalizeJobTitle(j.title);
+        const existingKey = titleToKeyMap.get(normKey);
+
+        if (existingKey && combinedJobsMap.has(existingKey)) {
+          const existing = combinedJobsMap.get(existingKey)!;
+          const merged: ClientPortalJob = {
+            ...existing,
+            ...j,
+            id: existing.id && !existing.id.startsWith('jd-client-') ? existing.id : j.id,
+            description: existing.description && !existing.description.startsWith('Job Requisition for') ? existing.description : (j.description || existing.description),
+            assignedRecruiter: existing.assignedRecruiter || j.assignedRecruiter,
+            location: existing.location && existing.location !== 'Remote / Hybrid' ? existing.location : (j.location || existing.location),
+            workMode: existing.workMode || j.workMode,
+            salary: existing.salary && existing.salary !== 'Competitive Market Rate' ? existing.salary : (j.salary || existing.salary),
+            screenedCount: Math.max(existing.screenedCount || 0, j.screenedCount || 0),
+            submittedCount: Math.max(existing.submittedCount || 0, j.submittedCount || 0),
+            joinedCount: Math.max(existing.joinedCount || 0, j.joinedCount || 0),
+          };
+          combinedJobsMap.set(existingKey, merged);
+        } else {
+          const key = j.id || `job-${normKey}`;
+          combinedJobsMap.set(key, j);
+          titleToKeyMap.set(normKey, key);
+        }
+      };
+
+      mappedStoreJobs.forEach(registerJob);
+      createdJobsForClient.forEach(registerJob);
+      uploadedJds.forEach(registerJob);
 
       const finalJobs = Array.from(combinedJobsMap.values());
 
-      // Update real screened/sourced counts from job-specific candidate storage
+      // Update real screened counts from job-specific candidate storage
       if (typeof window !== 'undefined') {
         for (const j of finalJobs) {
           try {
@@ -622,7 +658,6 @@ function ClientSharePortalContent() {
               const parsed = JSON.parse(rawCands);
               if (Array.isArray(parsed) && parsed.length > 0) {
                 j.screenedCount = Math.max(j.screenedCount || 0, parsed.length);
-                j.sourcedCount = Math.max(j.sourcedCount || 0, parsed.length * 2);
               }
             }
           } catch {}
@@ -1068,8 +1103,12 @@ function ClientSharePortalContent() {
         });
       });
 
-      // 2. Persist in Client JDs storage & sync into tasknera_created_jobs
-      const updatedJobs = [...newCreatedJobs, ...jobs];
+      // 2. Persist in Client JDs storage & sync into tasknera_created_jobs (deduplicating by normalized title)
+      const normTitleCheck = (t: string) =>
+        (t || '').toLowerCase().replace(/\b(jd|job|description|spec|specs|final|v\d+)\b/gi, '').replace(/[^a-z0-9]/g, '').trim();
+      const newTitlesSet = new Set(newCreatedJobs.map(nj => normTitleCheck(nj.title)));
+      const existingWithoutDuplicates = jobs.filter(j => !newTitlesSet.has(normTitleCheck(j.title)));
+      const updatedJobs = [...newCreatedJobs, ...existingWithoutDuplicates];
       setJobs(updatedJobs);
       if (typeof window !== 'undefined') {
         try {
@@ -2751,21 +2790,54 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                         </p>
                       )}
 
-                      {/* Funnel Transparency Bar */}
-                      <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-2 text-center text-xs">
-                        <div className="bg-[#F7F8FC] rounded-xl p-2">
-                          <div className="text-[10px] font-bold text-slate-400 uppercase">Sourced</div>
-                          <div className="text-base font-extrabold text-slate-800">{job.sourcedCount}</div>
-                        </div>
-                        <div className="bg-[#F7F8FC] rounded-xl p-2">
-                          <div className="text-[10px] font-bold text-slate-400 uppercase">Screened</div>
-                          <div className="text-base font-extrabold text-slate-800">{job.screenedCount}</div>
-                        </div>
-                        <div className="bg-[#EFF4FF] border border-[#D1E0FF] rounded-xl p-2">
-                          <div className="text-[10px] font-bold text-[#3563E9] uppercase">Submitted</div>
-                          <div className="text-base font-extrabold text-[#3563E9]">{job.submittedCount}</div>
-                        </div>
-                      </div>
+                      {/* Funnel Transparency Bar: Screened • Submitted • Joined (Updated dynamically from client form responses) */}
+                      {(() => {
+                        const normTitle = (job.title || '').toLowerCase().trim();
+                        const matchingCandidates = candidates.filter(c =>
+                          c.jobId === job.id ||
+                          (c.jobTitle && c.jobTitle.toLowerCase().trim() === normTitle) ||
+                          (c.jdName && c.jdName.toLowerCase().trim() === normTitle)
+                        );
+
+                        const submittedCount = matchingCandidates.length;
+
+                        const joinedCount = matchingCandidates.filter(c => {
+                          const oStat = (c.overallStatus || '').toLowerCase().trim();
+                          const jStat = (c.joiningStatus || '').toLowerCase().trim();
+                          const cStat = (c.currentStatus || '').toLowerCase().trim();
+                          const candStat = (c.candidateStatus || '').toLowerCase().trim();
+                          const resp = (c.response || '').toLowerCase().trim();
+                          return (
+                            oStat === 'joined' ||
+                            jStat === 'joined' ||
+                            cStat === 'joined' ||
+                            candStat === 'joined' ||
+                            resp === 'joined' ||
+                            oStat.includes('joined') ||
+                            jStat.includes('joined') ||
+                            cStat.includes('joined')
+                          );
+                        }).length;
+
+                        const screenedCount = Math.max(job.screenedCount || 0, submittedCount);
+
+                        return (
+                          <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-2 text-center text-xs">
+                            <div className="bg-[#F7F8FC] rounded-xl p-2">
+                              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Screened</div>
+                              <div className="text-base font-extrabold text-slate-800">{screenedCount}</div>
+                            </div>
+                            <div className="bg-[#EFF4FF] border border-[#D1E0FF] rounded-xl p-2">
+                              <div className="text-[10px] font-bold text-[#3563E9] uppercase tracking-wider">Submitted</div>
+                              <div className="text-base font-extrabold text-[#3563E9]">{submittedCount}</div>
+                            </div>
+                            <div className="bg-[#ECFDF3] border border-[#D1FADF] rounded-xl p-2">
+                              <div className="text-[10px] font-bold text-[#15966A] uppercase tracking-wider">Joined</div>
+                              <div className="text-base font-extrabold text-[#15966A]">{joinedCount}</div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
