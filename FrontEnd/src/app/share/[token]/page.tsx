@@ -76,6 +76,12 @@ interface CandidateItem {
   nextFollowUpDate?: string;        // 28. Next Follow-up Date
   response?: string;                // 29. Response
   overallStatus?: string;           // 30. Overall Status
+
+  // Recruiter Verification & Client Approval Gate
+  isRecruiterApproved?: boolean;
+  recruiterApprovalStatus?: 'APPROVED' | 'PENDING_APPROVAL';
+  recruiterApprovedBy?: string;
+  recruiterApprovedAt?: string;
 }
 
 interface ClientPortalJob {
@@ -222,6 +228,12 @@ function buildFull30FieldsCandidate(
     nextFollowUpDate,
     response,
     overallStatus,
+
+    // Recruiter Verification & Client Approval Gate
+    isRecruiterApproved: cand.isRecruiterApproved === true || cand.recruiterApprovalStatus === 'APPROVED',
+    recruiterApprovalStatus: (cand.isRecruiterApproved === true || cand.recruiterApprovalStatus === 'APPROVED') ? 'APPROVED' : 'PENDING_APPROVAL',
+    recruiterApprovedBy: cand.recruiterApprovedBy || recruiter,
+    recruiterApprovedAt: cand.recruiterApprovedAt || submissionDate,
   };
 }
 
@@ -727,15 +739,17 @@ function ClientSharePortalContent() {
                     finalJobs.find(j => j.id === pc.requisitionId)?.title ||
                     'Requisition Role';
 
+                  const isApproved = pc.isRecruiterApproved === true || existing?.isRecruiterApproved === true;
+
                   const item: CandidateItem = {
                     id: pc.id,
                     name: pc.name,
-                    email: full?.email || existing?.email || `${pc.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@candidate-profile.com`,
-                    phone: full?.phone || existing?.phone || '+1 (555) 234-5678',
+                    email: full?.email || existing?.email || pc.emailId || pc.email || '',
+                    phone: full?.phone || existing?.phone || pc.phoneNumber || pc.phone || '',
                     currentTitle: pc.role || full?.currentTitle || full?.current_title || existing?.currentTitle || 'Software Engineer',
                     currentCompany: full?.currentCompany || full?.current_company || existing?.currentCompany || 'Verified Candidate',
-                    totalExperience: full?.exp || full?.totalExperience || full?.total_experience || existing?.totalExperience || '5+ Years',
-                    location: full?.location || existing?.location || 'Remote / Hybrid',
+                    totalExperience: pc.totalWorkExperience || full?.exp || full?.totalExperience || full?.total_experience || existing?.totalExperience || 'Pending Recruiter Input',
+                    location: full?.location || existing?.location || pc.currentLocation || 'Not Specified',
                     summary: full?.summary || full?.profile_summary || existing?.summary || `Screened and evaluated for ${candidateJobTitle}. Evaluated deterministic score: ${score}%. Shortlisted by ${pc.recruiterName || 'Agency Recruiter'}.`,
                     skills: (full?.skills && Array.isArray(full?.skills) && full.skills.length > 0)
                       ? full.skills
@@ -752,6 +766,12 @@ function ClientSharePortalContent() {
                     jobTitle: candidateJobTitle,
                     decision: 'SUBMIT',
                     screeningEvidence: full?.evidenceSnippets || full?.screeningEvidence || existing?.screeningEvidence || [],
+
+                    // Recruiter Approval Gate
+                    isRecruiterApproved: isApproved,
+                    recruiterApprovalStatus: isApproved ? 'APPROVED' : 'PENDING_APPROVAL',
+                    recruiterApprovedBy: pc.recruiterApprovedBy || existing?.recruiterApprovedBy || pc.recruiterName,
+                    recruiterApprovedAt: pc.recruiterApprovedAt || existing?.recruiterApprovedAt,
                   };
 
                   portalCandidatesMap.set(pc.id, item);
@@ -780,15 +800,16 @@ function ClientSharePortalContent() {
         for (const sc of storeCands) {
           if (!portalCandidatesMap.has(sc.id) && (sc.decision === 'SUBMIT' || sc.stageStatus === 'SHORTLISTED' || sc.stageStatus === 'TL_APPROVED')) {
             const score = sc.calibratedScore || sc.match || 85;
+            const isApproved = (sc as any).isRecruiterApproved === true;
             portalCandidatesMap.set(sc.id, {
               id: sc.id,
               name: sc.name,
-              email: sc.email,
-              phone: sc.phone || '+1 (555) 234-5678',
+              email: sc.email || '',
+              phone: sc.phone || '',
               currentTitle: sc.role,
               currentCompany: sc.currentCompany || 'Verified Candidate',
-              totalExperience: sc.exp,
-              location: sc.location,
+              totalExperience: sc.exp || 'Pending Recruiter Input',
+              location: sc.location || 'Not Specified',
               summary: `Profile screened for ${sc.jobTitle}. Evaluated deterministic score: ${score}%.`,
               skills: sc.skills || [],
               atsScore: score,
@@ -803,6 +824,9 @@ function ClientSharePortalContent() {
               jobTitle: sc.jobTitle,
               screeningEvidence: sc.evidenceSnippets || [],
               decision: 'SUBMIT',
+              isRecruiterApproved: isApproved,
+              recruiterApprovalStatus: isApproved ? 'APPROVED' : 'PENDING_APPROVAL',
+              recruiterApprovedBy: sc.assignedRecruiter,
             });
           }
         }
@@ -821,15 +845,16 @@ function ClientSharePortalContent() {
                   const isSubmitted = cand.decision === 'SUBMIT' || cand.stage === 'Shortlisted';
                   if (isSubmitted && !portalCandidatesMap.has(cand.id)) {
                     const score = cand.atsScore || cand.score || cand.matchScore || 80;
+                    const isApproved = cand.isRecruiterApproved === true;
                     portalCandidatesMap.set(cand.id, {
                       id: cand.id,
                       name: cand.name || 'Candidate',
-                      email: cand.email || `${(cand.name || 'candidate').toLowerCase().replace(/[^a-z0-9]/g, '.')}@candidate-profile.com`,
-                      phone: cand.phone || '+1 (555) 234-5678',
+                      email: cand.email || '',
+                      phone: cand.phone || '',
                       currentTitle: cand.role || cand.currentTitle || cand.current_title || 'Software Engineer',
                       currentCompany: cand.currentCompany || cand.current_company || 'Verified Candidate',
-                      totalExperience: cand.exp || cand.totalExperience || cand.total_experience || '5+ Years',
-                      location: cand.location || 'Remote / Hybrid',
+                      totalExperience: cand.exp || cand.totalExperience || cand.total_experience || 'Pending Recruiter Input',
+                      location: cand.location || 'Not Specified',
                       summary: cand.summary || cand.profile_summary || `Screened and shortlisted for ${j.title}. ATS score: ${score}%.`,
                       skills: cand.skills || ['Technical Proficiency', 'Domain Skills'],
                       atsScore: score,
@@ -843,7 +868,9 @@ function ClientSharePortalContent() {
                       jobId: j.id,
                       jobTitle: j.title,
                       decision: 'SUBMIT',
-                      screeningEvidence: cand.evidenceSnippets || cand.screeningEvidence || []
+                      screeningEvidence: cand.evidenceSnippets || cand.screeningEvidence || [],
+                      isRecruiterApproved: isApproved,
+                      recruiterApprovalStatus: isApproved ? 'APPROVED' : 'PENDING_APPROVAL',
                     });
                   }
                 }
@@ -853,9 +880,13 @@ function ClientSharePortalContent() {
         }
       }
 
-      // E. Filter out candidates still in internal 'Active Screening' so client only sees shortlisted candidates
+      // E. Filter out candidates still in internal 'Active Screening' or pending recruiter approval so client only sees certified candidates
       const allCandidatesArray = Array.from(portalCandidatesMap.values());
-      const clientVisibleCandidates = allCandidatesArray.filter(c => c.currentStatus !== 'Active Screening');
+      const clientVisibleCandidates = allCandidatesArray.filter(c => {
+        const isNotActiveScreening = c.currentStatus !== 'Active Screening';
+        const isApproved = c.isRecruiterApproved === true || c.recruiterApprovalStatus === 'APPROVED';
+        return isNotActiveScreening && isApproved;
+      });
 
       // Hydrate all 30 executive submission fields on every visible candidate
       const full30Candidates = clientVisibleCandidates.map(c => {
@@ -1979,17 +2010,17 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
               </div>
             ) : filteredCandidates.length === 0 ? (
               <div className="bg-white border border-[#EAECF0] rounded-3xl p-12 text-center space-y-3">
-                <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] text-[#3563E9] flex items-center justify-center mx-auto border border-[#D1E0FF]">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center mx-auto border border-emerald-200 shadow-2xs">
                   <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                 </div>
                 <h3 className="text-base font-bold text-[#101828]">
-                  {candidates.length === 0 ? 'Candidate Sourcing & Screening in Progress' : 'No candidates match this filter'}
+                  {candidates.length === 0 ? 'Candidate Profiles Under Recruiter Quality Verification' : 'No candidates match this filter'}
                 </h3>
-                <p className="text-xs text-[#667085] max-w-sm mx-auto">
+                <p className="text-xs text-[#667085] max-w-md mx-auto leading-relaxed">
                   {candidates.length === 0
-                    ? 'Our agency recruiters have received your requirements and are actively sourcing candidate profiles. As candidates pass mandatory verification, they will be submitted directly to this portal.'
+                    ? `Assigned recruiter (${assignedMember || 'Agency Recruiter'}) is currently vetting candidate profiles, verifying notice periods, compensation, and mandatory benchmarks. To prevent misleading or unverified information, candidate profiles are visible on this portal only after explicit recruiter certification.`
                     : 'Try clearing your filters or search term to see other candidates.'}
                 </p>
                 {candidates.length > 0 && (
@@ -2068,10 +2099,13 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                             {idx + 1}
                           </td>
                           <td className="p-3 font-bold text-[#101828] sticky left-8 bg-white z-10 border-r border-[#EAECF0]">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span>{cand.candidateName || cand.name}</span>
                               <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-[#ECFDF3] text-[#15966A] border border-[#D1FADF]">
                                 {cand.atsScore}%
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200" title={`Certified & approved by ${cand.recruiterApprovedBy || cand.recruiterName}`}>
+                                ✓ Approved
                               </span>
                             </div>
                           </td>
@@ -2229,6 +2263,17 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                               {cand.totalWorkExperience && ` • ${cand.totalWorkExperience}`}
                               {cand.currentLocation && ` • ${cand.currentLocation}`}
                             </p>
+
+                            <div className="mt-2 flex items-center gap-2 flex-wrap">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                <svg className="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span>Recruiter Certified &amp; Approved</span>
+                                <span className="text-slate-300">•</span>
+                                <span className="text-slate-600 font-medium">by {cand.recruiterApprovedBy || cand.recruiterName || 'Assigned Recruiter'} ({cand.recruiterApprovedAt || cand.submissionDate})</span>
+                              </span>
+                            </div>
                           </div>
                         </div>
 
