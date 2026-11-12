@@ -67,6 +67,12 @@ interface PipelineCandidate {
   nextFollowUpDate?: string;
   response?: string;
   overallStatus?: string;
+
+  // Recruiter Verification & Client Approval Gate
+  isRecruiterApproved?: boolean;
+  recruiterApprovalStatus?: 'APPROVED' | 'PENDING_APPROVAL';
+  recruiterApprovedBy?: string;
+  recruiterApprovedAt?: string;
 }
 
 interface ScheduleForm {
@@ -798,11 +804,14 @@ export default function PipelinePage() {
         const candidateResp = candidate.response || 'Pending Recruiter Follow-up';
         const cvFileName = candidate.cvLink || fullCand?.fileName || fullCand?.resumeFileName || `${candidate.name.replace(/\s+/g, '_')}_CV.pdf`;
 
+        const isApproved = candidate.isRecruiterApproved === true;
+        const approvalStatus = isApproved ? 'APPROVED' : 'PENDING_APPROVAL';
+
         const candidateEntry = {
           id: candidate.id,
           name: candidate.name,
-          email: fullCand?.email || `${candidate.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@candidate-profile.com`,
-          phone: fullCand?.phone || '+91 98765 43210',
+          email: fullCand?.email || candidate.emailId || '',
+          phone: fullCand?.phone || candidate.phoneNumber || '',
           currentTitle: candidate.role || fullCand?.currentTitle || fullCand?.current_title || 'Software Engineer',
           currentCompany: fullCand?.currentCompany || fullCand?.current_company || 'Verified Candidate',
           totalExperience: totalExp,
@@ -824,14 +833,20 @@ export default function PipelinePage() {
           decision: 'SUBMIT',
           screeningEvidence: fullCand?.evidenceSnippets || fullCand?.screeningEvidence || [],
 
+          // Recruiter Verification & Client Approval Gate
+          isRecruiterApproved: isApproved,
+          recruiterApprovalStatus: approvalStatus,
+          recruiterApprovedBy: candidate.recruiterApprovedBy || recruiter,
+          recruiterApprovedAt: candidate.recruiterApprovedAt || submissionDate,
+
           // The 30 executive fields filled by assigned recruiter
           submissionDate,
           jdName: candidate.jdName || requisitionTitle || 'Requisition Role',
           clientName: candidate.clientName || clientName,
           recruiterName: recruiter,
           candidateName: candidate.candidateName || candidate.name,
-          emailId: candidate.emailId || fullCand?.email || `${candidate.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@candidate-profile.com`,
-          phoneNumber: candidate.phoneNumber || fullCand?.phone || '+91 98765 43210',
+          emailId: candidate.emailId || fullCand?.email || '',
+          phoneNumber: candidate.phoneNumber || fullCand?.phone || '',
           currentLocation: candidate.currentLocation || fullCand?.location || 'Remote / Hybrid',
           currentDesignation: candidate.currentDesignation || candidate.role || fullCand?.currentTitle || 'Software Engineer',
           totalWorkExperience: totalExp,
@@ -1523,17 +1538,17 @@ export default function PipelinePage() {
                                 type="button"
                                 onClick={() => handleOpenDossierModal(candidate)}
                                 className={`flex-1 py-1 px-2 rounded-lg border text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer truncate ${
-                                  candidate.noticePeriod || candidate.currentCtc
-                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                                    : 'border-blue-200 bg-blue-50 text-[#3563E9] hover:bg-blue-100'
+                                  candidate.isRecruiterApproved
+                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                                    : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
                                 }`}
-                                title="Assigned Recruiter: Click to fill or edit the 30 client submission fields"
+                                title="Assigned Recruiter: Click to review, fill 30 fields, and certify profile for client portal"
                               >
                                 <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                                 </svg>
                                 <span className="truncate">
-                                  {candidate.noticePeriod || candidate.currentCtc ? '30 Details ✓' : 'Fill 30 Details'}
+                                  {candidate.isRecruiterApproved ? 'Approved for Client ✓' : 'Review & Approve'}
                                 </span>
                               </button>
 

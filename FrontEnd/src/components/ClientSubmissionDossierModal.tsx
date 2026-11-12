@@ -33,6 +33,13 @@ export interface SubmissionDossierData {
   nextFollowUpDate: string;        // 28. Next Follow-up Date
   response: string;                // 29. Response
   overallStatus: string;           // 30. Overall Status
+
+  // Recruiter Verification & Client Release Approval Gate
+  isRecruiterApproved?: boolean;
+  recruiterApprovalStatus?: 'APPROVED' | 'PENDING_APPROVAL';
+  recruiterApprovedBy?: string;
+  recruiterApprovedAt?: string;
+  recruiterApprovalNotes?: string;
 }
 
 interface ClientSubmissionDossierModalProps {
@@ -89,10 +96,13 @@ export default function ClientSubmissionDossierModal({
     overallStatus: '',
   });
 
+  const [isApproved, setIsApproved] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!candidate || !isOpen) return;
+
+    setIsApproved(candidate.isRecruiterApproved !== false);
 
     const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const yesterdayStr = new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -171,15 +181,27 @@ export default function ClientSubmissionDossierModal({
     setFormData(prev => ({ ...prev, [field]: val }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveWithApproval = (approved: boolean) => {
     setIsSubmitting(true);
     try {
-      onSave(formData);
+      const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      const finalData: SubmissionDossierData = {
+        ...formData,
+        isRecruiterApproved: approved,
+        recruiterApprovalStatus: approved ? 'APPROVED' : 'PENDING_APPROVAL',
+        recruiterApprovedBy: formData.recruiterName || assignedRecruiterName,
+        recruiterApprovedAt: todayStr,
+      };
+      onSave(finalData);
     } finally {
       setIsSubmitting(false);
       onClose();
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSaveWithApproval(isApproved);
   };
 
   return (
@@ -689,32 +711,94 @@ export default function ClientSubmissionDossierModal({
               </div>
             </div>
           </div>
+
+          {/* ── SECTION 6: RECRUITER VERIFICATION & CLIENT RELEASE APPROVAL GATE ── */}
+          <div className="bg-gradient-to-br from-emerald-50/90 to-teal-50/60 border-2 border-emerald-300 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-xs">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                  ✓
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-black text-emerald-950 uppercase tracking-tight">
+                    Recruiter Quality Approval &amp; Client Release Gate
+                  </h4>
+                  <p className="text-[11px] text-emerald-800 font-medium">
+                    Protection against automated hallucinations &amp; misleading information
+                  </p>
+                </div>
+              </div>
+              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                isApproved
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : 'bg-amber-100 text-amber-800 border-amber-300'
+              }`}>
+                {isApproved ? 'Approved for Client View' : 'Pending Recruiter Approval'}
+              </span>
+            </div>
+
+            <div className="bg-white/95 rounded-xl p-3.5 border border-emerald-200/80 space-y-2.5">
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isApproved}
+                  onChange={e => setIsApproved(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                />
+                <div className="text-xs text-slate-800 space-y-0.5">
+                  <span className="font-extrabold text-emerald-950 block">
+                    I, {formData.recruiterName || assignedRecruiterName}, certify that I have reviewed and verified these candidate details.
+                  </span>
+                  <span className="text-[11px] text-slate-600 block leading-relaxed">
+                    By checking this, you confirm that total experience, relevant work experience, notice period, compensation, and screening benchmarks have been validated with the candidate and are 100% genuine before exposure to {formData.clientName || defaultClientName}.
+                  </span>
+                </div>
+              </label>
+
+              {!isApproved && (
+                <div className="text-[11px] font-bold text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200 flex items-center gap-2">
+                  <span>⚠️</span>
+                  <span>Unapproved profiles will NOT be visible to the client on the preview portal until explicitly approved.</span>
+                </div>
+              )}
+            </div>
+          </div>
         </form>
 
         {/* Modal Footer */}
-        <div className="p-4 sm:p-5 bg-slate-50 border-t border-[#EAECF0] flex items-center justify-between gap-3 shrink-0">
+        <div className="p-4 sm:p-5 bg-slate-50 border-t border-[#EAECF0] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
           <div className="text-xs text-slate-500 font-medium">
-            Assigned Recruiter: <strong className="text-slate-800">{formData.recruiterName}</strong>
+            Assigned Recruiter: <strong className="text-slate-800">{formData.recruiterName || assignedRecruiterName}</strong>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+              className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
             >
               Cancel
             </button>
             <button
-              type="submit"
-              form="submission-dossier-form"
+              type="button"
               disabled={isSubmitting}
-              className="px-5 py-2.5 bg-[#3563E9] hover:bg-[#2851D6] active:scale-[0.99] text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-[#3563E9]/20 cursor-pointer flex items-center gap-2"
+              onClick={() => handleSaveWithApproval(false)}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl transition cursor-pointer"
+              title="Save details internally without publishing to client preview portal"
+            >
+              Save Draft (Keep Internal Only)
+            </button>
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => handleSaveWithApproval(true)}
+              className="px-5 py-2.5 bg-[#15966A] hover:bg-[#12805A] active:scale-[0.99] text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-emerald-600/20 cursor-pointer flex items-center gap-1.5"
+              title="Certify details and approve candidate for client preview portal visibility"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <span>{isSubmitting ? 'Saving...' : '✓ Save & Submit Details to Client Portal'}</span>
+              <span>✓ Approve &amp; Publish to Client Portal</span>
             </button>
           </div>
         </div>
