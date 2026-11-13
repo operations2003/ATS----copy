@@ -205,7 +205,7 @@ export default function ClientSubmissionDossierModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+    <div className="fixed inset-0 z-[400] flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
       <div className="bg-white border border-[#EAECF0] rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Modal Header */}
         <div className="p-5 sm:p-6 border-b border-[#EAECF0] bg-white flex items-start justify-between gap-4 shrink-0">
@@ -229,14 +229,6 @@ export default function ClientSubmissionDossierModal({
           >
             ✕
           </button>
-        </div>
-
-        {/* Notice Banner */}
-        <div className="bg-amber-50/70 border-b border-amber-200/80 px-5 sm:px-6 py-2.5 text-xs text-amber-900 flex items-center gap-2 shrink-0">
-          <span className="text-amber-600 font-bold shrink-0">ℹ️</span>
-          <span>
-            These fields are <strong>not automatically filled</strong> with dummy values. As the assigned recruiter, enter the candidate&apos;s verified compensation, notice period, experience, and evaluation remarks before submitting to the client preview portal.
-          </span>
         </div>
 
         {/* Modal Scrollable Form Body */}
@@ -798,7 +790,7 @@ export default function ClientSubmissionDossierModal({
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <span>✓ Approve &amp; Publish to Client Portal</span>
+              <span>Approve &amp; Publish to Client Portal</span>
             </button>
           </div>
         </div>
