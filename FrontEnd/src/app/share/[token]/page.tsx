@@ -264,8 +264,6 @@ function ClientSharePortalContent() {
   const [isLoading, setIsLoading] = useState(true);
   const hasAutoPromptedRef = React.useRef(false);
 
-  // 2.1 View Mode for Candidate Submission Details (Cards vs 30-Column Table)
-  const [candidateViewMode, setCandidateViewMode] = useState<'cards' | 'table'>('cards');
   const [expandedDossierIds, setExpandedDossierIds] = useState<Record<string, boolean>>({});
 
   // 3. Filter & Tab State
@@ -2054,33 +2052,45 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                   </button>
                 )}
               </div>
-            ) : candidateViewMode === 'table' ? (
-              /* ── 30-COLUMN MASTER SUBMISSION TABLE VIEW ── */
+            ) : (
+              /* ── 30-COLUMN MASTER SUBMISSION EXCEL SPREADSHEET VIEW ── */
               <div className="bg-white border border-[#EAECF0] rounded-2xl shadow-xs overflow-hidden">
                 <div className="p-4 border-b border-[#EAECF0] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#F8F9FC]">
-                  <div>
-                    <h3 className="text-xs sm:text-sm font-bold text-[#101828]">
-                      Master Candidate Submission Sheet • All 30 Fields
-                    </h3>
-                    <p className="text-[11px] text-slate-500">
-                      Complete 30 verification data points for {filteredCandidates.length} candidate(s) submitted to {clientName}.
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs text-base">
+                      📊
+                    </div>
+                    <div>
+                      <h3 className="text-xs sm:text-sm font-bold text-[#101828] flex items-center gap-2">
+                        <span>Master Candidate Submission Sheet</span>
+                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Excel View • All 30 Fields
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Spreadsheet representation with all 30 verification data points for {filteredCandidates.length} candidate(s) submitted to {clientName}.
+                      </p>
+                    </div>
                   </div>
                   <button
                     type="button"
                     onClick={handleExportSubmissionSheetCsv}
                     className="px-3.5 py-1.5 bg-[#15966A] hover:bg-[#12805A] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
+                    title="Export all 30 candidate submission fields to spreadsheet (CSV)"
                   >
-                    <span>⬇️ Export 30 Columns (CSV)</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Export to Excel (CSV)</span>
                   </button>
                 </div>
 
-                <div className="overflow-x-auto max-h-[640px]">
-                  <table className="w-full text-left text-xs whitespace-nowrap">
+                <div className="overflow-x-auto max-h-[720px]">
+                  <table className="w-full text-left text-xs whitespace-nowrap border-collapse">
                     <thead className="bg-[#F8F9FC] text-[10px] font-extrabold uppercase tracking-wider text-slate-600 border-b border-[#EAECF0] sticky top-0 z-20 shadow-xs">
                       <tr>
-                        <th className="p-3 sticky left-0 bg-[#F8F9FC] z-30 border-r border-[#EAECF0]">#</th>
-                        <th className="p-3 sticky left-8 bg-[#F8F9FC] z-30 border-r border-[#EAECF0]">5. Candidate Name</th>
+                        <th className="p-3 sticky left-0 bg-[#F8F9FC] z-30 border-r border-[#EAECF0] text-center w-12 min-w-[48px]">#</th>
+                        <th className="p-3 sticky left-12 bg-[#F8F9FC] z-30 border-r border-[#EAECF0] min-w-[220px]">5. Candidate Name</th>
                         <th className="p-3">1. Date</th>
                         <th className="p-3">2. JD Name</th>
                         <th className="p-3">3. Client Name</th>
@@ -2115,13 +2125,23 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                     </thead>
                     <tbody className="divide-y divide-[#EAECF0]">
                       {filteredCandidates.map((cand, idx) => (
-                        <tr key={cand.id} className="hover:bg-slate-50/70 transition-colors">
-                          <td className="p-3 font-mono font-bold text-slate-400 sticky left-0 bg-white z-10 border-r border-[#EAECF0]">
+                        <tr key={cand.id} className="hover:bg-blue-50/40 transition-colors group">
+                          <td className="p-3 font-mono font-bold text-slate-400 sticky left-0 bg-white group-hover:bg-blue-50/70 z-10 border-r border-[#EAECF0] text-center w-12 min-w-[48px]">
                             {idx + 1}
                           </td>
-                          <td className="p-3 font-bold text-[#101828] sticky left-8 bg-white z-10 border-r border-[#EAECF0]">
+                          <td className="p-3 font-bold text-[#101828] sticky left-12 bg-white group-hover:bg-blue-50/70 z-10 border-r border-[#EAECF0] min-w-[220px]">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span>{cand.candidateName || cand.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingDossierCandidate(cand);
+                                  setIsDossierModalOpen(true);
+                                }}
+                                className="text-left font-bold text-[#101828] hover:text-[#3563E9] transition-colors cursor-pointer"
+                                title="Click to view/edit all 30 details"
+                              >
+                                {cand.candidateName || cand.name}
+                              </button>
                               <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-[#ECFDF3] text-[#15966A] border border-[#D1FADF]">
                                 {cand.atsScore}%
                               </span>
@@ -2130,62 +2150,64 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                               </span>
                             </div>
                           </td>
-                          <td className="p-3 text-slate-700">{cand.submissionDate}</td>
-                          <td className="p-3 font-semibold text-slate-800">{cand.jdName}</td>
-                          <td className="p-3 text-slate-700">{cand.clientName}</td>
-                          <td className="p-3 text-slate-700">{cand.recruiterName}</td>
-                          <td className="p-3 text-slate-600 select-all font-mono text-[11px]">{cand.emailId}</td>
-                          <td className="p-3 text-slate-600">{cand.phoneNumber}</td>
-                          <td className="p-3 text-slate-700">{cand.currentLocation}</td>
-                          <td className="p-3 text-slate-800 font-medium">{cand.currentDesignation}</td>
-                          <td className="p-3 font-semibold text-slate-900">{cand.totalWorkExperience}</td>
-                          <td className="p-3 font-semibold text-[#15966A]">{cand.relevantWorkExperience}</td>
+                          <td className="p-3 text-slate-700">{cand.submissionDate || '-'}</td>
+                          <td className="p-3 font-semibold text-slate-800">{cand.jdName || cand.jobTitle || 'Requisition Role'}</td>
+                          <td className="p-3 text-slate-700">{cand.clientName || clientName}</td>
+                          <td className="p-3 text-slate-700">{cand.recruiterName || 'Agency Recruiter'}</td>
+                          <td className="p-3 text-slate-600 select-all font-mono text-[11px]">{cand.emailId || cand.email || '-'}</td>
+                          <td className="p-3 text-slate-600">{cand.phoneNumber || cand.phone || '-'}</td>
+                          <td className="p-3 text-slate-700">{cand.currentLocation || cand.location || '-'}</td>
+                          <td className="p-3 text-slate-800 font-medium">{cand.currentDesignation || cand.currentTitle || '-'}</td>
+                          <td className="p-3 font-semibold text-slate-900">{cand.totalWorkExperience || cand.totalExperience || '-'}</td>
+                          <td className="p-3 font-semibold text-[#15966A]">{cand.relevantWorkExperience || '-'}</td>
                           <td className="p-3">
                             <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                              {cand.noticePeriod}
+                              {cand.noticePeriod || 'Immediate'}
                             </span>
                           </td>
-                          <td className="p-3 font-medium text-slate-700">{cand.currentCtc}</td>
-                          <td className="p-3 font-bold text-slate-900">{cand.expectedCtc}</td>
+                          <td className="p-3 font-medium text-slate-700">{cand.currentCtc || '-'}</td>
+                          <td className="p-3 font-bold text-slate-900">{cand.expectedCtc || '-'}</td>
                           <td className="p-3">
                             <button
                               type="button"
                               onClick={() => handleDownloadCandidateCv(cand)}
+                              disabled={downloadingCandidateId === cand.id}
                               className="text-xs font-bold text-[#3563E9] hover:underline cursor-pointer flex items-center gap-1"
+                              title="Download verified CV / Resume"
                             >
-                              <span>📄 Download CV</span>
+                              <span>📄 {downloadingCandidateId === cand.id ? 'Downloading...' : 'Download CV'}</span>
                             </button>
                           </td>
-                          <td className="p-3 font-black text-[#15966A]">{cand.atsScoreDisplay}</td>
+                          <td className="p-3 font-black text-[#15966A]">{cand.atsScoreDisplay || `${cand.atsScore}% Match`}</td>
                           <td className="p-3">
                             <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700">
-                              {cand.candidateStatus}
+                              {cand.candidateStatus || cand.currentStatus}
                             </span>
                           </td>
                           <td className="p-3">
                             <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              {cand.screeningStatus}
+                              {cand.screeningStatus || 'Verified (100% Mandatory Met)'}
                             </span>
                           </td>
-                          <td className="p-3 text-[11px] text-slate-600 italic max-w-xs truncate" title={cand.recruiterRemarks}>
-                            {cand.recruiterRemarks}
+                          <td className="p-3 text-[11px] text-slate-600 italic max-w-xs truncate" title={cand.recruiterRemarks || cand.screeningNote}>
+                            {cand.recruiterRemarks || cand.screeningNote || '-'}
                           </td>
-                          <td className="p-3 text-slate-700">{cand.interviewRound1}</td>
-                          <td className="p-3 text-slate-700">{cand.interviewRound2}</td>
-                          <td className="p-3 text-slate-700">{cand.finalInterview}</td>
-                          <td className="p-3 text-slate-700 font-medium">{cand.offerStatus}</td>
-                          <td className="p-3 text-slate-700">{cand.joiningDate}</td>
-                          <td className="p-3 text-slate-700">{cand.joiningStatus}</td>
-                          <td className="p-3 text-slate-600">{cand.rejectionReason}</td>
-                          <td className="p-3 text-slate-700">{cand.lastFollowUpDate}</td>
-                          <td className="p-3 text-slate-700">{cand.nextFollowUpDate}</td>
-                          <td className="p-3 text-slate-700">{cand.response}</td>
+                          <td className="p-3 text-slate-700">{cand.interviewRound1 || '-'}</td>
+                          <td className="p-3 text-slate-700">{cand.interviewRound2 || '-'}</td>
+                          <td className="p-3 text-slate-700">{cand.finalInterview || '-'}</td>
+                          <td className="p-3 text-slate-700 font-medium">{cand.offerStatus || '-'}</td>
+                          <td className="p-3 text-slate-700">{cand.joiningDate || '-'}</td>
+                          <td className="p-3 text-slate-700">{cand.joiningStatus || '-'}</td>
+                          <td className="p-3 text-slate-600">{cand.rejectionReason || 'None'}</td>
+                          <td className="p-3 text-slate-700">{cand.lastFollowUpDate || '-'}</td>
+                          <td className="p-3 text-slate-700">{cand.nextFollowUpDate || '-'}</td>
+                          <td className="p-3 text-slate-700">{cand.response || '-'}</td>
                           <td className="p-3">
                             <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#EFF4FF] text-[#3563E9] border border-[#D1E0FF]">
-                              {cand.overallStatus}
+                              {cand.overallStatus || cand.currentStatus}
                             </span>
                           </td>
-                          <td className="p-3 text-right sticky right-0 bg-white z-10 border-l border-[#EAECF0]">
+                          <td className="p-3 text-right sticky right-0 bg-white group-hover:bg-blue-50/70 z-10 border-l border-[#EAECF0]">
                             <div className="flex items-center justify-end gap-1.5">
                               <button
                                 type="button"
@@ -2204,7 +2226,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                                 className="px-2.5 py-1 bg-[#EFF4FF] hover:bg-[#D1E0FF] text-[#3563E9] border border-[#D1E0FF] rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
                                 title="Edit 30 submission fields (Assigned Recruiter)"
                               >
-                                <span>✏️ Fill / Edit</span>
+                                <span>✏️ Fill / Edit 30</span>
                               </button>
                               <button
                                 type="button"
@@ -2235,456 +2257,6 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                     </tbody>
                   </table>
                 </div>
-              </div>
-            ) : (
-              /* ── 30-POINT CANDIDATE CARD DOSSIER VIEW ── */
-              <div className="space-y-4">
-                {filteredCandidates.map(cand => {
-                  const score = cand.atsScore || 85;
-                  const isTopScore = score >= 90;
-
-                  return (
-                    <div
-                      key={cand.id}
-                      className="bg-white border border-[#EAECF0] hover:border-[#3563E9]/40 rounded-3xl p-5 sm:p-6 shadow-sm transition-all space-y-4"
-                    >
-                      {/* Top Header Row */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-start gap-3.5">
-                          {/* Score Badge */}
-                          <div className={`px-3 py-1.5 rounded-2xl text-center shrink-0 border ${
-                            isTopScore
-                              ? 'bg-[#ECFDF3] border-[#D1FADF] text-[#15966A]'
-                              : 'bg-[#EFF4FF] border-[#D1E0FF] text-[#3563E9]'
-                          }`}>
-                            <div className="text-base font-black leading-none">{score}%</div>
-                            <div className="text-[9px] font-extrabold uppercase tracking-wider mt-0.5">Match</div>
-                          </div>
-
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="text-base font-bold text-[#101828]">{cand.candidateName || cand.name}</h3>
-                              <span className="text-xs text-slate-400">•</span>
-                              <span className="text-xs font-semibold text-[#3563E9]">{cand.jdName || cand.jobTitle || 'Requisition Role'}</span>
-                              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
-                                cand.currentStatus.includes('Selected') || cand.currentStatus.includes('Offer') || cand.currentStatus.includes('Joined')
-                                  ? 'bg-[#ECFDF3] text-[#15966A] border-[#D1FADF]'
-                                  : cand.currentStatus.includes('Scheduled') || cand.currentStatus.includes('Round')
-                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                  : cand.currentStatus.includes('Shortlisted') || cand.currentStatus === 'Shared with Client'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : 'bg-slate-100 text-slate-700 border-slate-200'
-                              }`}>
-                                {cand.currentStatus}
-                              </span>
-                            </div>
-                            <p className="text-xs text-[#667085] mt-1">
-                              <span className="font-semibold text-slate-800">{cand.currentDesignation || cand.currentTitle}</span>
-                              {cand.currentCompany && ` at ${cand.currentCompany}`}
-                              {cand.totalWorkExperience && ` • ${cand.totalWorkExperience}`}
-                              {cand.currentLocation && ` • ${cand.currentLocation}`}
-                            </p>
-
-                            <div className="mt-2 flex items-center gap-2 flex-wrap">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                                <svg className="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                </svg>
-                                <span>Recruiter Certified &amp; Approved</span>
-                                <span className="text-slate-300">•</span>
-                                <span className="text-slate-600 font-medium">by {cand.recruiterApprovedBy || cand.recruiterName || 'Assigned Recruiter'} ({cand.recruiterApprovedAt || cand.submissionDate})</span>
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex items-center gap-2 self-stretch sm:self-auto shrink-0 flex-wrap">
-                          <button
-                            type="button"
-                            onClick={() => setLifecycleCandidate(cand)}
-                            className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-                            title="Fill or update interview rounds, offer status, and lifecycle decisions (Client)"
-                          >
-                            <span>📝 Update Lifecycle (Client)</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingDossierCandidate(cand);
-                              setIsDossierModalOpen(true);
-                            }}
-                            className="px-3.5 py-2 bg-[#EFF4FF] hover:bg-[#D1E0FF] text-[#3563E9] border border-[#D1E0FF] rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-                            title="Fill or edit all 30 candidate submission fields (Assigned Recruiter)"
-                          >
-                            <span>✏️ Fill / Edit 30 Details</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadCandidateCv(cand)}
-                            disabled={downloadingCandidateId === cand.id}
-                            className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-[#EAECF0] hover:border-slate-300 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-                            title="Download verified 30-point candidate dossier"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <span>{downloadingCandidateId === cand.id ? 'Downloading...' : 'Download Resume'}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setInterviewCandidate(cand);
-                              setInterviewRound('Round 1 Phase');
-                              setInterviewStartAt('');
-                            }}
-                            className="px-3.5 py-2 bg-[#101828] hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <span>Schedule Interview</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFeedbackCandidate(cand);
-                              setFeedbackStatus(cand.currentStatus);
-                              setFeedbackNotes(cand.latestFeedback || '');
-                            }}
-                            className="px-3.5 py-2 bg-[#3563E9] hover:bg-[#2851D6] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                            </svg>
-                            <span>Client Decision</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Summary */}
-                      {cand.summary && (
-                        <p className="text-xs text-slate-600 leading-relaxed bg-[#F7F8FC] p-3 rounded-2xl border border-slate-100">
-                          {cand.summary}
-                        </p>
-                      )}
-
-                      {/* Verified Skills */}
-                      {cand.skills && cand.skills.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">Matched Skills:</span>
-                          {cand.skills.map((skill, sIdx) => (
-                            <span
-                              key={sIdx}
-                              className="px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-semibold border border-slate-200/80"
-                            >
-                              {skill}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Agency Screening Transparency Note */}
-                      <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-3.5 space-y-2">
-                        <div className="flex items-center justify-between text-xs font-bold">
-                          <span className="inline-flex items-center gap-1.5 text-[#3563E9]">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            Agency Screening Verdict &amp; Mandatory Criteria Verification
-                          </span>
-                          <span className="text-emerald-700 font-extrabold text-[11px] bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                            ✓ 100% Mandatory Criteria Met
-                          </span>
-                        </div>
-
-                        {cand.screeningNote && (
-                          <p className="text-xs text-slate-700 leading-relaxed">
-                            {cand.screeningNote}
-                          </p>
-                        )}
-
-                        {cand.screeningEvidence && cand.screeningEvidence.length > 0 && (
-                          <div className="space-y-1.5 pt-1 border-t border-blue-100/70">
-                            {cand.screeningEvidence.slice(0, 3).map((item, eIdx) => (
-                              <div key={eIdx} className="text-[11px] text-slate-600 flex items-start gap-2">
-                                <span className="text-emerald-600 font-bold">✓</span>
-                                <span className="font-semibold text-slate-800">{item.requirement}:</span>
-                                <span className="text-slate-500 italic truncate">{item.evidence}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* ── 30-POINT CLIENT SUBMISSION DOSSIER ── */}
-                      <div className="rounded-2xl border border-[#EAECF0] bg-[#F8F9FC] overflow-hidden">
-                        <div
-                          onClick={() => toggleDossierExpand(cand.id)}
-                          className="p-3.5 sm:p-4 bg-white border-b border-[#EAECF0] flex items-center justify-between cursor-pointer hover:bg-slate-50/80 transition-colors select-none"
-                        >
-                          <div className="flex items-center gap-2.5 flex-wrap">
-                            <span className="w-2 h-2 rounded-full bg-[#3563E9]"></span>
-                            <h4 className="text-xs sm:text-sm font-black text-[#101828] tracking-tight">
-                              30-Point Client Submission Dossier
-                            </h4>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#EFF4FF] text-[#3563E9] border border-[#D1E0FF]">
-                              All 30 Fields Populated
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingDossierCandidate(cand);
-                                setIsDossierModalOpen(true);
-                              }}
-                              className="px-2.5 py-1 bg-[#EFF4FF] hover:bg-[#D1E0FF] text-[#3563E9] border border-[#D1E0FF] rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1"
-                              title="Edit all 30 candidate submission fields (Assigned Recruiter)"
-                            >
-                              <span>✏️ Edit 30 Details</span>
-                            </button>
-                            <span className="text-xs font-bold text-[#3563E9]">
-                              {expandedDossierIds[cand.id] ? 'Hide Dossier ▲' : 'Show All 30 Details ▼'}
-                            </span>
-                          </div>
-                        </div>
-
-                        {expandedDossierIds[cand.id] && (
-                          <div className="p-4 sm:p-5 space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                              {/* Group 1: Requisition & Agency Context */}
-                              <div className="bg-white border border-[#EAECF0] rounded-xl p-3.5 space-y-2.5 shadow-xs">
-                                <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#3563E9] flex items-center gap-1.5 border-b border-slate-100 pb-1.5">
-                                  <span>📌 Requisition &amp; Agency</span>
-                                </div>
-                                <div className="space-y-1.5 text-xs">
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">1. Date:</span>
-                                    <span className="font-semibold text-slate-800">{cand.submissionDate || 'N/A'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">2. JD Name:</span>
-                                    <span className="font-bold text-[#101828]">{cand.jdName || cand.jobTitle || 'Requisition Role'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">3. Client Name:</span>
-                                    <span className="font-semibold text-slate-800">{cand.clientName || clientName}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">4. Recruiter Name:</span>
-                                    <span className="font-semibold text-slate-800">{cand.recruiterName || 'Agency Recruiter'}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Group 2: Candidate Profile & Contact */}
-                              <div className="bg-white border border-[#EAECF0] rounded-xl p-3.5 space-y-2.5 shadow-xs">
-                                <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#3563E9] flex items-center gap-1.5 border-b border-slate-100 pb-1.5">
-                                  <span>👤 Candidate &amp; Contact</span>
-                                </div>
-                                <div className="space-y-1.5 text-xs">
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">5. Candidate Name:</span>
-                                    <span className="font-bold text-[#101828]">{cand.candidateName || cand.name}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">6. Email ID:</span>
-                                    <span className="font-medium text-slate-700 select-all">{cand.emailId || cand.email || 'N/A'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">7. Phone Number:</span>
-                                    <span className="font-medium text-slate-700">{cand.phoneNumber || cand.phone || 'N/A'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">8. Current Location:</span>
-                                    <span className="font-semibold text-slate-800">{cand.currentLocation || cand.location || 'N/A'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">9. Current Designation:</span>
-                                    <span className="font-semibold text-slate-800">{cand.currentDesignation || cand.currentTitle || 'N/A'}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Group 3: Experience & Notice Period */}
-                              <div className="bg-white border border-[#EAECF0] rounded-xl p-3.5 space-y-2.5 shadow-xs">
-                                <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#3563E9] flex items-center gap-1.5 border-b border-slate-100 pb-1.5">
-                                  <span>⏱️ Experience &amp; Notice</span>
-                                </div>
-                                <div className="space-y-1.5 text-xs">
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">10. Total Work Experience:</span>
-                                    <span className="font-bold text-slate-900">{cand.totalWorkExperience || cand.totalExperience || 'N/A'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">11. Relevant Work Experience:</span>
-                                    <span className="font-bold text-[#15966A]">{cand.relevantWorkExperience || 'N/A'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">12. Notice Period:</span>
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                                      {cand.noticePeriod || 'N/A'}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Group 4: Compensation & CV File */}
-                              <div className="bg-white border border-[#EAECF0] rounded-xl p-3.5 space-y-2.5 shadow-xs">
-                                <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#3563E9] flex items-center gap-1.5 border-b border-slate-100 pb-1.5">
-                                  <span>💼 Compensation &amp; CV</span>
-                                </div>
-                                <div className="space-y-1.5 text-xs">
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">13. Current CTC:</span>
-                                    <span className="font-semibold text-slate-800">{cand.currentCtc || 'N/A'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">14. Expected CTC:</span>
-                                    <span className="font-bold text-slate-900">{cand.expectedCtc || 'N/A'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">15. CV Link:</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDownloadCandidateCv(cand)}
-                                      className="text-xs font-bold text-[#3563E9] hover:underline cursor-pointer flex items-center gap-1 mt-0.5 truncate max-w-full"
-                                      title="Download CV & Summary"
-                                    >
-                                      <span>📄 {cand.cvLink || cand.resumeFileName || `${cand.name}_CV.pdf`}</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Group 5: Screening & Recruiter Remarks */}
-                              <div className="bg-white border border-[#EAECF0] rounded-xl p-3.5 space-y-2.5 shadow-xs">
-                                <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#3563E9] flex items-center gap-1.5 border-b border-slate-100 pb-1.5">
-                                  <span>🎯 Screening &amp; Assessment</span>
-                                </div>
-                                <div className="space-y-1.5 text-xs">
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">16. ATS:</span>
-                                    <span className="font-black text-[#15966A]">{cand.atsScoreDisplay || `${cand.atsScore}% Match`}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">17. Candidate Status:</span>
-                                    <span className="font-semibold text-slate-800">{cand.candidateStatus || cand.currentStatus}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">18. Screening Status:</span>
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                      {cand.screeningStatus || 'Verified (100% Mandatory Criteria Met)'}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">19. Recruiter Remarks:</span>
-                                    <p className="text-[11px] text-slate-700 italic leading-snug line-clamp-2">
-                                      {cand.recruiterRemarks || cand.screeningNote || 'Recommended for interview scheduling.'}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Group 6: Interview Pipeline & Lifecycle */}
-                              <div className="bg-white border border-[#EAECF0] rounded-xl p-3.5 space-y-2.5 shadow-xs">
-                                <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#3563E9] flex items-center justify-between border-b border-slate-100 pb-1.5">
-                                  <span className="flex items-center gap-1.5">📅 Interview &amp; Lifecycle</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setLifecycleCandidate(cand)}
-                                    className="px-2 py-0.5 bg-[#EFF4FF] hover:bg-[#D1E0FF] text-[#3563E9] border border-[#D1E0FF] rounded-md text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
-                                    title="Fill or update interview rounds, offer status, joining date, and decisions (Client)"
-                                  >
-                                    <span>✏️ Fill / Update (Client)</span>
-                                  </button>
-                                </div>
-                                <div className="space-y-1.5 text-xs">
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">20. Interview Round 1:</span>
-                                    <span className="font-medium text-slate-800">{cand.interviewRound1 || 'Ready for Scheduling'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">21. Interview Round 2:</span>
-                                    <span className="font-medium text-slate-800">{cand.interviewRound2 || 'Pending Round 1'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">22. Final Interview:</span>
-                                    <span className="font-medium text-slate-800">{cand.finalInterview || 'Pending'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">23. Offer Status:</span>
-                                    <span className="font-medium text-slate-800">{cand.offerStatus || 'In Evaluation'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">24. Joining Date:</span>
-                                    <span className="font-medium text-slate-800">{cand.joiningDate || 'Post Offer Release'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">25. Joining Status:</span>
-                                    <span className="font-medium text-slate-800">{cand.joiningStatus || 'Pending'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">26. Rejection Reason:</span>
-                                    <span className="font-medium text-slate-600">{cand.rejectionReason || 'None (Profile Qualified)'}</span>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
-                                    <div>
-                                      <span className="text-[10px] font-bold text-slate-400 block uppercase">27. Last Follow-up:</span>
-                                      <span className="text-[11px] text-slate-700">{cand.lastFollowUpDate || 'Recently'}</span>
-                                    </div>
-                                    <div>
-                                      <span className="text-[10px] font-bold text-slate-400 block uppercase">28. Next Follow-up:</span>
-                                      <span className="text-[11px] text-slate-700">{cand.nextFollowUpDate || 'Upcoming'}</span>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">29. Response:</span>
-                                    <span className="text-[11px] text-slate-800 font-medium">{cand.response || 'Interested & Actively Available'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">30. Overall Status:</span>
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-[#EFF4FF] text-[#3563E9] border border-[#D1E0FF]">
-                                      {cand.overallStatus || cand.currentStatus}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="pt-2 mt-1 border-t border-slate-100">
-                                  <button
-                                    type="button"
-                                    onClick={() => setLifecycleCandidate(cand)}
-                                    className="w-full py-2 bg-[#3563E9] hover:bg-[#2851D6] text-white rounded-xl text-xs font-bold transition shadow-xs hover:shadow-md cursor-pointer flex items-center justify-center gap-1.5"
-                                    title="Click to fill or update interview rounds, offer details, and lifecycle status"
-                                  >
-                                    <span>📝 Fill / Update Interview &amp; Lifecycle (Client)</span>
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Latest Client Interaction Note if present */}
-                      {cand.latestFeedback && (
-                        <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl px-3.5 py-2 text-xs text-amber-900 flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold">Latest Hiring Note:</span>
-                            <span>&ldquo;{cand.latestFeedback}&rdquo;</span>
-                          </div>
-                          <span className="text-[11px] text-amber-700 shrink-0 font-medium">{cand.lastUpdatedDate}</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
               </div>
             )}
           </div>
