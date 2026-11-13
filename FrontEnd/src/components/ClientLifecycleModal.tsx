@@ -31,6 +31,7 @@ const OVERALL_STATUS_OPTIONS = [
   'Round 2 Phase Scheduled',
   'Interview Completed',
   'Selected / Offer',
+  'Offered',
   'Joined',
   'Offer Declined',
   'On Hold',

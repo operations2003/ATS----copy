@@ -217,6 +217,22 @@ export default function PipelinePage() {
   const [dossierCandidate, setDossierCandidate] = useState<PipelineCandidate | null>(null);
   const [dossierTargetStage, setDossierTargetStage] = useState<PipelineStage | null>(null);
   const [isDossierOpen, setIsDossierOpen] = useState(false);
+  const [pipelineRefreshKey, setPipelineRefreshKey] = useState(0);
+
+  // Live real-time listener: auto-refresh pipeline when candidate status/interviews are updated in the client portal
+  useEffect(() => {
+    const handleSync = () => {
+      setPipelineRefreshKey(prev => prev + 1);
+    };
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('tasknera_portal_sync', handleSync);
+    window.addEventListener('tasknera_pipeline_sync', handleSync);
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('tasknera_portal_sync', handleSync);
+      window.removeEventListener('tasknera_pipeline_sync', handleSync);
+    };
+  }, []);
 
   // Load real requisitions and parsed candidates
   useEffect(() => {
@@ -339,19 +355,36 @@ export default function PipelinePage() {
               rawCandidates.push(sc);
             }
           }
+
+          // Ingest any candidates saved in STORAGE_KEY (e.g. from portal sync)
+          const savedPipeRaw = localStorage.getItem(STORAGE_KEY);
+          if (savedPipeRaw) {
+            try {
+              const savedList = JSON.parse(savedPipeRaw);
+              if (Array.isArray(savedList)) {
+                for (const sc of savedList) {
+                  if (sc && (sc.id || sc.name) && !rawCandidates.some((r: any) => (sc.id && r.id === sc.id) || (sc.name && r.name && r.name.toLowerCase().trim() === sc.name.toLowerCase().trim()))) {
+                    rawCandidates.push(sc);
+                  }
+                }
+              }
+            } catch {}
+          }
         } catch {}
       }
 
       // 3. Load Saved Stage Overrides from LocalStorage
       const stageOverrides: Record<string, PipelineStage> = {};
+      let savedPipelineCandidatesList: any[] = [];
       if (typeof window !== 'undefined') {
         try {
           const saved = localStorage.getItem(STORAGE_KEY);
           if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) {
+              savedPipelineCandidatesList = parsed;
               for (const c of parsed) {
-                if (c && c.id && !DUMMY_IDS.has(c.id)) {
+                if (c && (c.id || c.name) && !DUMMY_IDS.has(c.id)) {
                   // Legacy migrations: 'Sourced' -> 'Screening', 'Recruiter Screen' -> 'Recruiter Name'
                   const mappedStage =
                     c.stage === 'Sourced'
@@ -360,7 +393,8 @@ export default function PipelinePage() {
                       ? 'Recruiter Name'
                       : c.stage;
                   if (stages.includes(mappedStage)) {
-                    stageOverrides[c.id] = mappedStage;
+                    if (c.id) stageOverrides[c.id] = mappedStage;
+                    if (c.name) stageOverrides[c.name.toLowerCase().trim()] = mappedStage;
                   }
                 }
               }
@@ -422,37 +456,46 @@ export default function PipelinePage() {
         const requisitionTitle = jobMap.get(requisitionId) || c.jobTitle || undefined;
 
         // Stage placement rule:
-        // - Honored if manually moved by recruiter
+        // - Honored if updated by client in portal or moved by recruiter
         // - If candidate has been approved for client, do not keep in Screening - place in Shortlisted
         // - All other parsed CVs start in "Screening"
+        const savedStage = stageOverrides[id] || (name ? stageOverrides[name.toLowerCase().trim()] : undefined);
         let stage: PipelineStage = 'Screening';
-        if (stageOverrides[id] && stageOverrides[id] !== 'Screening') {
-          stage = stageOverrides[id];
+        if (savedStage && savedStage !== 'Screening') {
+          stage = savedStage;
+        } else if (c.stage && stages.includes(c.stage) && c.stage !== 'Screening') {
+          stage = c.stage;
         } else if (c.isRecruiterApproved === true || c.recruiterApprovalStatus === 'APPROVED' || c.stage === 'Shortlisted') {
           stage = 'Shortlisted';
-        } else if (stageOverrides[id]) {
-          stage = stageOverrides[id];
+        } else if (savedStage) {
+          stage = savedStage;
         } else {
           stage = 'Screening';
         }
 
+        // Also merge any updated 30-field submission attributes saved from client portal or recruiter review
+        const savedCandidateRecord = savedPipelineCandidatesList.find(
+          (sp: any) => sp.id === id || (sp.name && name && sp.name.toLowerCase().trim() === name.toLowerCase().trim())
+        );
+        const eff = { ...c, ...(savedCandidateRecord || {}) };
+
         // Resolve Recruiter Name who added / parsed this candidate
         const isUuid = (val?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val || '');
         let recruiterName =
-          c.recruiterName ||
-          c.user?.name ||
-          c.uploadedByName ||
-          c.assignedRecruiter ||
-          c.recruiter ||
-          c.screenedBy;
-        if (!recruiterName && c.user?.email) {
-          recruiterName = c.user.email;
+          eff.recruiterName ||
+          eff.user?.name ||
+          eff.uploadedByName ||
+          eff.assignedRecruiter ||
+          eff.recruiter ||
+          eff.screenedBy;
+        if (!recruiterName && eff.user?.email) {
+          recruiterName = eff.user.email;
         }
         if (!recruiterName || isUuid(recruiterName)) {
-          if (c.uploadedBy && !isUuid(c.uploadedBy)) {
-            recruiterName = c.uploadedBy;
-          } else if (c.createdBy && !isUuid(c.createdBy)) {
-            recruiterName = c.createdBy;
+          if (eff.uploadedBy && !isUuid(eff.uploadedBy)) {
+            recruiterName = eff.uploadedBy;
+          } else if (eff.createdBy && !isUuid(eff.createdBy)) {
+            recruiterName = eff.createdBy;
           } else {
             recruiterName = user?.name || user?.email || 'Recruiter';
           }
@@ -468,40 +511,40 @@ export default function PipelinePage() {
           requisitionTitle,
           decision,
           recruiterName,
-          submissionDate: c.submissionDate,
-          jdName: c.jdName,
-          clientName: c.clientName,
-          candidateName: c.candidateName,
-          emailId: c.emailId || c.email,
-          phoneNumber: c.phoneNumber || c.phone,
-          currentLocation: c.currentLocation || c.location,
-          currentDesignation: c.currentDesignation || c.role || c.currentTitle,
-          totalWorkExperience: c.totalWorkExperience || c.exp || c.totalExperience,
-          relevantWorkExperience: c.relevantWorkExperience,
-          noticePeriod: c.noticePeriod,
-          currentCtc: c.currentCtc,
-          expectedCtc: c.expectedCtc,
-          cvLink: c.cvLink,
-          atsScoreDisplay: c.atsScoreDisplay,
-          candidateStatus: c.candidateStatus,
-          screeningStatus: c.screeningStatus,
-          recruiterRemarks: c.recruiterRemarks,
-          interviewRound1: c.interviewRound1,
-          interviewRound2: c.interviewRound2,
-          finalInterview: c.finalInterview,
-          offerStatus: c.offerStatus,
-          joiningDate: c.joiningDate,
-          joiningStatus: c.joiningStatus,
-          rejectionReason: c.rejectionReason,
-          lastFollowUpDate: c.lastFollowUpDate,
-          nextFollowUpDate: c.nextFollowUpDate,
-          response: c.response,
-          overallStatus: c.overallStatus,
-          isRecruiterApproved: c.isRecruiterApproved === true,
-          recruiterApprovalStatus: c.recruiterApprovalStatus || (c.isRecruiterApproved ? 'APPROVED' : 'PENDING_APPROVAL'),
-          recruiterApprovedBy: c.recruiterApprovedBy,
-          recruiterApprovedAt: c.recruiterApprovedAt,
-          recruiterApprovalNotes: c.recruiterApprovalNotes,
+          submissionDate: eff.submissionDate,
+          jdName: eff.jdName,
+          clientName: eff.clientName,
+          candidateName: eff.candidateName,
+          emailId: eff.emailId || eff.email,
+          phoneNumber: eff.phoneNumber || eff.phone,
+          currentLocation: eff.currentLocation || eff.location,
+          currentDesignation: eff.currentDesignation || eff.role || eff.currentTitle,
+          totalWorkExperience: eff.totalWorkExperience || eff.exp || eff.totalExperience,
+          relevantWorkExperience: eff.relevantWorkExperience,
+          noticePeriod: eff.noticePeriod,
+          currentCtc: eff.currentCtc,
+          expectedCtc: eff.expectedCtc,
+          cvLink: eff.cvLink,
+          atsScoreDisplay: eff.atsScoreDisplay,
+          candidateStatus: eff.candidateStatus,
+          screeningStatus: eff.screeningStatus,
+          recruiterRemarks: eff.recruiterRemarks,
+          interviewRound1: eff.interviewRound1,
+          interviewRound2: eff.interviewRound2,
+          finalInterview: eff.finalInterview,
+          offerStatus: eff.offerStatus,
+          joiningDate: eff.joiningDate,
+          joiningStatus: eff.joiningStatus,
+          rejectionReason: eff.rejectionReason,
+          lastFollowUpDate: eff.lastFollowUpDate,
+          nextFollowUpDate: eff.nextFollowUpDate,
+          response: eff.response,
+          overallStatus: eff.overallStatus,
+          isRecruiterApproved: eff.isRecruiterApproved === true,
+          recruiterApprovalStatus: eff.recruiterApprovalStatus || (eff.isRecruiterApproved ? 'APPROVED' : 'PENDING_APPROVAL'),
+          recruiterApprovedBy: eff.recruiterApprovedBy,
+          recruiterApprovedAt: eff.recruiterApprovedAt,
+          recruiterApprovalNotes: eff.recruiterApprovalNotes,
         });
       }
 
@@ -586,7 +629,7 @@ export default function PipelinePage() {
     return () => {
       isMounted = false;
     };
-  }, [user]);
+  }, [user, pipelineRefreshKey]);
 
   // Filter candidates by requisition
   const filteredCandidates = useMemo(

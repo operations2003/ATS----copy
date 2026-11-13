@@ -16,7 +16,10 @@ const STATUS_OPTIONS = [
   'Round 1 Phase Scheduled',
   'Round 2 Phase Scheduled',
   'Interview Completed',
+  'Selected',
   'Selected / Offer',
+  'Offered',
+  'Joined',
   'Offer Declined',
   'On Hold',
   'Not a Fit',
@@ -329,6 +332,213 @@ function ClientSharePortalContent() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Core Sync: Update Recruiter Pipeline when Candidate changes in Client Portal
+  // ─────────────────────────────────────────────────────────────────────────────
+  const syncToRecruiterPipeline = (
+    candidateId: string,
+    candidateName: string,
+    candidateEmail: string | undefined,
+    targetStage: string,
+    extraData: {
+      status?: string;
+      interviewRound?: string;
+      interviewDate?: string;
+      interviewer?: string;
+      meetingPlace?: string;
+      offerStatus?: string;
+      joiningDate?: string;
+      joiningStatus?: string;
+      rejectionReason?: string;
+      feedback?: string;
+      notes?: string;
+      overallStatus?: string;
+      dossierFields?: any;
+    } = {}
+  ) => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      // 1. Update tasknera_recruitment_pipeline_v1
+      const pipelineRaw = localStorage.getItem('tasknera_recruitment_pipeline_v1');
+      let pipeList: any[] = [];
+      if (pipelineRaw) {
+        try {
+          const parsed = JSON.parse(pipelineRaw);
+          if (Array.isArray(parsed)) pipeList = parsed;
+        } catch {}
+      }
+
+      const cleanCName = (candidateName || '').toLowerCase().trim();
+      const cleanCEmail = (candidateEmail || '').toLowerCase().trim();
+
+      const matchFn = (c: any) =>
+        (c.id && (c.id === candidateId || String(c.id).toLowerCase() === String(candidateId).toLowerCase())) ||
+        (c.name && cleanCName && c.name.toLowerCase().trim() === cleanCName) ||
+        (c.emailId && cleanCEmail && c.emailId.toLowerCase().trim() === cleanCEmail) ||
+        (c.email && cleanCEmail && c.email.toLowerCase().trim() === cleanCEmail);
+
+      let found = false;
+      pipeList = pipeList.map(c => {
+        if (matchFn(c)) {
+          found = true;
+          return {
+            ...c,
+            stage: targetStage,
+            currentStatus: extraData.status || extraData.overallStatus || c.currentStatus,
+            overallStatus: extraData.overallStatus || extraData.status || c.overallStatus,
+            offerStatus: extraData.offerStatus || c.offerStatus,
+            joiningDate: extraData.joiningDate || c.joiningDate,
+            joiningStatus: extraData.joiningStatus || c.joiningStatus,
+            rejectionReason: extraData.rejectionReason || c.rejectionReason,
+            notes: extraData.feedback || extraData.notes || c.notes,
+            ...(extraData.status === 'Not a Fit' || extraData.status === 'Rejected' ? { decision: 'DO NOT SUBMIT' } : {}),
+            ...(extraData.dossierFields || {})
+          };
+        }
+        return c;
+      });
+
+      if (!found) {
+        pipeList.push({
+          id: candidateId,
+          name: candidateName,
+          role: extraData.dossierFields?.currentDesignation || 'Candidate',
+          score: 85,
+          stage: targetStage,
+          requisitionId: 'all',
+          currentStatus: extraData.status || extraData.overallStatus || 'Active',
+          overallStatus: extraData.overallStatus || extraData.status,
+          offerStatus: extraData.offerStatus,
+          joiningDate: extraData.joiningDate,
+          joiningStatus: extraData.joiningStatus,
+          rejectionReason: extraData.rejectionReason,
+          notes: extraData.feedback || extraData.notes,
+          emailId: candidateEmail,
+          ...(extraData.dossierFields || {})
+        });
+      }
+
+      localStorage.setItem('tasknera_recruitment_pipeline_v1', JSON.stringify(pipeList));
+
+      // 2. If an interview was scheduled or round assigned, record into tasknera_interviews_frontend_v1
+      if (extraData.interviewDate || targetStage === 'Round 1 Phase' || targetStage === 'Round 2 Phase') {
+        try {
+          const rawInterviews = localStorage.getItem('tasknera_interviews_frontend_v1');
+          let interviewStore: any = {};
+          if (rawInterviews) {
+            try { interviewStore = JSON.parse(rawInterviews); } catch {}
+          }
+          const candidateKey = candidateId.toLowerCase();
+          const nameKey = cleanCName;
+
+          const interviewEntry = {
+            id: `int-${Date.now()}`,
+            round: extraData.interviewRound || (targetStage === 'Round 2 Phase' ? 'Round 2 Phase' : 'Round 1 Phase'),
+            startAt: extraData.interviewDate || new Date().toISOString(),
+            interviewer: extraData.interviewer || `${clientName} Interview Team`,
+            meetingPlace: extraData.meetingPlace || 'Client Video Meeting',
+            notes: extraData.notes || `Scheduled by ${clientName} client portal`,
+            status: 'scheduled',
+            candidateId,
+            candidateName,
+          };
+
+          const updateList = (existing: any[] = []) => [
+            ...existing.filter(i => i.round !== interviewEntry.round),
+            interviewEntry
+          ];
+
+          interviewStore[candidateKey] = updateList(interviewStore[candidateKey]);
+          if (nameKey && nameKey !== candidateKey) {
+            interviewStore[nameKey] = updateList(interviewStore[nameKey]);
+          }
+
+          localStorage.setItem('tasknera_interviews_frontend_v1', JSON.stringify(interviewStore));
+        } catch {}
+      }
+
+      // 3. Update tasknera_candidates_pool
+      try {
+        const poolRaw = localStorage.getItem('tasknera_candidates_pool');
+        if (poolRaw) {
+          const pool = JSON.parse(poolRaw);
+          if (Array.isArray(pool)) {
+            const updatedPool = pool.map(c => {
+              if (matchFn(c)) {
+                return {
+                  ...c,
+                  stage: targetStage,
+                  currentStatus: extraData.status || extraData.overallStatus || c.currentStatus,
+                  offerStatus: extraData.offerStatus || c.offerStatus,
+                  joiningDate: extraData.joiningDate || c.joiningDate,
+                  joiningStatus: extraData.joiningStatus || c.joiningStatus,
+                };
+              }
+              return c;
+            });
+            localStorage.setItem('tasknera_candidates_pool', JSON.stringify(updatedPool));
+          }
+        }
+      } catch {}
+
+      // 4. Update any job-specific candidate storage keys
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('tasknera_candidates_') && key !== 'tasknera_candidates_pool') {
+          try {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const list = JSON.parse(raw);
+              if (Array.isArray(list)) {
+                let modified = false;
+                const updatedList = list.map(c => {
+                  if (matchFn(c)) {
+                    modified = true;
+                    return {
+                      ...c,
+                      stage: targetStage,
+                      currentStatus: extraData.status || extraData.overallStatus || c.currentStatus,
+                      offerStatus: extraData.offerStatus || c.offerStatus,
+                      joiningDate: extraData.joiningDate || c.joiningDate,
+                      joiningStatus: extraData.joiningStatus || c.joiningStatus,
+                    };
+                  }
+                  return c;
+                });
+                if (modified) {
+                  localStorage.setItem(key, JSON.stringify(updatedList));
+                }
+              }
+            }
+          } catch {}
+        }
+      }
+
+      // 5. Ingest / update in atsStore
+      try {
+        const storeCand = atsStore.getCandidate(candidateId);
+        if (storeCand) {
+          (storeCand as any).stage = targetStage;
+          if (targetStage === 'Joined') storeCand.stageStatus = 'JOINED' as any;
+          else if (targetStage === 'Offered') storeCand.stageStatus = 'OFFERED' as any;
+          else if (targetStage === 'Selected') storeCand.stageStatus = 'SELECTED' as any;
+        }
+      } catch {}
+
+      // 6. Broadcast sync events so recruiter pipeline immediately refreshes in real-time
+      window.dispatchEvent(new CustomEvent('tasknera_portal_sync', {
+        detail: { candidateId, candidateName, stage: targetStage, status: extraData.status }
+      }));
+      window.dispatchEvent(new CustomEvent('tasknera_pipeline_sync', {
+        detail: { candidateId, candidateName, stage: targetStage, status: extraData.status }
+      }));
+      localStorage.setItem('tasknera_portal_last_sync', String(Date.now()));
+    } catch (e) {
+      console.warn('[Sync to Pipeline Error]', e);
+    }
+  };
+
   const handleSavePortalDossier = (data: SubmissionDossierData) => {
     if (!editingDossierCandidate) return;
     const updated = candidates.map(c => {
@@ -351,31 +561,33 @@ function ClientSharePortalContent() {
       localStorage.setItem(storageKey, JSON.stringify(updated));
     } catch {}
 
-    // Two-way sync to pipeline
-    try {
-      const pipelineRaw = localStorage.getItem('tasknera_recruitment_pipeline_v1');
-      if (pipelineRaw) {
-        const pipeCands = JSON.parse(pipelineRaw);
-        if (Array.isArray(pipeCands)) {
-          const updatedPipe = pipeCands.map((p: any) => {
-            if (p.id === editingDossierCandidate.id || p.name === editingDossierCandidate.name) {
-              return {
-                ...p,
-                ...data,
-                stage: data.overallStatus?.toLowerCase().includes('interview') ? 'Interviewing' :
-                       data.overallStatus?.toLowerCase().includes('offer') ? 'Offered' :
-                       data.overallStatus?.toLowerCase().includes('hire') ? 'Hired' : p.stage,
-                notes: data.recruiterRemarks || p.notes
-              };
-            }
-            return p;
-          });
-          localStorage.setItem('tasknera_recruitment_pipeline_v1', JSON.stringify(updatedPipe));
-        }
-      }
-    } catch {}
+    // Resolve target stage
+    let targetStage = 'Shortlisted';
+    const norm = (data.overallStatus || '').toLowerCase();
+    if (norm.includes('joined')) targetStage = 'Joined';
+    else if (norm.includes('offer')) targetStage = 'Offered';
+    else if (norm.includes('select')) targetStage = 'Selected';
+    else if (norm.includes('round 2')) targetStage = 'Round 2 Phase';
+    else if (norm.includes('round 1')) targetStage = 'Round 1 Phase';
+    else if (norm.includes('reject') || norm.includes('not a fit')) targetStage = 'Screening';
 
-    window.dispatchEvent(new CustomEvent('tasknera_portal_sync'));
+    syncToRecruiterPipeline(
+      editingDossierCandidate.id,
+      editingDossierCandidate.name,
+      editingDossierCandidate.email || editingDossierCandidate.emailId,
+      targetStage,
+      {
+        status: data.overallStatus,
+        overallStatus: data.overallStatus,
+        offerStatus: data.offerStatus,
+        joiningDate: data.joiningDate,
+        joiningStatus: data.joiningStatus,
+        rejectionReason: data.rejectionReason,
+        notes: data.recruiterRemarks,
+        dossierFields: data,
+      }
+    );
+
     showToast(`Updated 30-field dossier for ${editingDossierCandidate.name}`);
     setIsDossierModalOpen(false);
     setEditingDossierCandidate(null);
@@ -430,46 +642,59 @@ function ClientSharePortalContent() {
       localStorage.setItem(storageKey, JSON.stringify(updated));
     } catch {}
 
-    // Two-way sync with recruiter pipeline
-    try {
-      const pipelineRaw = localStorage.getItem('tasknera_recruitment_pipeline_v1');
-      if (pipelineRaw) {
-        const pipeCands = JSON.parse(pipelineRaw);
-        if (Array.isArray(pipeCands)) {
-          const updatedPipe = pipeCands.map((p: any) => {
-            if (p.id === lifecycleCandidate.id || p.name === lifecycleCandidate.name) {
-              const stageMapping =
-                data.overallStatus === 'Round 1 Phase Scheduled' ? 'Round 1 Phase' :
-                data.overallStatus === 'Round 2 Phase Scheduled' ? 'Round 2 Phase' :
-                data.overallStatus === 'Interview Completed' ? 'Interviewing' :
-                data.overallStatus === 'Selected / Offer' ? 'Selected' :
-                data.overallStatus === 'Joined' ? 'Joined' :
-                data.overallStatus === 'Not a Fit' ? 'Rejected' : p.stage;
+    // Resolve pipeline stage based on client lifecycle update
+    let targetStage = 'Shortlisted';
+    const normOverall = (data.overallStatus || '').toLowerCase();
+    const normOffer = (data.offerStatus || '').toLowerCase();
+    const normJoining = (data.joiningStatus || '').toLowerCase();
 
-              return {
-                ...p,
-                stage: stageMapping,
-                interviewRound1: data.interviewRound1,
-                interviewRound2: data.interviewRound2,
-                finalInterview: data.finalInterview,
-                offerStatus: data.offerStatus,
-                joiningDate: data.joiningDate,
-                joiningStatus: data.joiningStatus,
-                rejectionReason: data.rejectionReason,
-                lastFollowUpDate: data.lastFollowUpDate,
-                nextFollowUpDate: data.nextFollowUpDate,
-                response: data.response,
-                overallStatus: data.overallStatus,
-                notes: data.response || p.notes,
-                ...(data.overallStatus === 'Not a Fit' ? { decision: 'DO NOT SUBMIT' } : {})
-              };
-            }
-            return p;
-          });
-          localStorage.setItem('tasknera_recruitment_pipeline_v1', JSON.stringify(updatedPipe));
+    if (normOverall.includes('joined') || normJoining.includes('joined company') || normJoining === 'joined') {
+      targetStage = 'Joined';
+    } else if (normOverall.includes('offered') || normOffer.includes('offer extended') || normOffer.includes('offer accepted') || normOffer.includes('offer processing')) {
+      targetStage = 'Offered';
+    } else if (normOverall.includes('selected') || normOverall.includes('selected / offer') || data.finalInterview?.toLowerCase().includes('pass') || data.finalInterview?.toLowerCase().includes('recommended for offer')) {
+      targetStage = 'Selected';
+    } else if (normOverall.includes('round 2') || data.interviewRound2?.toLowerCase().includes('scheduled') || data.interviewRound2?.toLowerCase().includes('cleared')) {
+      targetStage = 'Round 2 Phase';
+    } else if (normOverall.includes('round 1') || data.interviewRound1?.toLowerCase().includes('scheduled')) {
+      targetStage = 'Round 1 Phase';
+    } else if (normOverall.includes('interview completed')) {
+      targetStage = 'Round 2 Phase';
+    } else if (normOverall.includes('not a fit') || normOverall.includes('reject')) {
+      targetStage = 'Screening';
+    }
+
+    // Two-way sync to recruiter pipeline
+    syncToRecruiterPipeline(
+      lifecycleCandidate.id,
+      lifecycleCandidate.name,
+      lifecycleCandidate.email || lifecycleCandidate.emailId,
+      targetStage,
+      {
+        status: data.overallStatus,
+        overallStatus: data.overallStatus,
+        interviewRound: targetStage,
+        offerStatus: data.offerStatus,
+        joiningDate: data.joiningDate,
+        joiningStatus: data.joiningStatus,
+        rejectionReason: data.rejectionReason,
+        notes: data.response,
+        feedback: data.response,
+        dossierFields: {
+          interviewRound1: data.interviewRound1,
+          interviewRound2: data.interviewRound2,
+          finalInterview: data.finalInterview,
+          offerStatus: data.offerStatus,
+          joiningDate: data.joiningDate,
+          joiningStatus: data.joiningStatus,
+          rejectionReason: data.rejectionReason,
+          lastFollowUpDate: data.lastFollowUpDate,
+          nextFollowUpDate: data.nextFollowUpDate,
+          response: data.response,
+          overallStatus: data.overallStatus,
         }
       }
-    } catch {}
+    );
 
     // Add to Transparency Activity Feed
     const newActivity: TransparencyActivityItem = {
@@ -483,7 +708,6 @@ function ClientSharePortalContent() {
     };
     setActivities(prev => [newActivity, ...prev]);
 
-    window.dispatchEvent(new CustomEvent('tasknera_portal_sync'));
     showToast(`✓ Updated Interview & Lifecycle for ${lifecycleCandidate.name}`);
     setLifecycleCandidate(null);
   };
@@ -1235,24 +1459,22 @@ function ClientSharePortalContent() {
       }
 
       // Two-way sync back into the Recruiter Pipeline
-      if (typeof window !== 'undefined') {
-        try {
-          const rawPipe = localStorage.getItem('tasknera_recruitment_pipeline_v1');
-          if (rawPipe) {
-            const list = JSON.parse(rawPipe);
-            if (Array.isArray(list)) {
-              const targetStage = interviewRound === 'Round 2 Phase' ? 'Round 2 Phase' : 'Round 1 Phase';
-              const updatedPipe = list.map((c: any) => {
-                if (c.id === interviewCandidate.id || c.name === interviewCandidate.name) {
-                  return { ...c, stage: targetStage };
-                }
-                return c;
-              });
-              localStorage.setItem('tasknera_recruitment_pipeline_v1', JSON.stringify(updatedPipe));
-            }
-          }
-        } catch {}
-      }
+      const targetStage = interviewRound === 'Round 2 Phase' ? 'Round 2 Phase' : 'Round 1 Phase';
+      syncToRecruiterPipeline(
+        interviewCandidate.id,
+        interviewCandidate.name,
+        interviewCandidate.email || interviewCandidate.emailId,
+        targetStage,
+        {
+          status: newStatus,
+          overallStatus: newStatus,
+          interviewRound,
+          interviewDate: interviewStartAt,
+          interviewer: interviewInterviewer,
+          meetingPlace: interviewMeetingPlace,
+          notes: interviewNotes,
+        }
+      );
 
       // Add to Transparency Activity Feed
       const newActivity: TransparencyActivityItem = {
@@ -1326,33 +1548,39 @@ function ClientSharePortalContent() {
       }
 
       // Two-way sync back into the Recruiter Pipeline
-      if (typeof window !== 'undefined') {
-        try {
-          const rawPipe = localStorage.getItem('tasknera_recruitment_pipeline_v1');
-          if (rawPipe) {
-            const list = JSON.parse(rawPipe);
-            if (Array.isArray(list)) {
-              let targetStage: string | null = null;
-              if (feedbackStatus === 'Selected' || feedbackStatus === 'Selected / Offer') targetStage = 'Selected';
-              else if (feedbackStatus === 'Offered') targetStage = 'Offered';
-              else if (feedbackStatus === 'Joined') targetStage = 'Joined';
-
-              const updatedPipe = list.map((c: any) => {
-                if (c.id === feedbackCandidate.id || c.name === feedbackCandidate.name) {
-                  const isReject = feedbackStatus === 'Not a Fit' || feedbackStatus === 'Rejected';
-                  return {
-                    ...c,
-                    ...(targetStage ? { stage: targetStage } : {}),
-                    ...(isReject ? { decision: 'DO NOT SUBMIT' } : {})
-                  };
-                }
-                return c;
-              });
-              localStorage.setItem('tasknera_recruitment_pipeline_v1', JSON.stringify(updatedPipe));
-            }
-          }
-        } catch {}
+      let targetStage = 'Shortlisted';
+      const normStatus = (feedbackStatus || '').toLowerCase();
+      if (normStatus.includes('joined')) {
+        targetStage = 'Joined';
+      } else if (normStatus.includes('offered') || normStatus === 'offered') {
+        targetStage = 'Offered';
+      } else if (normStatus.includes('selected')) {
+        targetStage = 'Selected';
+      } else if (normStatus.includes('round 2')) {
+        targetStage = 'Round 2 Phase';
+      } else if (normStatus.includes('round 1')) {
+        targetStage = 'Round 1 Phase';
+      } else if (normStatus.includes('interview completed')) {
+        targetStage = 'Round 2 Phase';
+      } else if (normStatus.includes('not a fit') || normStatus.includes('reject')) {
+        targetStage = 'Screening';
       }
+
+      syncToRecruiterPipeline(
+        feedbackCandidate.id,
+        feedbackCandidate.name,
+        feedbackCandidate.email || feedbackCandidate.emailId,
+        targetStage,
+        {
+          status: feedbackStatus,
+          overallStatus: feedbackStatus,
+          feedback: feedbackNotes,
+          notes: feedbackNotes,
+          offerStatus: isJoined ? 'Offer Accepted' : isOffer ? 'Offer Extended & Processing' : isReject ? 'Not Offered' : undefined,
+          joiningStatus: isJoined ? 'Joined Company' : isOffer ? 'Offer Accepted - Awaiting Joining' : isReject ? 'Rejected' : undefined,
+          rejectionReason: isReject ? (feedbackNotes || 'Candidate profile not aligned with technical benchmark criteria') : undefined,
+        }
+      );
 
       // Add to Activity Feed
       const newActivity: TransparencyActivityItem = {
