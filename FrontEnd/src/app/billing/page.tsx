@@ -10,8 +10,7 @@ interface PlanDefinition {
   id: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
   name: string;
   badge: string;
-  priceINR: string;
-  priceUSD: string;
+  price: string;
   period: string;
   seats: number;
   maxJobs: number;
@@ -26,8 +25,7 @@ const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
     id: 'STARTER',
     name: 'Starter',
     badge: 'Boutique Agencies',
-    priceINR: '₹3,999',
-    priceUSD: '$49',
+    price: '$49',
     period: '/ month',
     seats: 5,
     maxJobs: 20,
@@ -47,8 +45,7 @@ const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
     id: 'PROFESSIONAL',
     name: 'Professional',
     badge: 'Most Popular',
-    priceINR: '₹9,999',
-    priceUSD: '$119',
+    price: '$119',
     period: '/ month',
     seats: 15,
     maxJobs: 40,
@@ -70,8 +67,7 @@ const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
     id: 'ENTERPRISE',
     name: 'Enterprise',
     badge: 'Corporate Scale',
-    priceINR: 'Custom',
-    priceUSD: 'Custom',
+    price: 'Custom',
     period: 'tailored billing',
     seats: 999,
     maxJobs: 999,
@@ -418,13 +414,8 @@ export default function BillingPage() {
                     </div>
 
                     <div className="mb-3">
-                      <span className="text-2xl font-black text-slate-900">{plan.priceINR}</span>
+                      <span className="text-2xl font-black text-slate-900">{plan.price}</span>
                       <span className="text-xs text-slate-500 font-medium"> {plan.period}</span>
-                      {plan.priceUSD !== 'Custom' && (
-                        <div className="text-[11px] text-slate-400 font-medium">
-                          or {plan.priceUSD} / month
-                        </div>
-                      )}
                     </div>
 
                     <p className="text-xs text-slate-500 mb-5 leading-relaxed">

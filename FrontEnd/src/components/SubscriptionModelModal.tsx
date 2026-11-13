@@ -20,8 +20,7 @@ export const SubscriptionModelModal: React.FC = () => {
       id: 'STARTER' as const,
       name: 'Starter Plan',
       badge: 'Boutique Agencies',
-      priceINR: '₹3,999',
-      priceUSD: '$49',
+      price: '$49',
       period: '/ month',
       description: 'Essential recruitment intelligence for small staffing teams and independent recruiters.',
       features: [
@@ -39,8 +38,7 @@ export const SubscriptionModelModal: React.FC = () => {
       id: 'PROFESSIONAL' as const,
       name: 'Professional Plan',
       badge: 'Most Popular',
-      priceINR: '₹9,999',
-      priceUSD: '$119',
+      price: '$119',
       period: '/ month',
       description: 'Comprehensive hiring automation and benchmarking for fast-scaling recruitment agencies.',
       features: [
@@ -60,8 +58,7 @@ export const SubscriptionModelModal: React.FC = () => {
       id: 'ENTERPRISE' as const,
       name: 'Enterprise Plan',
       badge: 'Corporate Scale',
-      priceINR: 'Custom',
-      priceUSD: 'Custom',
+      price: 'Custom',
       period: 'tailored billing',
       description: 'Custom architecture, dedicated SLAs, and custom LLM tuning for corporate talent acquisition.',
       features: [
@@ -185,10 +182,10 @@ export const SubscriptionModelModal: React.FC = () => {
                 {/* Price Display */}
                 <div className="flex items-baseline gap-1.5 mb-6 pb-6 border-b border-slate-100">
                   <span className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-                    {plan.priceINR}
+                    {plan.price}
                   </span>
                   <span className="text-xs font-semibold text-slate-500">
-                    ({plan.priceUSD}) {plan.period}
+                    {plan.period}
                   </span>
                 </div>
 
@@ -319,8 +316,8 @@ export const SubscriptionModelModal: React.FC = () => {
                       onChange={(e) => setSelectedPlan(e.target.value as any)}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange"
                     >
-                      <option value="STARTER">Starter Plan (₹3,999 / $49 mo)</option>
-                      <option value="PROFESSIONAL">Professional Plan (₹9,999 / $119 mo) - Recommended</option>
+                      <option value="STARTER">Starter Plan ($49 / month)</option>
+                      <option value="PROFESSIONAL">Professional Plan ($119 / month) - Recommended</option>
                       <option value="ENTERPRISE">Enterprise Plan (Custom SLA & Scale)</option>
                     </select>
                   </div>
