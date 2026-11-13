@@ -23,6 +23,7 @@ import {
 import CandidateLinkModal from '@/components/CandidateLinkModal';
 import HireIQCandidateCompareAndSubmitModal, { CandidateComparisonItem } from '@/components/evaluation/HireIQCandidateCompareAndSubmitModal';
 import { RequirementStatus, ConfidenceLevel } from '@/types';
+import { getResolvedBackendUrl } from '@/lib/backendUrl';
 
 
 export interface CandidateEducation {
@@ -662,7 +663,7 @@ export default function JobCandidatesPage() {
     }
   }, [selectedCandidate]);
 
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  const backendUrl = getResolvedBackendUrl();
 
   // Lazy fetch full candidate record (rawText, projects, certifications, etc.) when drawer is opened
   useEffect(() => {
@@ -1139,29 +1140,88 @@ export default function JobCandidatesPage() {
       setJob(jobInfo);
 
       // 2. Fetch Candidates
+      let fetchedCandidates: any[] = [];
+      let backendSuccessful = false;
+
+      // 2a. Try Next.js same-origin API route (/api/jobs/${jobId}/candidates)
       try {
-        const candRes = await fetch(`${backendUrl}/jobs/${jobId}/candidates`, {
+        const nextApiRes = await fetch(`/api/jobs/${jobId}/candidates`, {
           headers: {
             ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
           }
         });
-        if (candRes.ok) {
-          const candData = await candRes.json();
-          const list = Array.isArray(candData.candidates) ? candData.candidates : [];
-          setCandidates(list);
-          if (typeof window !== 'undefined') {
-            try {
-              localStorage.setItem(`tasknera_candidates_${jobId}`, JSON.stringify(list));
-              localStorage.setItem(`tasknera_candidates_count_${jobId}`, String(list.length));
-            } catch {}
+        if (nextApiRes.ok) {
+          const nextData = await nextApiRes.json();
+          if (Array.isArray(nextData.candidates)) {
+            fetchedCandidates = nextData.candidates;
+            backendSuccessful = true;
           }
-        } else {
-          const localSaved = JSON.parse(localStorage.getItem(`tasknera_candidates_${jobId}`) || '[]');
-          setCandidates(localSaved);
         }
-      } catch {
-        const localSaved = JSON.parse(localStorage.getItem(`tasknera_candidates_${jobId}`) || '[]');
-        setCandidates(localSaved);
+      } catch {}
+
+      // 2b. If not loaded or empty, try resolved backend URL
+      if (!backendSuccessful) {
+        try {
+          const candRes = await fetch(`${backendUrl}/jobs/${jobId}/candidates`, {
+            headers: {
+              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+            }
+          });
+          if (candRes.ok) {
+            const candData = await candRes.json();
+            const list = Array.isArray(candData.candidates) ? candData.candidates : [];
+            if (list.length > 0 || fetchedCandidates.length === 0) {
+              fetchedCandidates = list;
+              backendSuccessful = true;
+            }
+          }
+        } catch {}
+      }
+
+      // 2c. Merge with localStorage cache
+      let localSaved: any[] = [];
+      try {
+        localSaved = JSON.parse(localStorage.getItem(`tasknera_candidates_${jobId}`) || '[]');
+      } catch {}
+
+      // 2d. Check global public applied candidates for this job
+      let publicApplied: any[] = [];
+      try {
+        const allPublic = JSON.parse(localStorage.getItem('tasknera_public_applied_candidates') || '[]');
+        publicApplied = allPublic.filter((c: any) =>
+          String(c.jobId) === String(jobId) ||
+          String(c.job_id) === String(jobId) ||
+          (jobInfo.id && String(c.jobId) === String(jobInfo.id))
+        );
+      } catch {}
+
+      // Combine and deduplicate across all sources
+      const candidateMap = new Map<string, any>();
+      for (const c of localSaved) {
+        const key = (c.email && c.email.trim().toLowerCase()) || (c.fileHash && c.fileHash.trim()) || c.id;
+        if (key) candidateMap.set(key, c);
+      }
+      for (const c of publicApplied) {
+        const key = (c.email && c.email.trim().toLowerCase()) || (c.fileHash && c.fileHash.trim()) || c.id;
+        if (key) {
+          candidateMap.set(key, { ...(candidateMap.get(key) || {}), ...c });
+        }
+      }
+      for (const c of fetchedCandidates) {
+        const key = (c.email && c.email.trim().toLowerCase()) || (c.fileHash && c.fileHash.trim()) || c.id;
+        if (key) {
+          candidateMap.set(key, { ...(candidateMap.get(key) || {}), ...c });
+        }
+      }
+
+      const finalList = Array.from(candidateMap.values());
+      setCandidates(finalList);
+
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(`tasknera_candidates_${jobId}`, JSON.stringify(finalList));
+          localStorage.setItem(`tasknera_candidates_count_${jobId}`, String(finalList.length));
+        } catch {}
       }
     } catch (err: any) {
       console.error('Error loading candidates:', err);
@@ -1174,6 +1234,27 @@ export default function JobCandidatesPage() {
   useEffect(() => {
     fetchJobAndCandidates();
   }, [fetchJobAndCandidates]);
+
+  // Real-time synchronization when candidates apply via public link or in another tab
+  useEffect(() => {
+    const handleCandidatesUpdate = (event: any) => {
+      if (!event.detail?.jobId || String(event.detail.jobId) === String(jobId)) {
+        fetchJobAndCandidates();
+      }
+    };
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `tasknera_candidates_${jobId}` || e.key === 'tasknera_public_applied_candidates') {
+        fetchJobAndCandidates();
+      }
+    };
+
+    window.addEventListener('tasknera_candidates_updated', handleCandidatesUpdate as EventListener);
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('tasknera_candidates_updated', handleCandidatesUpdate as EventListener);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [fetchJobAndCandidates, jobId]);
 
   // Lock background scroll when modal drawer is open
   useEffect(() => {

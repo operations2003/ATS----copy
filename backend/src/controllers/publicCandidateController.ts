@@ -417,6 +417,8 @@ export const getPublicJobByToken = async (req: Request, res: Response): Promise<
       success: true,
       isAcceptingApplications: true,
       job: {
+        id: job.id,
+        jobId: job.id,
         token: job.publicToken || token,
         position: job.position || 'Open Requisition',
         client: job.client || 'Hiring Organization',
@@ -825,6 +827,27 @@ export const applyPublicCandidate = async (req: Request, res: Response): Promise
       message: 'Application submitted successfully! Our recruitment team will review your qualifications.',
       candidateName: candidateRecord.name,
       jobTitle: job.position,
+      jobId: job.id,
+      candidate: {
+        id: candidateRecord.id,
+        jobId: job.id,
+        name: candidateRecord.name,
+        email: candidateRecord.email,
+        phone: candidateRecord.phone,
+        location: candidateRecord.location,
+        totalExperience: candidateRecord.totalExperience,
+        currentTitle: candidateRecord.currentTitle,
+        currentCompany: candidateRecord.currentCompany,
+        summary: candidateRecord.summary,
+        skills: candidateRecord.skills,
+        experience: candidateRecord.experience,
+        education: candidateRecord.education,
+        fileName: candidateRecord.fileName,
+        fileSize: candidateRecord.fileSize,
+        source: 'public_application',
+        uploadedAt: candidateRecord.uploadedAt,
+        parsingStatus: 'PARSED'
+      }
     });
   } catch (error: any) {
     console.error('Error in applyPublicCandidate:', error);

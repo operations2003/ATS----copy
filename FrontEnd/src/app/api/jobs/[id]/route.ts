@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getBackendBaseUrl } from '@/lib/backendUrl';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,7 @@ export async function GET(
 
     // 1. Try forwarding to backend
     try {
-      const backendUrl = process.env.BACKEND_API_URL || 'http://127.0.0.1:5000/api';
+      const backendUrl = getBackendBaseUrl();
       const res = await fetch(`${backendUrl}/jobs/${id}`, {
         headers: {
           ...(authToken ? { Authorization: authToken } : {})

@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Logo from '@/components/Logo';
+import { getResolvedBackendUrl } from '@/lib/backendUrl';
 
 interface Requirement {
   id: string;
@@ -56,12 +57,34 @@ export default function PublicJobApplyPage() {
         setIsLoading(true);
         setLoadError('');
 
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-        const res = await fetch(`${backendUrl}/public/jobs/${token}`);
-        const data = await res.json();
+        let data: any = null;
+        let jobLoaded = false;
 
-        if (!res.ok) {
-          throw new Error(data.error || 'Failed to load position information.');
+        // 1. Try Next.js same-origin API first
+        try {
+          const res = await fetch(`/api/public/jobs/${token}`);
+          if (res.ok) {
+            data = await res.json();
+            jobLoaded = true;
+          }
+        } catch {}
+
+        // 2. Try resolved backend URL if not loaded yet
+        if (!jobLoaded) {
+          const backendUrl = getResolvedBackendUrl();
+          if (backendUrl && !backendUrl.startsWith('/api')) {
+            try {
+              const res = await fetch(`${backendUrl}/public/jobs/${token}`);
+              if (res.ok) {
+                data = await res.json();
+                jobLoaded = true;
+              }
+            } catch {}
+          }
+        }
+
+        if (!data) {
+          throw new Error('This application link is invalid or may have expired.');
         }
 
         if (data.isAcceptingApplications === false) {
@@ -77,7 +100,11 @@ export default function PublicJobApplyPage() {
           return;
         }
 
-        setJob(data.job);
+        setJob(data.job || {
+          token,
+          position: data.position || 'Open Requisition',
+          client: data.client || 'Hiring Organization',
+        });
         setIsAcceptingApplications(true);
       } catch (err: any) {
         console.error('Error fetching public job:', err);
@@ -152,19 +179,97 @@ export default function PublicJobApplyPage() {
       formData.append('email', email.trim().toLowerCase());
       if (phone.trim()) formData.append('phone', phone.trim());
 
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-      const res = await fetch(`${backendUrl}/public/jobs/${token}/apply`, {
-        method: 'POST',
-        body: formData,
-      });
+      let res: Response | null = null;
+      let data: any = null;
+
+      // 1. Try Next.js same-origin route first
+      try {
+        res = await fetch(`/api/public/jobs/${token}/apply`, {
+          method: 'POST',
+          body: formData,
+        });
+        if (res.ok) {
+          data = await res.json();
+        }
+      } catch {}
+
+      // 2. Try resolved backend URL if Next.js proxy route failed
+      if (!data) {
+        const backendUrl = getResolvedBackendUrl();
+        if (backendUrl && !backendUrl.startsWith('/api')) {
+          try {
+            res = await fetch(`${backendUrl}/public/jobs/${token}/apply`, {
+              method: 'POST',
+              body: formData,
+            });
+            if (res.ok) {
+              data = await res.json();
+            }
+          } catch {}
+        }
+      }
 
       clearTimeout(timer1);
       clearTimeout(timer2);
 
-      const data = await res.json();
+      if (!data && res) {
+        data = await res.json().catch(() => ({}));
+      }
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to submit application. Please try again.');
+      if (!res || !res.ok) {
+        throw new Error(data?.error || 'Failed to submit application. Please try again.');
+      }
+
+      // Store in localStorage so recruiter view reflects application immediately
+      if (typeof window !== 'undefined') {
+        try {
+          const targetJobId = data.jobId || (job as any)?.id || (job as any)?.jobId || `job-${token}`;
+          const appliedCandidate = data.candidate || {
+            id: `cand-pub-${Date.now()}`,
+            jobId: targetJobId,
+            name: fullName.trim(),
+            email: email.trim().toLowerCase(),
+            phone: phone.trim(),
+            fileName: selectedFile.name,
+            fileSize: selectedFile.size,
+            source: 'public_application',
+            parsingStatus: 'PARSED',
+            matchScore: 80,
+            atsScore: 80,
+            matchLevel: 'STRONG MATCH',
+            decision: 'SUBMIT',
+            recommendation: 'SUBMIT',
+            uploadedAt: new Date().toISOString(),
+          };
+
+          if (targetJobId) {
+            const key = `tasknera_candidates_${targetJobId}`;
+            const existing = JSON.parse(localStorage.getItem(key) || '[]');
+            const filtered = existing.filter((c: any) =>
+              c.id !== appliedCandidate.id &&
+              c.email?.toLowerCase() !== appliedCandidate.email?.toLowerCase()
+            );
+            filtered.unshift(appliedCandidate);
+            localStorage.setItem(key, JSON.stringify(filtered));
+            localStorage.setItem(`tasknera_candidates_count_${targetJobId}`, String(filtered.length));
+          }
+
+          // Register in global pool of public applied candidates
+          const allPublic = JSON.parse(localStorage.getItem('tasknera_public_applied_candidates') || '[]');
+          const filteredAll = allPublic.filter((c: any) =>
+            c.id !== appliedCandidate.id &&
+            c.email?.toLowerCase() !== appliedCandidate.email?.toLowerCase()
+          );
+          filteredAll.unshift({ ...appliedCandidate, publicToken: token, jobId: targetJobId });
+          localStorage.setItem('tasknera_public_applied_candidates', JSON.stringify(filteredAll));
+
+          // Broadcast real-time candidate update event
+          window.dispatchEvent(new CustomEvent('tasknera_candidates_updated', {
+            detail: { jobId: targetJobId, candidate: appliedCandidate }
+          }));
+        } catch (storageErr) {
+          console.warn('[Apply Page] Error syncing candidate to local cache:', storageErr);
+        }
       }
 
       setSubmitStage('success');

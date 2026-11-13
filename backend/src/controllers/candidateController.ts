@@ -793,6 +793,7 @@ export const getCandidatesForJob = async (req: AuthRequest, res: Response): Prom
     memCandidates = memCandidates.filter(c => {
       if (!isSuperAdmin && (c.organizationId || 'org-tasknera') !== userOrgId) return false;
       if (!isSuperAdmin && !isClientAdmin && currentUserId) {
+        if (c.source === 'public_application') return true;
         const owner = c.uploadedBy || c.createdBy;
         return !owner || owner === currentUserId;
       }

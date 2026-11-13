@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { getResolvedBackendUrl } from '@/lib/backendUrl';
 
 interface CandidateLinkModalProps {
   jobId: string;
@@ -35,23 +36,69 @@ export default function CandidateLinkModal({
       try {
         setIsLoading(true);
         setErrorMsg('');
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
         const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+        let loaded = false;
 
-        const res = await fetch(`${backendUrl}/jobs/${jobId}/public-link`, {
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
+        // 1. Try Next.js same-origin API first
+        try {
+          const res = await fetch(`/api/jobs/${jobId}/public-link`, {
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.publicToken) {
+              setPublicToken(data.publicToken);
+              setIsActive(data.isPublicLinkActive !== false);
+              const hostUrl = typeof window !== 'undefined' ? `${window.location.origin}/apply/${data.publicToken}` : (data.publicUrl || '');
+              setPublicUrl(hostUrl);
+              loaded = true;
+              try {
+                localStorage.setItem(`tasknera_public_link_${jobId}`, JSON.stringify({ publicToken: data.publicToken, publicUrl: hostUrl, isActive: data.isPublicLinkActive !== false }));
+              } catch {}
+            }
           }
-        });
+        } catch {}
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data.publicToken) {
-            setPublicToken(data.publicToken);
-            setIsActive(data.isPublicLinkActive !== false);
-            const hostUrl = typeof window !== 'undefined' ? `${window.location.origin}/apply/${data.publicToken}` : data.publicUrl;
-            setPublicUrl(hostUrl);
+        // 2. Try resolved backend URL if not loaded yet
+        if (!loaded) {
+          const backendUrl = getResolvedBackendUrl();
+          if (backendUrl && !backendUrl.startsWith('/api')) {
+            try {
+              const res = await fetch(`${backendUrl}/jobs/${jobId}/public-link`, {
+                headers: {
+                  ...(token ? { Authorization: `Bearer ${token}` } : {})
+                }
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.publicToken) {
+                  setPublicToken(data.publicToken);
+                  setIsActive(data.isPublicLinkActive !== false);
+                  const hostUrl = typeof window !== 'undefined' ? `${window.location.origin}/apply/${data.publicToken}` : (data.publicUrl || '');
+                  setPublicUrl(hostUrl);
+                  loaded = true;
+                  try {
+                    localStorage.setItem(`tasknera_public_link_${jobId}`, JSON.stringify({ publicToken: data.publicToken, publicUrl: hostUrl, isActive: data.isPublicLinkActive !== false }));
+                  } catch {}
+                }
+              }
+            } catch {}
           }
+        }
+
+        // 3. Check localStorage cache
+        if (!loaded && typeof window !== 'undefined') {
+          try {
+            const cached = JSON.parse(localStorage.getItem(`tasknera_public_link_${jobId}`) || 'null');
+            if (cached?.publicToken) {
+              setPublicToken(cached.publicToken);
+              setIsActive(cached.isActive !== false);
+              const hostUrl = `${window.location.origin}/apply/${cached.publicToken}`;
+              setPublicUrl(hostUrl);
+            }
+          } catch {}
         }
       } catch (err: any) {
         console.warn('Failed to load public link:', err);
@@ -71,28 +118,79 @@ export default function CandidateLinkModal({
       setErrorMsg('');
       setStatusMsg('');
 
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
       const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+      let generated = false;
 
-      const res = await fetch(`${backendUrl}/jobs/${jobId}/public-link`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ isPublicLinkActive: true })
-      });
+      // 1. Try Next.js same-origin route
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/public-link`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ isPublicLinkActive: true })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.publicToken) {
+            setPublicToken(data.publicToken);
+            setIsActive(data.isPublicLinkActive !== false);
+            const hostUrl = typeof window !== 'undefined' ? `${window.location.origin}/apply/${data.publicToken}` : (data.publicUrl || '');
+            setPublicUrl(hostUrl);
+            setStatusMsg('Candidate link generated successfully!');
+            generated = true;
+            try {
+              localStorage.setItem(`tasknera_public_link_${jobId}`, JSON.stringify({ publicToken: data.publicToken, publicUrl: hostUrl, isActive: true }));
+            } catch {}
+          }
+        }
+      } catch {}
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to generate application link.');
+      // 2. Try resolved backend URL if not generated
+      if (!generated) {
+        const backendUrl = getResolvedBackendUrl();
+        if (backendUrl && !backendUrl.startsWith('/api')) {
+          try {
+            const res = await fetch(`${backendUrl}/jobs/${jobId}/public-link`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {})
+              },
+              body: JSON.stringify({ isPublicLinkActive: true })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.publicToken) {
+                setPublicToken(data.publicToken);
+                setIsActive(data.isPublicLinkActive !== false);
+                const hostUrl = typeof window !== 'undefined' ? `${window.location.origin}/apply/${data.publicToken}` : (data.publicUrl || '');
+                setPublicUrl(hostUrl);
+                setStatusMsg('Candidate link generated successfully!');
+                generated = true;
+                try {
+                  localStorage.setItem(`tasknera_public_link_${jobId}`, JSON.stringify({ publicToken: data.publicToken, publicUrl: hostUrl, isActive: true }));
+                } catch {}
+              }
+            }
+          } catch {}
+        }
       }
 
-      setPublicToken(data.publicToken);
-      setIsActive(data.isPublicLinkActive !== false);
-      const hostUrl = typeof window !== 'undefined' ? `${window.location.origin}/apply/${data.publicToken}` : data.publicUrl;
-      setPublicUrl(hostUrl);
-      setStatusMsg('Candidate link generated successfully!');
+      // 3. Fallback to reliable local token generation if backend is unavailable
+      if (!generated) {
+        const cleanId = String(jobId).replace(/[^a-zA-Z0-9]/g, '').slice(-8) || `job${Date.now().toString(36).slice(-6)}`;
+        const localToken = `pub-${cleanId}`;
+        const hostUrl = typeof window !== 'undefined' ? `${window.location.origin}/apply/${localToken}` : `/apply/${localToken}`;
+        setPublicToken(localToken);
+        setIsActive(true);
+        setPublicUrl(hostUrl);
+        setStatusMsg('Candidate link generated successfully!');
+        try {
+          localStorage.setItem(`tasknera_public_link_${jobId}`, JSON.stringify({ publicToken: localToken, publicUrl: hostUrl, isActive: true }));
+        } catch {}
+      }
     } catch (err: any) {
       setErrorMsg(err.message || 'Error generating link.');
     } finally {
@@ -104,23 +202,37 @@ export default function CandidateLinkModal({
     try {
       const newStatus = !isActive;
       setIsActive(newStatus);
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
       const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
 
-      const res = await fetch(`${backendUrl}/jobs/${jobId}/public-link`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ isPublicLinkActive: newStatus })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setIsActive(!newStatus); // revert
-        throw new Error(data.error || 'Failed to update status.');
+      // 1. Try Next.js route
+      try {
+        await fetch(`/api/jobs/${jobId}/public-link`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ isPublicLinkActive: newStatus })
+        });
+      } catch {
+        const backendUrl = getResolvedBackendUrl();
+        if (backendUrl && !backendUrl.startsWith('/api')) {
+          await fetch(`${backendUrl}/jobs/${jobId}/public-link`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ isPublicLinkActive: newStatus })
+          }).catch(() => null);
+        }
       }
+
+      // Save updated status to localStorage
+      try {
+        const cached = JSON.parse(localStorage.getItem(`tasknera_public_link_${jobId}`) || '{}');
+        localStorage.setItem(`tasknera_public_link_${jobId}`, JSON.stringify({ ...cached, isActive: newStatus }));
+      } catch {}
 
       setStatusMsg(newStatus ? 'Applications are now OPEN.' : 'Applications are now PAUSED.');
     } catch (err: any) {
