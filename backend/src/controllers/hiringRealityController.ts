@@ -46,7 +46,7 @@ export const getJobHiringRealityController = async (req: AuthRequest, res: Respo
       workMode: job.work_mode || undefined,
       salary: job.salary || undefined,
       jdText: job.jd_text || job.original_jd || undefined,
-      requirements: (job.requirements || []).map(r => ({
+      requirements: ((job as any).requirements || []).map((r: any) => ({
         id: r.id,
         requirement: r.requirement,
         category: r.category || 'General',

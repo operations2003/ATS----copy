@@ -1852,6 +1852,7 @@ export const updateJob = async (
       res.status(404).json({ error: `Job with ID "${jobId}" not found.` });
       return;
     }
+    const jobOrg = existingJob.organizationId || "org-tasknera";
 
     // Enforce Tenant Isolation & RBAC
     if (!isSuperAdmin) {

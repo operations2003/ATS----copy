@@ -83,7 +83,7 @@ const validateActiveShare = async (token: string) => {
  */
 export const getPublicClientShare = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { token } = req.params;
+    const token = String(req.params.token || '');
     const validation = await validateActiveShare(token);
 
     if (!validation) {
@@ -298,7 +298,8 @@ export const getPublicClientShare = async (req: Request, res: Response): Promise
  */
 export const updateCandidateStatusAndFeedback = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { token, candidateId } = req.params;
+    const token = String(req.params.token || '');
+    const candidateId = String(req.params.candidateId || '');
     const validation = await validateActiveShare(token);
 
     if (!validation) {
@@ -434,7 +435,8 @@ const cleanResumeText = (text?: string | null): string => {
  */
 export const downloadCandidateCv = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { token, candidateId } = req.params;
+    const token = String(req.params.token || '');
+    const candidateId = String(req.params.candidateId || '');
     const format = String(req.query.format || '').toLowerCase(); // 'pdf' or 'docx'
     const validation = await validateActiveShare(token);
 
@@ -479,16 +481,18 @@ export const downloadCandidateCv = async (req: Request, res: Response): Promise<
       return;
     }
 
+    const cand = candidate as any;
+
     // ── 1. CHECK IF STORED ORIGINAL FILE EXISTS ON DISK ──
     let storedFilePath: string | null = null;
     let storedMime = 'application/pdf';
     let storedOriginalName = candidate.resume_file_url || `${candidate.name || 'Candidate'}_CV.pdf`;
 
     // 1a. Check bulkItems storagePath
-    if (candidate.bulkItems?.[0]?.storagePath && fs.existsSync(candidate.bulkItems[0].storagePath)) {
-      storedFilePath = candidate.bulkItems[0].storagePath;
-      storedMime = candidate.bulkItems[0].fileMime || 'application/octet-stream';
-      storedOriginalName = candidate.bulkItems[0].fileName || storedOriginalName;
+    if (cand.bulkItems?.[0]?.storagePath && fs.existsSync(cand.bulkItems[0].storagePath)) {
+      storedFilePath = cand.bulkItems[0].storagePath;
+      storedMime = cand.bulkItems[0].fileMime || 'application/octet-stream';
+      storedOriginalName = cand.bulkItems[0].fileName || storedOriginalName;
     }
 
     // 1b. Check uploads/resumes and fallback search dirs
@@ -606,11 +610,11 @@ export const downloadCandidateCv = async (req: Request, res: Response): Promise<
     const cleanLocation = cleanResumeText(candidate.location);
     const cleanSummary = cleanResumeText(candidate.summary);
 
-    const cleanSkills = (candidate.skills || [])
-      .map(s => cleanResumeText(s.skill))
-      .filter((s, idx, arr) => s && arr.indexOf(s) === idx);
+    const cleanSkills = (cand.skills || [])
+      .map((s: any) => cleanResumeText(s.skill))
+      .filter((s: any, idx: number, arr: any[]) => s && arr.indexOf(s) === idx);
 
-    const cleanExperiences = (candidate.experiences || []).map(exp => ({
+    const cleanExperiences = (cand.experiences || []).map((exp: any) => ({
       title: cleanResumeText(exp.title) || 'Role',
       company: cleanResumeText(exp.company),
       duration: cleanResumeText(exp.duration),
@@ -618,8 +622,8 @@ export const downloadCandidateCv = async (req: Request, res: Response): Promise<
     }));
 
     // Filter out invalid/misclassified education entries
-    const cleanEducation = (candidate.education || [])
-      .filter(edu => {
+    const cleanEducation = (cand.education || [])
+      .filter((edu: any) => {
         const degree = edu.degree || '';
         if (degree.length > 90) return false;
         if (
@@ -637,7 +641,7 @@ export const downloadCandidateCv = async (req: Request, res: Response): Promise<
         }
         return true;
       })
-      .map(edu => {
+      .map((edu: any) => {
         const deg = cleanResumeText(edu.degree);
         const inst = cleanResumeText(edu.institution);
         return [deg, inst && inst !== 'University / Institute' ? `- ${inst}` : null].filter(Boolean).join(' ');
@@ -695,7 +699,7 @@ export const downloadCandidateCv = async (req: Request, res: Response): Promise<
 
       if (cleanExperiences.length > 0) {
         docxChildren.push(new Paragraph({ text: 'WORK EXPERIENCE', heading: HeadingLevel.HEADING_1 }));
-        cleanExperiences.forEach(exp => {
+        cleanExperiences.forEach((exp: any) => {
           docxChildren.push(
             new Paragraph({
               children: [
@@ -721,7 +725,7 @@ export const downloadCandidateCv = async (req: Request, res: Response): Promise<
 
       if (cleanEducation.length > 0) {
         docxChildren.push(new Paragraph({ text: 'EDUCATION', heading: HeadingLevel.HEADING_1 }));
-        cleanEducation.forEach(edu => {
+        cleanEducation.forEach((edu: any) => {
           docxChildren.push(new Paragraph({ text: `• ${edu}` }));
         });
         docxChildren.push(new Paragraph({ text: '' }));
@@ -798,7 +802,7 @@ export const downloadCandidateCv = async (req: Request, res: Response): Promise<
       doc.fontSize(11).font('Helvetica-Bold').fillColor('#1e293b').text('WORK EXPERIENCE');
       doc.moveDown(0.3);
 
-      cleanExperiences.forEach(exp => {
+      cleanExperiences.forEach((exp: any) => {
         if (doc.y > 720) doc.addPage();
         doc.fontSize(10).font('Helvetica-Bold').fillColor('#0f172a').text(exp.title);
         const compLine = [exp.company, exp.duration].filter(Boolean).join(' | ');
@@ -826,7 +830,7 @@ export const downloadCandidateCv = async (req: Request, res: Response): Promise<
       doc.fontSize(11).font('Helvetica-Bold').fillColor('#1e293b').text('EDUCATION');
       doc.moveDown(0.3);
 
-      cleanEducation.forEach(eduStr => {
+      cleanEducation.forEach((eduStr: any) => {
         doc.fontSize(9).font('Helvetica').fillColor('#334155').text(`• ${eduStr}`);
       });
       doc.moveDown(0.7);

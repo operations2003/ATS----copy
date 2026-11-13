@@ -22,7 +22,7 @@ export const createClientShare = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
-    const { jobId } = req.params;
+    const jobId = String(req.params.jobId || '');
     const { candidateIds, clientName, expiresInDays } = req.body;
 
     if (!jobId) {
@@ -114,7 +114,7 @@ export const createClientShare = async (req: AuthRequest, res: Response): Promis
     });
 
     // Record initial hiring activity for each shared candidate
-    const actorName = user.name || user.email || 'Recruiter';
+    const actorName = (user as any).name || user.email || 'Recruiter';
     await Promise.all(
       validCandidates.map(c =>
         prisma.candidateHiringActivity.create({
@@ -160,7 +160,7 @@ export const listJobClientShares = async (req: AuthRequest, res: Response): Prom
       return;
     }
 
-    const { jobId } = req.params;
+    const jobId = String(req.params.jobId || '');
     const orgId = user.organizationId || 'org-tasknera';
     const isSuperAdmin = user.role === 'SUPER_ADMIN';
 
@@ -206,7 +206,7 @@ export const listJobClientShares = async (req: AuthRequest, res: Response): Prom
       return {
         ...share,
         isExpired,
-        candidateCount: share.items.length,
+        candidateCount: (share as any).items?.length || 0,
       };
     });
 
@@ -235,7 +235,8 @@ export const getClientShareById = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const { jobId, shareId } = req.params;
+    const jobId = String(req.params.jobId || '');
+    const shareId = String(req.params.shareId || '');
     const orgId = user.organizationId || 'org-tasknera';
     const isSuperAdmin = user.role === 'SUPER_ADMIN';
 
@@ -310,7 +311,8 @@ export const updateClientShareStatus = async (req: AuthRequest, res: Response): 
       return;
     }
 
-    const { jobId, shareId } = req.params;
+    const jobId = String(req.params.jobId || '');
+    const shareId = String(req.params.shareId || '');
     const { status } = req.body;
 
     if (!status || !['active', 'revoked'].includes(status)) {
@@ -364,7 +366,8 @@ export const regenerateClientShareToken = async (req: AuthRequest, res: Response
       return;
     }
 
-    const { jobId, shareId } = req.params;
+    const jobId = String(req.params.jobId || '');
+    const shareId = String(req.params.shareId || '');
     const orgId = user.organizationId || 'org-tasknera';
     const isSuperAdmin = user.role === 'SUPER_ADMIN';
 
@@ -420,7 +423,8 @@ export const addCandidatesToShare = async (req: AuthRequest, res: Response): Pro
       return;
     }
 
-    const { jobId, shareId } = req.params;
+    const jobId = String(req.params.jobId || '');
+    const shareId = String(req.params.shareId || '');
     const { candidateIds } = req.body;
 
     if (!Array.isArray(candidateIds) || candidateIds.length === 0) {
@@ -468,7 +472,7 @@ export const addCandidatesToShare = async (req: AuthRequest, res: Response): Pro
     );
 
     // Record initial hiring activity for newly added candidates
-    const actorName = user.name || user.email || 'Recruiter';
+    const actorName = (user as any).name || user.email || 'Recruiter';
     await Promise.all(
       candidateIds.map(candidateId =>
         prisma.candidateHiringActivity.create({
@@ -511,7 +515,9 @@ export const removeCandidateFromShare = async (req: AuthRequest, res: Response):
       return;
     }
 
-    const { jobId, shareId, candidateId } = req.params;
+    const jobId = String(req.params.jobId || '');
+    const shareId = String(req.params.shareId || '');
+    const candidateId = String(req.params.candidateId || '');
     const orgId = user.organizationId || 'org-tasknera';
     const isSuperAdmin = user.role === 'SUPER_ADMIN';
 
@@ -563,7 +569,7 @@ export const getJobCandidateActivities = async (req: AuthRequest, res: Response)
       return;
     }
 
-    const { jobId } = req.params;
+    const jobId = String(req.params.jobId || '');
     const candidateId = req.query.candidateId ? String(req.query.candidateId) : undefined;
     const shareId = req.query.shareId ? String(req.query.shareId) : undefined;
 
