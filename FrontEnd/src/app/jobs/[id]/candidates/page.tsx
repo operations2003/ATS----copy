@@ -2668,6 +2668,7 @@ export default function JobCandidatesPage() {
                     fallbackJobTitle={job?.position}
                     fallbackScore={Math.round(selectedCandidate.matchScore ?? selectedCandidate.atsScore ?? 0)}
                     fallbackRecommendation={getCandidateDecision(selectedCandidate)}
+                    fallbackCandidate={selectedCandidate}
                   />
                 )}
 

@@ -1506,6 +1506,7 @@ export default function CandidatesPage() {
                         fallbackJobTitle={candidateHistory.length > 0 ? (candidateHistory[0].jobTitle || candidateHistory[0].position) : selectedCandidate.role}
                         fallbackScore={candidateHistory.length > 0 && candidateHistory[0].score !== null ? Math.round(candidateHistory[0].score) : undefined}
                         fallbackRecommendation={selectedCandidate.decision}
+                        fallbackCandidate={selectedCandidate}
                       />
                     </div>
                   )}

@@ -63,18 +63,33 @@ for (const [jobId, list] of Object.entries(DEFAULT_INITIAL_CANDIDATES)) {
   }
 }
 
-const POOL_STORAGE_DIR = path.resolve(process.cwd(), 'data');
-const POOL_STORAGE_FILE = path.join(POOL_STORAGE_DIR, 'candidates_pool.json');
+export const getPoolStorageFile = (): string => {
+  const potentialPaths = [
+    path.resolve(process.cwd(), 'data', 'candidates_pool.json'),
+    path.resolve(process.cwd(), 'backend', 'data', 'candidates_pool.json'),
+    path.resolve(__dirname, '..', '..', 'data', 'candidates_pool.json'),
+    path.resolve(__dirname, '..', 'data', 'candidates_pool.json'),
+  ];
+  for (const p of potentialPaths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return path.resolve(process.cwd(), 'data', 'candidates_pool.json');
+};
+
+const POOL_STORAGE_FILE = getPoolStorageFile();
+const POOL_STORAGE_DIR = path.dirname(POOL_STORAGE_FILE);
 
 export const saveCandidateToPersistentPool = (candidate: CandidateRecord): void => {
   try {
-    if (!fs.existsSync(POOL_STORAGE_DIR)) {
-      fs.mkdirSync(POOL_STORAGE_DIR, { recursive: true });
+    const targetFile = getPoolStorageFile();
+    const targetDir = path.dirname(targetFile);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
     }
     let existingList: CandidateRecord[] = [];
-    if (fs.existsSync(POOL_STORAGE_FILE)) {
+    if (fs.existsSync(targetFile)) {
       try {
-        const fileContent = fs.readFileSync(POOL_STORAGE_FILE, 'utf-8');
+        const fileContent = fs.readFileSync(targetFile, 'utf-8');
         existingList = JSON.parse(fileContent);
       } catch {}
     }
@@ -88,7 +103,7 @@ export const saveCandidateToPersistentPool = (candidate: CandidateRecord): void 
     } else {
       existingList.unshift(candidate);
     }
-    fs.writeFileSync(POOL_STORAGE_FILE, JSON.stringify(existingList, null, 2), 'utf-8');
+    fs.writeFileSync(targetFile, JSON.stringify(existingList, null, 2), 'utf-8');
   } catch (err) {
     console.warn('[Pool Persistent File Warning]:', err);
   }
@@ -96,8 +111,9 @@ export const saveCandidateToPersistentPool = (candidate: CandidateRecord): void 
 
 export const loadPersistentPool = (targetOrgId?: string): CandidateRecord[] => {
   try {
-    if (fs.existsSync(POOL_STORAGE_FILE)) {
-      const data = JSON.parse(fs.readFileSync(POOL_STORAGE_FILE, 'utf-8'));
+    const targetFile = getPoolStorageFile();
+    if (fs.existsSync(targetFile)) {
+      const data = JSON.parse(fs.readFileSync(targetFile, 'utf-8'));
       if (Array.isArray(data)) {
         if (targetOrgId) {
           return data.filter(c => (c.organizationId || 'org-tasknera') === targetOrgId);
@@ -2740,6 +2756,20 @@ export async function findCandidateRecord(candidateId: string, jobId?: string, t
       console.warn('[Candidates] Prisma find candidate error:', err);
     }
   }
+
+  // 5. Check persistent pool if candidate was not in memory or DB
+  try {
+    const pool = loadPersistentPool();
+    const foundInPool = pool.find(c => c.id === candidateId);
+    if (foundInPool) {
+      const isSharedSample =
+        foundInPool.organizationId === '022233f7-e2ce-44b7-910a-f336bb8aa67c' ||
+        (foundInPool.organizationId || 'org-tasknera') === 'org-tasknera';
+      if (!targetOrgId || isSharedSample || (foundInPool.organizationId || 'org-tasknera') === targetOrgId) {
+        return foundInPool;
+      }
+    }
+  } catch {}
 
   return null;
 }
