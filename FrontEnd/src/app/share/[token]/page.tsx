@@ -1472,7 +1472,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Action: Export 30-Column Master Submission Sheet (CSV)
+  // Action: Export the client-facing submission sheet (CSV)
   // ─────────────────────────────────────────────────────────────────────────────
   const handleExportSubmissionSheetCsv = () => {
     if (candidates.length === 0) {
@@ -1480,38 +1480,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
       return;
     }
 
-    const headers = [
-      'Date',
-      'JD Name',
-      'Client Name',
-      'Recruiter Name',
-      'Candidate Name',
-      'Email ID',
-      'Phone Number',
-      'Current Location',
-      'Current Designation',
-      'Total Work Experience',
-      'Relevant Work Experience',
-      'Notice Period',
-      'Current CTC',
-      'Expected CTC',
-      'CV Link',
-      'ATS',
-      'Candidate Status',
-      'Screening Status',
-      'Recruiter Remarks',
-      'Interview Round 1',
-      'Interview Round 2',
-      'Final Interview',
-      'Offer Status',
-      'Joining Date',
-      'Joining Status',
-      'Rejection Reason',
-      'Last Follow-up Date',
-      'Next Follow-up Date',
-      'Response',
-      'Overall Status',
-    ];
+    const headers = ['Sr. No.', 'Candidate Name', 'Date', 'JD Name', 'Email ID', 'Phone No.', 'Current Location'];
 
     const escapeCsv = (val: any) => {
       if (val === null || val === undefined) return '""';
@@ -1521,37 +1490,14 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
 
     const targetList = filteredCandidates.length > 0 ? filteredCandidates : candidates;
 
-    const rows = targetList.map(c => [
+    const rows = targetList.map((c, idx) => [
+      escapeCsv(idx + 1),
+      escapeCsv(c.candidateName || c.name),
       escapeCsv(c.submissionDate || ''),
       escapeCsv(c.jdName || c.jobTitle || ''),
-      escapeCsv(c.clientName || clientName),
-      escapeCsv(c.recruiterName || ''),
-      escapeCsv(c.candidateName || c.name),
       escapeCsv(c.emailId || c.email || ''),
       escapeCsv(c.phoneNumber || c.phone || ''),
       escapeCsv(c.currentLocation || c.location || ''),
-      escapeCsv(c.currentDesignation || c.currentTitle || ''),
-      escapeCsv(c.totalWorkExperience || c.totalExperience || ''),
-      escapeCsv(c.relevantWorkExperience || ''),
-      escapeCsv(c.noticePeriod || ''),
-      escapeCsv(c.currentCtc || ''),
-      escapeCsv(c.expectedCtc || ''),
-      escapeCsv(c.cvLink || c.resumeFileName || `${(c.name || 'candidate').replace(/\s+/g, '_')}_CV.pdf`),
-      escapeCsv(c.atsScoreDisplay || `${c.atsScore}% Match`),
-      escapeCsv(c.candidateStatus || c.currentStatus),
-      escapeCsv(c.screeningStatus || 'Verified (100% Mandatory Criteria Met)'),
-      escapeCsv(c.recruiterRemarks || c.screeningNote || ''),
-      escapeCsv(c.interviewRound1 || ''),
-      escapeCsv(c.interviewRound2 || ''),
-      escapeCsv(c.finalInterview || ''),
-      escapeCsv(c.offerStatus || ''),
-      escapeCsv(c.joiningDate || ''),
-      escapeCsv(c.joiningStatus || ''),
-      escapeCsv(c.rejectionReason || 'None (Profile Qualified)'),
-      escapeCsv(c.lastFollowUpDate || ''),
-      escapeCsv(c.nextFollowUpDate || ''),
-      escapeCsv(c.response || ''),
-      escapeCsv(c.overallStatus || c.currentStatus),
     ]);
 
     const csvContent = [headers.map(h => `"${h}"`).join(','), ...rows.map(r => r.join(','))].join('\r\n');
@@ -1559,13 +1505,13 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${(clientName || 'Client').replace(/\s+/g, '_')}_Candidate_Submission_Sheet_30_Points_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `${(clientName || 'Client').replace(/\s+/g, '_')}_Candidate_Submission_Sheet_${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    showToast(`✓ Exported 30-column submission sheet for ${targetList.length} candidate(s)!`);
+    showToast(`✓ Exported submission sheet for ${targetList.length} candidate(s)!`);
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1652,7 +1598,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
          1. TOP EXECUTIVE HEADER
       ───────────────────────────────────────────────────────────── */}
       <header className="bg-[#101828] text-white border-b border-slate-800 sticky top-0 z-30 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
+        <div className="max-w-screen-2xl mx-auto px-5 sm:px-8 xl:px-12 2xl:px-16 py-3.5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="w-9 h-9 rounded-xl bg-[#3563E9] text-white flex items-center justify-center font-black text-sm shadow-sm">
               HQ
@@ -1679,7 +1625,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
       ───────────────────────────────────────────────────────────── */}
       {jdSuccessBanner && (
         <div className="bg-[#ECFDF3] border-b border-[#D1FADF] px-4 py-3">
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs text-[#15966A] font-semibold">
+          <div className="max-w-screen-2xl mx-auto px-5 sm:px-8 xl:px-12 2xl:px-16 flex items-center justify-between gap-3 text-xs text-[#15966A] font-semibold">
             <div className="flex items-center gap-2">
               <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
@@ -1701,7 +1647,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
          3. HERO TRANSPARENCY STRIP & METRICS
       ───────────────────────────────────────────────────────────── */}
       <section className="bg-white border-b border-[#EAECF0] py-6 sm:py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div className="max-w-screen-2xl mx-auto px-5 sm:px-8 xl:px-12 2xl:px-16 space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#EFF4FF] text-[#3563E9] border border-[#D1E0FF] mb-2">
@@ -1789,7 +1735,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
       {/* ─────────────────────────────────────────────────────────────
          4. MAIN CONTENT & TABS
       ───────────────────────────────────────────────────────────── */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
+      <main className="max-w-screen-2xl mx-auto px-5 sm:px-8 xl:px-12 2xl:px-16 py-8 flex-1 w-full space-y-7">
         {/* Onboarding Banner when no JDs uploaded yet */}
         {jobs.length === 0 && (
           <div className="bg-white border border-[#EAECF0] rounded-3xl p-6 sm:p-10 shadow-sm space-y-8 relative overflow-hidden bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(53,99,233,0.05),transparent)]">
@@ -2053,30 +1999,21 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                 )}
               </div>
             ) : (
-              /* ── 30-COLUMN MASTER SUBMISSION EXCEL SPREADSHEET VIEW ── */
+              /* ── MASTER CANDIDATE SUBMISSION SHEET ── */
               <div className="bg-white border border-[#EAECF0] rounded-2xl shadow-xs overflow-hidden">
                 <div className="p-4 border-b border-[#EAECF0] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#F8F9FC]">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs text-base">
-                      📊
-                    </div>
+                  <div className="flex items-center">
                     <div>
-                      <h3 className="text-xs sm:text-sm font-bold text-[#101828] flex items-center gap-2">
+                      <h3 className="text-xs sm:text-sm font-bold text-[#101828]">
                         <span>Master Candidate Submission Sheet</span>
-                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          Excel View • All 30 Fields
-                        </span>
                       </h3>
-                      <p className="text-[11px] text-slate-500">
-                        Spreadsheet representation with all 30 verification data points for {filteredCandidates.length} candidate(s) submitted to {clientName}.
-                      </p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={handleExportSubmissionSheetCsv}
                     className="px-3.5 py-1.5 bg-[#15966A] hover:bg-[#12805A] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
-                    title="Export all 30 candidate submission fields to spreadsheet (CSV)"
+                    title="Export candidate submission details (CSV)"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -2085,148 +2022,43 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                   </button>
                 </div>
 
-                <div className="overflow-x-auto max-h-[720px]">
-                  <table className="w-full text-left text-xs whitespace-nowrap border-collapse">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1100px] text-left text-sm border-collapse">
                     <thead className="bg-[#F8F9FC] text-[10px] font-extrabold uppercase tracking-wider text-slate-600 border-b border-[#EAECF0] sticky top-0 z-20 shadow-xs">
                       <tr>
-                        <th className="p-3 sticky left-0 bg-[#F8F9FC] z-30 border-r border-[#EAECF0] text-center w-12 min-w-[48px]">#</th>
-                        <th className="p-3 sticky left-12 bg-[#F8F9FC] z-30 border-r border-[#EAECF0] min-w-[220px]">5. Candidate Name</th>
-                        <th className="p-3">1. Date</th>
-                        <th className="p-3">2. JD Name</th>
-                        <th className="p-3">3. Client Name</th>
-                        <th className="p-3">4. Recruiter Name</th>
-                        <th className="p-3">6. Email ID</th>
-                        <th className="p-3">7. Phone Number</th>
-                        <th className="p-3">8. Current Location</th>
-                        <th className="p-3">9. Current Designation</th>
-                        <th className="p-3">10. Total Work Exp</th>
-                        <th className="p-3">11. Relevant Work Exp</th>
-                        <th className="p-3">12. Notice Period</th>
-                        <th className="p-3">13. Current CTC</th>
-                        <th className="p-3">14. Expected CTC</th>
-                        <th className="p-3">15. CV Link</th>
-                        <th className="p-3">16. ATS</th>
-                        <th className="p-3">17. Candidate Status</th>
-                        <th className="p-3">18. Screening Status</th>
-                        <th className="p-3 min-w-[240px]">19. Recruiter Remarks</th>
-                        <th className="p-3">20. Interview Round 1</th>
-                        <th className="p-3">21. Interview Round 2</th>
-                        <th className="p-3">22. Final Interview</th>
-                        <th className="p-3">23. Offer Status</th>
-                        <th className="p-3">24. Joining Date</th>
-                        <th className="p-3">25. Joining Status</th>
-                        <th className="p-3">26. Rejection Reason</th>
-                        <th className="p-3">27. Last Follow-up</th>
-                        <th className="p-3">28. Next Follow-up</th>
-                        <th className="p-3">29. Response</th>
-                        <th className="p-3">30. Overall Status</th>
-                        <th className="p-3 text-right sticky right-0 bg-[#F8F9FC] z-30 border-l border-[#EAECF0]">Actions</th>
+                        <th className="p-4 text-center w-[88px] whitespace-nowrap">Sr. No.</th>
+                        <th className="p-4 w-[150px] min-w-[150px]">Candidate Name</th>
+                        <th className="p-4 min-w-[130px]">Date</th>
+                        <th className="p-4 min-w-[200px]">JD Name</th>
+                        <th className="p-4 min-w-[230px]">Email ID</th>
+                        <th className="p-4 min-w-[150px]">Phone No.</th>
+                        <th className="p-4 min-w-[190px]">Current Location</th>
+                        <th className="p-4 text-center min-w-[230px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#EAECF0]">
                       {filteredCandidates.map((cand, idx) => (
-                        <tr key={cand.id} className="hover:bg-blue-50/40 transition-colors group">
-                          <td className="p-3 font-mono font-bold text-slate-400 sticky left-0 bg-white group-hover:bg-blue-50/70 z-10 border-r border-[#EAECF0] text-center w-12 min-w-[48px]">
+                        <tr key={cand.id} className="hover:bg-blue-50/40 transition-colors">
+                          <td className="p-4 font-mono font-bold text-slate-400 text-center">
                             {idx + 1}
                           </td>
-                          <td className="p-3 font-bold text-[#101828] sticky left-12 bg-white group-hover:bg-blue-50/70 z-10 border-r border-[#EAECF0] min-w-[220px]">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingDossierCandidate(cand);
-                                  setIsDossierModalOpen(true);
-                                }}
-                                className="text-left font-bold text-[#101828] hover:text-[#3563E9] transition-colors cursor-pointer"
-                                title="Click to view/edit all 30 details"
-                              >
-                                {cand.candidateName || cand.name}
-                              </button>
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-[#ECFDF3] text-[#15966A] border border-[#D1FADF]">
-                                {cand.atsScore}%
-                              </span>
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200" title={`Certified & approved by ${cand.recruiterApprovedBy || cand.recruiterName}`}>
-                                ✓ Approved
-                              </span>
-                            </div>
+                          <td className="p-4 font-bold text-[#101828] w-[150px] min-w-[150px] whitespace-normal">
+                            {cand.candidateName || cand.name}
                           </td>
-                          <td className="p-3 text-slate-700">{cand.submissionDate || '-'}</td>
-                          <td className="p-3 font-semibold text-slate-800">{cand.jdName || cand.jobTitle || 'Requisition Role'}</td>
-                          <td className="p-3 text-slate-700">{cand.clientName || clientName}</td>
-                          <td className="p-3 text-slate-700">{cand.recruiterName || 'Agency Recruiter'}</td>
-                          <td className="p-3 text-slate-600 select-all font-mono text-[11px]">{cand.emailId || cand.email || '-'}</td>
-                          <td className="p-3 text-slate-600">{cand.phoneNumber || cand.phone || '-'}</td>
-                          <td className="p-3 text-slate-700">{cand.currentLocation || cand.location || '-'}</td>
-                          <td className="p-3 text-slate-800 font-medium">{cand.currentDesignation || cand.currentTitle || '-'}</td>
-                          <td className="p-3 font-semibold text-slate-900">{cand.totalWorkExperience || cand.totalExperience || '-'}</td>
-                          <td className="p-3 font-semibold text-[#15966A]">{cand.relevantWorkExperience || '-'}</td>
-                          <td className="p-3">
-                            <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                              {cand.noticePeriod || 'Immediate'}
-                            </span>
-                          </td>
-                          <td className="p-3 font-medium text-slate-700">{cand.currentCtc || '-'}</td>
-                          <td className="p-3 font-bold text-slate-900">{cand.expectedCtc || '-'}</td>
-                          <td className="p-3">
-                            <button
-                              type="button"
-                              onClick={() => handleDownloadCandidateCv(cand)}
-                              disabled={downloadingCandidateId === cand.id}
-                              className="text-xs font-bold text-[#3563E9] hover:underline cursor-pointer flex items-center gap-1"
-                              title="Download verified CV / Resume"
-                            >
-                              <span>📄 {downloadingCandidateId === cand.id ? 'Downloading...' : 'Download CV'}</span>
-                            </button>
-                          </td>
-                          <td className="p-3 font-black text-[#15966A]">{cand.atsScoreDisplay || `${cand.atsScore}% Match`}</td>
-                          <td className="p-3">
-                            <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700">
-                              {cand.candidateStatus || cand.currentStatus}
-                            </span>
-                          </td>
-                          <td className="p-3">
-                            <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              {cand.screeningStatus || 'Verified (100% Mandatory Met)'}
-                            </span>
-                          </td>
-                          <td className="p-3 text-[11px] text-slate-600 italic max-w-xs truncate" title={cand.recruiterRemarks || cand.screeningNote}>
-                            {cand.recruiterRemarks || cand.screeningNote || '-'}
-                          </td>
-                          <td className="p-3 text-slate-700">{cand.interviewRound1 || '-'}</td>
-                          <td className="p-3 text-slate-700">{cand.interviewRound2 || '-'}</td>
-                          <td className="p-3 text-slate-700">{cand.finalInterview || '-'}</td>
-                          <td className="p-3 text-slate-700 font-medium">{cand.offerStatus || '-'}</td>
-                          <td className="p-3 text-slate-700">{cand.joiningDate || '-'}</td>
-                          <td className="p-3 text-slate-700">{cand.joiningStatus || '-'}</td>
-                          <td className="p-3 text-slate-600">{cand.rejectionReason || 'None'}</td>
-                          <td className="p-3 text-slate-700">{cand.lastFollowUpDate || '-'}</td>
-                          <td className="p-3 text-slate-700">{cand.nextFollowUpDate || '-'}</td>
-                          <td className="p-3 text-slate-700">{cand.response || '-'}</td>
-                          <td className="p-3">
-                            <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#EFF4FF] text-[#3563E9] border border-[#D1E0FF]">
-                              {cand.overallStatus || cand.currentStatus}
-                            </span>
-                          </td>
-                          <td className="p-3 text-right sticky right-0 bg-white group-hover:bg-blue-50/70 z-10 border-l border-[#EAECF0]">
-                            <div className="flex items-center justify-end gap-1.5">
+                          <td className="p-4 text-slate-700">{cand.submissionDate || '-'}</td>
+                          <td className="p-4 font-semibold text-slate-800 whitespace-normal">{cand.jdName || cand.jobTitle || 'Requisition Role'}</td>
+                          <td className="p-4 text-slate-600 select-all break-all">{cand.emailId || cand.email || '-'}</td>
+                          <td className="p-4 text-slate-600">{cand.phoneNumber || cand.phone || '-'}</td>
+                          <td className="p-4 text-slate-700 whitespace-normal">{cand.currentLocation || cand.location || '-'}</td>
+                          <td className="p-4">
+                            <div className="grid grid-cols-2 gap-2 max-w-[220px] mx-auto">
                               <button
                                 type="button"
                                 onClick={() => setLifecycleCandidate(cand)}
-                                className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                                className="px-2 py-2 bg-[#3563E9] hover:bg-[#2851D6] text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1 shadow-xs"
                                 title="Fill or update interview rounds, offer status, and lifecycle decisions (Client)"
                               >
-                                <span>📝 Lifecycle</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingDossierCandidate(cand);
-                                  setIsDossierModalOpen(true);
-                                }}
-                                className="px-2.5 py-1 bg-[#EFF4FF] hover:bg-[#D1E0FF] text-[#3563E9] border border-[#D1E0FF] rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
-                                title="Edit 30 submission fields (Assigned Recruiter)"
-                              >
-                                <span>✏️ Fill / Edit 30</span>
+                                <span>Lifecycle</span>
                               </button>
                               <button
                                 type="button"
@@ -2235,7 +2067,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                                   setInterviewRound('Round 1 Phase');
                                   setInterviewStartAt('');
                                 }}
-                                className="px-2.5 py-1 bg-[#101828] hover:bg-slate-800 text-white rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                                className="px-2 py-2 bg-[#3563E9] hover:bg-[#2851D6] text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
                               >
                                 Schedule
                               </button>
@@ -2246,9 +2078,20 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                                   setFeedbackStatus(cand.currentStatus);
                                   setFeedbackNotes(cand.latestFeedback || '');
                                 }}
-                                className="px-2.5 py-1 bg-[#3563E9] hover:bg-[#2851D6] text-white rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                                className="px-2 py-2 bg-[#3563E9] hover:bg-[#2851D6] text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
                               >
                                 Decision
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingDossierCandidate(cand);
+                                  setIsDossierModalOpen(true);
+                                }}
+                                className="px-2 py-2 bg-[#3563E9] hover:bg-[#2851D6] text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                                title="View the candidate's complete 30-field submission profile"
+                              >
+                                View Profile
                               </button>
                             </div>
                           </td>
@@ -2793,6 +2636,10 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
           assignedRecruiterName={assignedMember || 'Senior Recruiter'}
           defaultClientName={clientName}
           defaultJdName={editingDossierCandidate.jdName || (jobs[0]?.title ?? 'Requisition Role')}
+          hideApprovalGate
+          hideSaveDraft
+          hideHeaderContext
+          hideModalFooter
         />
       )}
 
@@ -2816,7 +2663,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
 
       {/* Clean Enterprise Footer */}
       <footer className="border-t border-[#EAECF0] bg-white py-6 text-center text-xs text-[#667085]">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="max-w-screen-2xl mx-auto px-5 sm:px-8 xl:px-12 2xl:px-16 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="font-extrabold text-[#101828]">HIRE<span className="text-[#3563E9]">IQ</span></span>
             <span>• Transparent Client Hiring &amp; Candidate Intelligence Portal</span>

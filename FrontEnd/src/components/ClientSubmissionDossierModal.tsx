@@ -51,6 +51,10 @@ interface ClientSubmissionDossierModalProps {
   assignedRecruiterName?: string;
   defaultClientName?: string;
   defaultJdName?: string;
+  hideApprovalGate?: boolean;
+  hideSaveDraft?: boolean;
+  hideHeaderContext?: boolean;
+  hideModalFooter?: boolean;
 }
 
 export default function ClientSubmissionDossierModal({
@@ -62,6 +66,10 @@ export default function ClientSubmissionDossierModal({
   assignedRecruiterName = 'Senior Recruiter',
   defaultClientName = 'Client Partner',
   defaultJdName = 'Requisition Role',
+  hideApprovalGate = false,
+  hideSaveDraft = false,
+  hideHeaderContext = false,
+  hideModalFooter = false,
 }: ClientSubmissionDossierModalProps) {
   const [formData, setFormData] = useState<SubmissionDossierData>({
     submissionDate: '',
@@ -210,16 +218,16 @@ export default function ClientSubmissionDossierModal({
         {/* Modal Header */}
         <div className="p-5 sm:p-6 border-b border-[#EAECF0] bg-white flex items-start justify-between gap-4 shrink-0">
           <div>
-            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-[#EFF4FF] text-[#3563E9] border border-[#D1E0FF] mb-1.5">
+            {!hideHeaderContext && <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-[#EFF4FF] text-[#3563E9] border border-[#D1E0FF] mb-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#3563E9]" />
               Assigned Recruiter Data Entry
-            </div>
+            </div>}
             <h2 className="text-base sm:text-lg font-black text-[#101828]">
-              Client Submission Details • 30 Data Points
+              {hideHeaderContext ? 'Client Submission Details' : 'Client Submission Details • 30 Data Points'}
             </h2>
-            <p className="text-xs text-[#667085] mt-0.5">
+            {!hideHeaderContext && <p className="text-xs text-[#667085] mt-0.5">
               Candidate: <strong className="text-[#101828]">{formData.candidateName || candidate.name}</strong> • Client: <strong className="text-[#101828]">{formData.clientName}</strong> • Requisition: <strong className="text-[#3563E9]">{formData.jdName}</strong>
-            </p>
+            </p>}
           </div>
 
           <button
@@ -705,7 +713,7 @@ export default function ClientSubmissionDossierModal({
           </div>
 
           {/* ── SECTION 6: RECRUITER VERIFICATION & CLIENT RELEASE APPROVAL GATE ── */}
-          <div className="bg-gradient-to-br from-emerald-50/90 to-teal-50/60 border-2 border-emerald-300 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-xs">
+          {!hideApprovalGate && <div className="bg-gradient-to-br from-emerald-50/90 to-teal-50/60 border-2 border-emerald-300 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-xs">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
@@ -754,11 +762,11 @@ export default function ClientSubmissionDossierModal({
                 </div>
               )}
             </div>
-          </div>
+          </div>}
         </form>
 
         {/* Modal Footer */}
-        <div className="p-4 sm:p-5 bg-slate-50 border-t border-[#EAECF0] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+        {!hideModalFooter && <div className="p-4 sm:p-5 bg-slate-50 border-t border-[#EAECF0] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
           <div className="text-xs text-slate-500 font-medium">
             Assigned Recruiter: <strong className="text-slate-800">{formData.recruiterName || assignedRecruiterName}</strong>
           </div>
@@ -771,15 +779,15 @@ export default function ClientSubmissionDossierModal({
             >
               Cancel
             </button>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => handleSaveWithApproval(false)}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl transition cursor-pointer"
-              title="Save details internally without publishing to client preview portal"
-            >
-              Save Draft (Keep Internal Only)
-            </button>
+            {!hideSaveDraft && <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => handleSaveWithApproval(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl transition cursor-pointer"
+                title="Save details internally without publishing to client preview portal"
+              >
+                Save Draft (Keep Internal Only)
+              </button>}
             <button
               type="button"
               disabled={isSubmitting}
@@ -793,7 +801,7 @@ export default function ClientSubmissionDossierModal({
               <span>Approve &amp; Publish to Client Portal</span>
             </button>
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );
