@@ -423,9 +423,14 @@ export default function PipelinePage() {
 
         // Stage placement rule:
         // - Honored if manually moved by recruiter
-        // - All parsed CVs start directly in "Screening"
+        // - If candidate has been approved for client, do not keep in Screening - place in Shortlisted
+        // - All other parsed CVs start in "Screening"
         let stage: PipelineStage = 'Screening';
-        if (stageOverrides[id]) {
+        if (stageOverrides[id] && stageOverrides[id] !== 'Screening') {
+          stage = stageOverrides[id];
+        } else if (c.isRecruiterApproved === true || c.recruiterApprovalStatus === 'APPROVED' || c.stage === 'Shortlisted') {
+          stage = 'Shortlisted';
+        } else if (stageOverrides[id]) {
           stage = stageOverrides[id];
         } else {
           stage = 'Screening';
@@ -1098,7 +1103,7 @@ export default function PipelinePage() {
   // Open 30-point submission dossier modal for assigned recruiter data entry
   const handleOpenDossierModal = (candidate: PipelineCandidate, targetStage?: PipelineStage) => {
     setDossierCandidate(candidate);
-    setDossierTargetStage(targetStage || null);
+    setDossierTargetStage(targetStage || (candidate.stage === 'Screening' ? 'Shortlisted' : null));
     setIsDossierOpen(true);
   };
 
@@ -1106,7 +1111,11 @@ export default function PipelinePage() {
   const handleSaveDossier = (data: SubmissionDossierData) => {
     if (!dossierCandidate) return;
 
-    const nextStage = dossierTargetStage || dossierCandidate.stage;
+    // When approved, candidate must never be kept in Screening - always move to Shortlisted
+    const isApproved = data.isRecruiterApproved === true;
+    const nextStage: PipelineStage =
+      dossierTargetStage ||
+      (isApproved || dossierCandidate.stage === 'Screening' ? 'Shortlisted' : dossierCandidate.stage);
     const assignedRecruiter = data.recruiterName || user?.name || user?.email || 'Agency Recruiter';
 
     const updatedCandidate: PipelineCandidate = {
@@ -1585,23 +1594,26 @@ export default function PipelinePage() {
                                 </svg>
                               </button>
 
-                              <button
-                                type="button"
-                                onClick={() => handleOpenDossierModal(candidate)}
-                                className={`flex-1 py-1 px-2 rounded-lg border text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer truncate ${
-                                  candidate.isRecruiterApproved
-                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                                    : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
-                                }`}
-                                title="Assigned Recruiter: Click to review, fill 30 fields, and certify profile for client portal"
-                              >
-                                <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                </svg>
-                                <span className="truncate">
-                                  {candidate.isRecruiterApproved ? 'Approved for Client ✓' : 'Review & Approve'}
-                                </span>
-                              </button>
+                              {/* Only show Review & Approve tag in Screening stage before moved into Shortlisted */}
+                              {candidate.stage === 'Screening' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenDossierModal(candidate, 'Shortlisted')}
+                                  className={`flex-1 py-1 px-2 rounded-lg border text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer truncate ${
+                                    candidate.isRecruiterApproved
+                                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                                      : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                                  }`}
+                                  title="Assigned Recruiter: Click to review, fill 30 fields, and certify profile for client portal"
+                                >
+                                  <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                  </svg>
+                                  <span className="truncate">
+                                    {candidate.isRecruiterApproved ? 'Approved for Client ✓' : 'Review & Approve'}
+                                  </span>
+                                </button>
+                              )}
 
                               <button
                                 type="button"
