@@ -1210,40 +1210,7 @@ export default function ClientsPage() {
           )}
         </div>
 
-        {/* Client Accounts from ATS Requisitions */}
-        {clientAccounts.length > 0 && (
-          <div className="bg-white border border-[#EAECF0] rounded-2xl p-6 shadow-xs">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#EAECF0]">
-              <div>
-                <h3 className="text-base font-bold text-[#101828]">Existing Client Accounts ({clientAccounts.length})</h3>
-                <p className="text-xs text-[#667085]">Companies with active positions or submissions in HireIQ</p>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {clientAccounts.map(client => (
-                <div
-                  key={client.name}
-                  className="rounded-xl border border-[#EAECF0] bg-slate-50/60 p-4 flex items-center justify-between gap-3"
-                >
-                  <div className="min-w-0">
-                    <h4 className="text-xs font-bold text-[#101828] truncate">{client.name}</h4>
-                    <p className="text-[11px] text-[#667085] mt-0.5">
-                      {client.jobsCount} Requisition{client.jobsCount === 1 ? '' : 's'} in ATS
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleOpenShareModal(client.name)}
-                    className="shrink-0 px-3 py-1.5 rounded-lg bg-white border border-[#EAECF0] hover:border-[#3563E9] text-[#3563E9] text-[11px] font-bold shadow-xs hover:bg-[#EFF4FF] transition-all cursor-pointer"
-                  >
-                    Create Link
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Create Client JD Upload Link Modal */}
         {shareModalOpen && (
