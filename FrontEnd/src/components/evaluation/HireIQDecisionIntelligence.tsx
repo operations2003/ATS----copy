@@ -1048,7 +1048,11 @@ export default function HireIQDecisionIntelligence({
               </div>
               <div className="text-lg font-black text-slate-900 mt-1 flex items-center justify-between">
                 <span>
-                  {`${Number(data.breakdown.experience.candidateYears || 0).toFixed(1).replace(/\.0$/, '')} ${Number(data.breakdown.experience.candidateYears) === 1 ? 'year' : 'years'}`}
+                  {(data.breakdown.experience as any).formattedTenure
+                    ? (data.breakdown.experience as any).formattedTenure
+                    : Number(data.breakdown.experience.candidateYears || 0) < 1 && Number(data.breakdown.experience.candidateYears || 0) > 0
+                      ? `${Math.round(Number(data.breakdown.experience.candidateYears) * 12)} months`
+                      : `${Number(data.breakdown.experience.candidateYears || 0).toFixed(1).replace(/\.0$/, '')} ${Number(data.breakdown.experience.candidateYears) === 1 ? 'year' : 'years'}`}
                 </span>
                 <span
                   className={`text-xs px-2 py-0.5 rounded font-bold ${

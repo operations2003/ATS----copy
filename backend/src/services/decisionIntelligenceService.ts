@@ -8,7 +8,11 @@
 
 import prisma from "../config/prisma";
 import { getStandardRequirementsForPosition } from "../controllers/evaluationController";
-import { calculateNonOverlappingExperienceMonths } from "./cvParsingService";
+import {
+  calculateNonOverlappingExperienceMonths,
+  parseTenureStringToMonthsAndYears,
+  formatNumericExperience,
+} from "./cvParsingService";
 export type EvidenceStatus =
   | "PROVEN"
   | "PARTIALLY_PROVEN"
@@ -38,6 +42,8 @@ export interface DecisionIntelligenceBreakdown {
   };
   experience: {
     candidateYears: number;
+    candidateMonths?: number;
+    formattedTenure?: string;
     requiredYears: number;
     text: string;
     meets: boolean;
@@ -486,12 +492,13 @@ export async function buildDecisionIntelligencePayload(
     candidate.total_experience || candidate.totalExperience || candidate.exp || "",
   );
 
-  const explicitExperienceMatch =
-    explicitExperienceText.match(/(\d+(?:\.\d+)?)/);
-
-  const explicitExperienceYears = explicitExperienceMatch
-    ? parseFloat(explicitExperienceMatch[1])
-    : 0;
+  let explicitExperienceYears = 0;
+  let explicitExperienceMonths = 0;
+  if (explicitExperienceText) {
+    const tenure = parseTenureStringToMonthsAndYears(explicitExperienceText);
+    explicitExperienceYears = tenure.totalYears;
+    explicitExperienceMonths = tenure.totalMonths;
+  }
 
   const normalizedExperiences = (
     candidate.experiences ||
@@ -514,16 +521,23 @@ export async function buildDecisionIntelligencePayload(
       ? Number((verifiedExperienceMonths / 12).toFixed(1))
       : 0;
 
-  // Use the stronger verified value.
-  const totalExpYears = Math.max(
-    explicitExperienceYears,
-    verifiedExperienceYears,
+  // Use the stronger verified value in months
+  const effectiveMonths = Math.max(
+    explicitExperienceMonths,
+    verifiedExperienceMonths,
   );
+
+  const totalExpYears = effectiveMonths > 0
+    ? Number((effectiveMonths / 12).toFixed(1))
+    : Math.max(explicitExperienceYears, verifiedExperienceYears);
 
   console.log("[Decision Intelligence] Experience calculation:", {
     explicitExperienceYears,
+    explicitExperienceMonths,
     verifiedExperienceYears,
+    verifiedExperienceMonths,
     finalExperienceYears: totalExpYears,
+    finalExperienceMonths: effectiveMonths,
   });
 
   // Resolve Job Details
@@ -841,11 +855,13 @@ export async function buildDecisionIntelligencePayload(
     },
     experience: {
       candidateYears: totalExpYears,
+      candidateMonths: effectiveMonths,
+      formattedTenure: formatNumericExperience(effectiveMonths),
       requiredYears,
       text:
         requiredYears > 0
-          ? `${totalExpYears} / ${requiredExperienceLabel}`
-          : `${totalExpYears} years; no numeric requirement specified`,
+          ? `${formatNumericExperience(effectiveMonths)} / ${requiredExperienceLabel}`
+          : `${formatNumericExperience(effectiveMonths)}; no numeric requirement specified`,
       meets: meetsExperience,
       status:
         requiredYears === 0
@@ -901,7 +917,7 @@ export async function buildDecisionIntelligencePayload(
   const whyThisCandidate: string[] = [];
   if (meetsExperience && totalExpYears > 0) {
     whyThisCandidate.push(
-      `${totalExpYears} years documented professional experience aligned with requisition.`,
+      `${formatNumericExperience(effectiveMonths)} documented professional experience aligned with requisition.`,
     );
   }
   classifiedRequirements
@@ -933,7 +949,7 @@ export async function buildDecisionIntelligencePayload(
 
     const experienceMessage = [
       `Experience requirement: ${requiredExperienceLabel}.`,
-      `Candidate experience: ${formatYears(totalExpYears)} Years.`,
+      `Candidate experience: ${formatNumericExperience(effectiveMonths)}.`,
       `Gap: ${formatYears(experienceGap)} Years.`,
     ].join("\n");
 
@@ -1120,7 +1136,7 @@ export async function buildDecisionIntelligencePayload(
         scorePct: experiencePct,
         pointsEarned: experiencePoints,
         maxPoints: 25,
-        evidence: `${breakdown.experience.candidateYears} yrs verified tenure vs ${breakdown.experience.requiredYears} yrs required`,
+        evidence: `${formatNumericExperience(effectiveMonths)} verified tenure vs ${breakdown.experience.requiredYears} yrs required`,
       },
       education: {
         name: "Education & Qualifications",

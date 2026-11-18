@@ -1400,7 +1400,11 @@ export default function JobCandidatesPage() {
             const requiredYears = (isMandatory && srcYears !== undefined)
               ? srcYears
               : (yearsPattern ? parseFloat(yearsPattern[1]) : (matchResult.breakdown.experience.requiredYears || 3.0));
-            const candExp = c.totalExperienceYears || parseFloat(String(c.totalExperience || '0').replace(/[^0-9.]/g, '')) || 0;
+            const candExp = c.totalExperienceYears !== undefined && c.totalExperienceYears > 0
+              ? c.totalExperienceYears
+              : (/months?|mos?/i.test(String(c.totalExperience || ''))
+                  ? (parseFloat(String(c.totalExperience || '0').replace(/[^0-9.]/g, '')) || 0) / 12
+                  : (parseFloat(String(c.totalExperience || '0').replace(/[^0-9.]/g, '')) || 0));
             if (candExp >= requiredYears) {
               hasSkill = true;
               matchPercent = 100;
