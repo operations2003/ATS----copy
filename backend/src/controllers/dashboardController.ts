@@ -85,8 +85,18 @@ export const getDashboardSummaryController = async (
       }
     }
 
+    const activityWhere: any = {};
+    if (!isSuperAdmin) {
+      activityWhere.organizationId = userOrgId;
+      if (!isClientAdmin) {
+        activityWhere.candidate = { created_by: currentUserId };
+      }
+    } else if (req.query.organizationId) {
+      activityWhere.organizationId = String(req.query.organizationId);
+    }
+
     // 2. Execute parallel lightweight queries
-    const [jobsData, evalsData, candidateCount] = await Promise.all([
+    const [jobsData, evalsData, candidateCount, candidatesList, applicationsData, activitiesData] = await Promise.all([
       // Jobs query (selected fields only)
       prisma.job.findMany({
         where: jobWhere,
@@ -154,6 +164,39 @@ export const getDashboardSummaryController = async (
       // Total Candidate Count
       prisma.candidate.count({
         where: candidateWhere
+      }),
+
+      // Candidate list for pipeline funnel
+      prisma.candidate.findMany({
+        where: candidateWhere,
+        select: { id: true, parsing_status: true }
+      }),
+
+      // Applications with stages
+      prisma.candidateApplication.findMany({
+        where: {
+          ...(Object.keys(jobWhere).length > 0 ? { job: jobWhere } : {})
+        },
+        select: {
+          id: true,
+          candidate_id: true,
+          stage: true,
+          status: true,
+          match_score: true
+        }
+      }),
+
+      // Hiring activities for client portal events
+      prisma.candidateHiringActivity.findMany({
+        where: activityWhere,
+        select: {
+          id: true,
+          candidateId: true,
+          status: true,
+          interviewRound: true,
+          createdAt: true
+        },
+        orderBy: { createdAt: 'desc' }
       })
     ]);
 
@@ -240,19 +283,121 @@ export const getDashboardSummaryController = async (
       avgCompliance = Math.round((sum / recentEvaluations.length) * 10) / 10;
     }
 
+    // 7. Calculate authoritative Pipeline Funnel stages
+    const FUNNEL_STAGES = [
+      'Screening',
+      'Shortlisted',
+      'Recruiter Name',
+      'Round 1 Phase',
+      'Round 2 Phase',
+      'Selected',
+      'Offered',
+      'Joined'
+    ] as const;
+
+    const STAGE_RANK: Record<string, number> = {
+      'Screening': 1,
+      'Shortlisted': 2,
+      'Recruiter Name': 3,
+      'Round 1 Phase': 4,
+      'Round 2 Phase': 5,
+      'Selected': 6,
+      'Offered': 7,
+      'Joined': 8,
+    };
+
+    const candStageMap = new Map<string, string>();
+    const updateStage = (cId: string, stage: string) => {
+      if (!cId || !stage || !STAGE_RANK[stage]) return;
+      const current = candStageMap.get(cId);
+      if (!current || STAGE_RANK[stage] > (STAGE_RANK[current] || 0)) {
+        candStageMap.set(cId, stage);
+      }
+    };
+
+    // Candidates in DB start in Screening
+    for (const c of (candidatesList || [])) {
+      if (c && c.id) {
+        candStageMap.set(c.id, 'Screening');
+      }
+    }
+
+    // In-memory candidate store candidates
+    for (const [, memCands] of CANDIDATE_STORE.entries()) {
+      for (const mc of memCands) {
+        if (mc && mc.id) {
+          candStageMap.set(String(mc.id), 'Screening');
+        }
+      }
+    }
+
+    // Evaluations: high match or SUBMIT moves to Shortlisted
+    for (const e of (evalsData || [])) {
+      const s = e.atsScore ?? e.score;
+      const cId = e.candidateId || e.id;
+      if (e.decision === 'SUBMIT' || (typeof s === 'number' && s >= 80)) {
+        updateStage(cId, 'Shortlisted');
+      } else if (!candStageMap.has(cId)) {
+        updateStage(cId, 'Screening');
+      }
+    }
+
+    // Applications with stages
+    for (const a of (applicationsData || [])) {
+      const st = String(a.stage || '').toUpperCase();
+      let mapped = '';
+      if (st.includes('JOIN')) mapped = 'Joined';
+      else if (st.includes('OFFER')) mapped = 'Offered';
+      else if (st.includes('SELECT')) mapped = 'Selected';
+      else if (st.includes('INTERVIEW')) mapped = 'Round 1 Phase';
+      else if (st.includes('SHORTLIST') || st.includes('TL_APPROVED') || (typeof a.match_score === 'number' && a.match_score >= 80)) mapped = 'Shortlisted';
+      else if (st.includes('SOURCED') || st.includes('SCREEN') || st.includes('REVIEW')) mapped = 'Screening';
+
+      if (mapped) updateStage(a.candidate_id, mapped);
+    }
+
+    // Hiring activities from client shares
+    for (const act of (activitiesData || [])) {
+      const actStatus = String(act.status || '').toUpperCase();
+      const round = String(act.interviewRound || '').toLowerCase();
+      let mapped = '';
+      if (actStatus.includes('JOIN')) mapped = 'Joined';
+      else if (actStatus.includes('OFFER')) mapped = 'Offered';
+      else if (actStatus.includes('SELECT')) mapped = 'Selected';
+      else if (actStatus.includes('INTERVIEW')) {
+        if (round.includes('hr') || round.includes('round 2') || round.includes('final')) mapped = 'Round 2 Phase';
+        else if (round.includes('recruiter')) mapped = 'Recruiter Name';
+        else mapped = 'Round 1 Phase';
+      } else if (actStatus.includes('CLIENT') || actStatus.includes('SHORTLIST')) {
+        mapped = 'Shortlisted';
+      }
+
+      if (mapped) updateStage(act.candidateId, mapped);
+    }
+
+    const counts: Record<string, number> = Object.fromEntries(FUNNEL_STAGES.map(s => [s, 0]));
+    for (const [, stage] of candStageMap.entries()) {
+      if (counts[stage] !== undefined) {
+        counts[stage]++;
+      }
+    }
+
+    const funnel = FUNNEL_STAGES.map(stage => ({ stage, value: counts[stage] || 0 }));
+
     res.status(200).json({
       success: true,
       stats: {
         totalJobs: formattedJobs.length,
         activeJobs: activeJobsCount,
-        totalCandidates: Math.max(candidateCount, totalJobApplicants),
+        totalCandidates: Math.max(candidateCount, totalJobApplicants, candStageMap.size),
         totalEvaluated,
         submitCount,
         rejectCount,
         avgCompliance
       },
       jobs: formattedJobs,
-      recentEvaluations
+      recentEvaluations,
+      funnel
     });
   } catch (error: any) {
     console.error('[Dashboard Summary Controller Error]:', error);

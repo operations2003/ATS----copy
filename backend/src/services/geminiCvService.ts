@@ -222,8 +222,7 @@ export async function extractCvWithGemini(
   if (isFallbackSupported) {
     candidateModels.push(FALLBACK_GEMINI_MODEL);
   } else {
-    const isAltSupported = await isGeminiModelSupported('gemini-2.5-flash', apiKey);
-    if (isAltSupported) candidateModels.push('gemini-2.5-flash');
+    candidateModels.push('gemini-3.5-flash-lite');
   }
 
   const prompt = `Extract all structured fields from this candidate resume:\n\n--- RESUME TEXT (${fileName}) ---\n${rawText}\n--- END RESUME TEXT ---`;

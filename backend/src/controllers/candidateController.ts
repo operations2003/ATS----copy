@@ -832,11 +832,39 @@ export const getCandidatesForJob = async (req: AuthRequest, res: Response): Prom
     }
     const jobTitle = targetJob?.position || targetJob?.title || 'Job Requisition';
     const jobClient = targetJob?.client || targetJob?.company || 'Enterprise Client';
-    const reqs = (targetJob?.requirements && targetJob.requirements.length > 0)
+    let reqs: any[] = (targetJob?.requirements && targetJob.requirements.length > 0)
       ? targetJob.requirements
       : ((targetJob?.extractedRequirements && targetJob.extractedRequirements.length > 0)
         ? targetJob.extractedRequirements
-        : getStandardRequirementsForPosition(jobTitle, jobClient));
+        : []);
+
+    if (reqs.length === 0) {
+      const jdText = targetJob?.jd_text || targetJob?.original_jd || '';
+      if (jdText && typeof jdText === 'string' && jdText.trim().length > 30) {
+        try {
+          const { semanticallyUnderstandJd } = await import('../services/jdAiService');
+          const semRes = await semanticallyUnderstandJd(jdText);
+          if (semRes && Array.isArray(semRes.requirements) && semRes.requirements.length > 0) {
+            reqs = semRes.requirements.map((r, idx) => ({
+              id: r.id || `req-ai-jd-${idx + 1}`,
+              requirement: r.requirement,
+              category: r.category,
+              is_mandatory: r.is_mandatory,
+              weight: r.weight,
+              evidence_required: true,
+              source_evidence: r.source_evidence,
+              needs_verification: false,
+              aliases: r.aliases || [],
+              context: r.context || null
+            }));
+          }
+        } catch {}
+      }
+    }
+
+    if (reqs.length === 0) {
+      reqs = getStandardRequirementsForPosition(jobTitle, jobClient);
+    }
 
     const enrichedList = await Promise.all(resultList.map(async (c) => {
       let finalScore = (c as any).matchScore ?? (c as any).atsScore;
@@ -1049,7 +1077,35 @@ export async function evaluateAndEnrichCandidateRecord(
     const jobClient = targetJob?.client || targetJob?.company || reqJobClient || 'Client Organization';
     let reqs: any[] = (targetJob?.requirements && targetJob.requirements.length > 0)
       ? targetJob.requirements
-      : (customReqs.length > 0 ? customReqs : getStandardRequirementsForPosition(jobTitle, jobClient));
+      : (customReqs.length > 0 ? customReqs : []);
+
+    if (reqs.length === 0) {
+      const jdText = targetJob?.jd_text || targetJob?.original_jd || '';
+      if (jdText && typeof jdText === 'string' && jdText.trim().length > 30) {
+        try {
+          const { semanticallyUnderstandJd } = await import('../services/jdAiService');
+          const semRes = await semanticallyUnderstandJd(jdText);
+          if (semRes && Array.isArray(semRes.requirements) && semRes.requirements.length > 0) {
+            reqs = semRes.requirements.map((r, idx) => ({
+              id: r.id || `req-ai-jd-${idx + 1}`,
+              requirement: r.requirement,
+              category: r.category,
+              is_mandatory: r.is_mandatory,
+              weight: r.weight,
+              evidence_required: true,
+              source_evidence: r.source_evidence,
+              needs_verification: false,
+              aliases: r.aliases || [],
+              context: r.context || null
+            }));
+          }
+        } catch {}
+      }
+    }
+
+    if (reqs.length === 0) {
+      reqs = getStandardRequirementsForPosition(jobTitle, jobClient);
+    }
 
     if (!targetJob && (reqJobPosition || customReqs.length > 0)) {
       targetJob = {

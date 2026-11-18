@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { useAuth } from '@/context/AuthContext';
 import { computeComprehensiveMatchScore } from '@/utils/requirementUtils';
+import { atsStore } from '@/lib/atsStore';
 import {
   getJobAssignment,
   CLIENT_SHARES_STORAGE_KEY,
@@ -117,8 +118,27 @@ export default function DashboardPage() {
   const [jobSearch, setJobSearch] = useState('');
   const [timeRange, setTimeRange] = useState<'today' | '7d' | '30d' | '90d'>('30d');
   const [isLoading, setIsLoading] = useState(true);
+  const apiFunnelRef = useRef<DashboardFunnelStage[] | null>(null);
 
-  useEffect(() => {
+  const recomputeFunnel = useCallback((apiFunnel?: DashboardFunnelStage[]) => {
+    if (typeof window === 'undefined') return;
+
+    if (apiFunnel && Array.isArray(apiFunnel) && apiFunnel.length > 0) {
+      apiFunnelRef.current = apiFunnel;
+    }
+    const currentApiFunnel = apiFunnel || apiFunnelRef.current;
+
+    const STAGE_RANK: Record<string, number> = {
+      'Screening': 1,
+      'Shortlisted': 2,
+      'Recruiter Name': 3,
+      'Round 1 Phase': 4,
+      'Round 2 Phase': 5,
+      'Selected': 6,
+      'Offered': 7,
+      'Joined': 8,
+    };
+
     const uniqueCandidates = new Map<string, any>();
     const readArray = (key: string) => {
       try {
@@ -129,55 +149,195 @@ export default function DashboardPage() {
       }
     };
 
+    // 1. Gather all candidates from candidate stores & pools
     [...readArray('tasknera_ats_candidates'), ...readArray('tasknera_candidates_pool')].forEach(candidate => {
       if (candidate?.id) uniqueCandidates.set(String(candidate.id), candidate);
     });
+
     for (let index = 0; index < localStorage.length; index++) {
       const key = localStorage.key(index);
-      if (!key?.startsWith('tasknera_candidates_') || key === 'tasknera_candidates_pool' || key.startsWith('tasknera_candidates_count_')) continue;
-      readArray(key).forEach(candidate => {
-        if (candidate?.id) uniqueCandidates.set(String(candidate.id), candidate);
-      });
+      if (!key) continue;
+      // Read candidate lists across jobs, pools, and client portal shares
+      if (
+        (key.startsWith('tasknera_candidates_') && key !== 'tasknera_candidates_pool' && !key.startsWith('tasknera_candidates_count_')) ||
+        key.startsWith('tasknera_portal_cands_')
+      ) {
+        readArray(key).forEach(candidate => {
+          if (candidate?.id) {
+            const existing = uniqueCandidates.get(String(candidate.id)) || {};
+            uniqueCandidates.set(String(candidate.id), { ...existing, ...candidate });
+          }
+        });
+      }
     }
 
-    const stageOverrides = new Map<string, string>();
-    readArray('tasknera_recruitment_pipeline_v1').forEach(candidate => {
-      if (candidate?.id && candidate?.stage) {
-        stageOverrides.set(String(candidate.id), String(candidate.stage));
-        uniqueCandidates.set(String(candidate.id), { ...uniqueCandidates.get(String(candidate.id)), ...candidate });
+    // Include candidates from atsStore
+    try {
+      atsStore.getCandidates().forEach(candidate => {
+        if (candidate?.id) {
+          const existing = uniqueCandidates.get(String(candidate.id)) || {};
+          uniqueCandidates.set(String(candidate.id), { ...existing, ...candidate });
+        }
+      });
+    } catch {}
+
+    // Include candidates from recent evaluations
+    recentEvaluations.forEach(evaluation => {
+      const id = String(evaluation.id || '');
+      if (id) {
+        const existing = uniqueCandidates.get(id) || {};
+        uniqueCandidates.set(id, {
+          ...existing,
+          id,
+          name: evaluation.name || existing.name,
+          atsScore: evaluation.match ?? existing.atsScore,
+          decision: evaluation.decision ?? existing.decision,
+        });
       }
     });
 
-    const stageMembers = new Map<string, Set<string>>(FUNNEL_STAGES.map(stage => [stage, new Set<string>()] as const));
-    uniqueCandidates.forEach((candidate, id) => {
-      const savedStage = stageOverrides.get(id) || String(candidate.stage || candidate.pipelineStage || '');
-      const status = String(candidate.stageStatus || candidate.status || '').toUpperCase();
-      const normalized = savedStage.toLowerCase();
-      let stage = '';
-      if (normalized === 'screening' || status === 'SCREENED' || status === 'SOURCED') stage = 'Screening';
-      else if (normalized === 'shortlisted' || ['SHORTLISTED', 'PENDING_TL_REVIEW', 'TL_APPROVED', 'OVERRIDDEN'].includes(status)) stage = 'Shortlisted';
-      else if (normalized === 'recruiter name' || normalized === 'recruiter screen') stage = 'Recruiter Name';
-      else if (normalized === 'round 1 phase' || normalized.includes('technical')) stage = 'Round 1 Phase';
-      else if (normalized === 'round 2 phase' || normalized.includes('hr')) stage = 'Round 2 Phase';
-      else if (normalized === 'selected') stage = 'Selected';
-      else if (normalized === 'offered') stage = 'Offered';
-      else if (normalized === 'joined' || status === 'JOINED') stage = 'Joined';
-      if (stage) stageMembers.get(stage)?.add(id);
+    // 2. Read saved pipeline candidates and stage overrides
+    const stageOverrides = new Map<string, string>();
+    readArray('tasknera_recruitment_pipeline_v1').forEach(candidate => {
+      if (candidate?.id) {
+        const candId = String(candidate.id);
+        if (candidate.stage) stageOverrides.set(candId, String(candidate.stage));
+        const existing = uniqueCandidates.get(candId) || {};
+        uniqueCandidates.set(candId, { ...existing, ...candidate });
+      }
     });
 
+    // 3. Scan portal activities for stage progression
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index);
+      if (key?.startsWith('tasknera_portal_activities_')) {
+        readArray(key).forEach((act: any) => {
+          const cId = String(act?.candidateId || act?.candidate_id || '');
+          if (!cId) return;
+          const status = String(act.status || '').toUpperCase();
+          const round = String(act.interviewRound || '').toLowerCase();
+          let actStage = '';
+          if (status.includes('JOIN')) actStage = 'Joined';
+          else if (status.includes('OFFER')) actStage = 'Offered';
+          else if (status.includes('SELECT')) actStage = 'Selected';
+          else if (status.includes('INTERVIEW')) {
+            if (round.includes('hr') || round.includes('round 2') || round.includes('final')) actStage = 'Round 2 Phase';
+            else if (round.includes('recruiter')) actStage = 'Recruiter Name';
+            else actStage = 'Round 1 Phase';
+          } else if (status.includes('CLIENT') || status.includes('SHORTLIST')) {
+            actStage = 'Shortlisted';
+          }
+          if (actStage) {
+            const currentOver = stageOverrides.get(cId);
+            if (!currentOver || (STAGE_RANK[actStage] || 0) > (STAGE_RANK[currentOver] || 0)) {
+              stageOverrides.set(cId, actStage);
+            }
+          }
+        });
+      }
+    }
+
+    // 4. Map each candidate to stage using ranking
+    const candidateStageMap = new Map<string, string>();
+    const assignStage = (candId: string, stage: string) => {
+      if (!candId || !stage || !STAGE_RANK[stage]) return;
+      const current = candidateStageMap.get(candId);
+      if (!current || (STAGE_RANK[stage] || 0) > (STAGE_RANK[current] || 0)) {
+        candidateStageMap.set(candId, stage);
+      }
+    };
+
+    uniqueCandidates.forEach((candidate, id) => {
+      const savedStage = stageOverrides.get(id) || String(candidate.stage || candidate.pipelineStage || '');
+      const status = String(candidate.stageStatus || candidate.status || candidate.portalStatus || '').toUpperCase();
+      const decision = String(candidate.decision || '').toUpperCase();
+      const rawScore = Number(candidate.atsScore ?? candidate.score ?? candidate.match ?? 0);
+      const normalized = savedStage.toLowerCase();
+
+      if (normalized === 'joined' || status === 'JOINED' || status.includes('JOIN')) assignStage(id, 'Joined');
+      else if (normalized === 'offered' || status === 'OFFERED' || status.includes('OFFER')) assignStage(id, 'Offered');
+      else if (normalized === 'selected' || status === 'SELECTED' || status.includes('SELECT')) assignStage(id, 'Selected');
+      else if (normalized === 'round 2 phase' || normalized.includes('hr') || normalized.includes('round 2')) assignStage(id, 'Round 2 Phase');
+      else if (normalized === 'round 1 phase' || normalized.includes('technical') || normalized.includes('round 1') || status === 'INTERVIEWING') assignStage(id, 'Round 1 Phase');
+      else if (normalized === 'recruiter name' || normalized === 'recruiter screen' || normalized.includes('recruiter')) assignStage(id, 'Recruiter Name');
+      else if (
+        normalized === 'shortlisted' ||
+        ['SHORTLISTED', 'PENDING_TL_REVIEW', 'TL_APPROVED', 'OVERRIDDEN', 'SUBMIT'].includes(status) ||
+        decision === 'SUBMIT' ||
+        rawScore >= 80 ||
+        candidate.isRecruiterApproved === true
+      ) {
+        assignStage(id, 'Shortlisted');
+      } else {
+        assignStage(id, 'Screening');
+      }
+    });
+
+    // 5. Ingest scheduled interviews
     try {
       const interviewStore = JSON.parse(localStorage.getItem('tasknera_interviews_frontend_v1') || '{}');
       const interviews = Array.isArray(interviewStore?.interviews) ? interviewStore.interviews : [];
       interviews.forEach((interview: any, index: number) => {
         const round = String(interview?.round || '').toLowerCase();
         const candidateId = String(interview?.candidateId || interview?.id || `interview-${index}`);
-        const stage = round.includes('hr') ? 'Round 2 Phase' : round.includes('technical') ? 'Round 1 Phase' : round.includes('recruiter') ? 'Recruiter Name' : '';
-        if (stage && interview.status !== 'cancelled') stageMembers.get(stage)?.add(candidateId);
+        const stage = round.includes('hr') || round.includes('round 2')
+          ? 'Round 2 Phase'
+          : round.includes('technical') || round.includes('round 1')
+          ? 'Round 1 Phase'
+          : round.includes('recruiter')
+          ? 'Recruiter Name'
+          : '';
+        if (stage && interview.status !== 'cancelled') {
+          assignStage(candidateId, stage);
+        }
       });
     } catch {}
 
-    setDashboardFunnel(FUNNEL_STAGES.map(stage => ({ stage, value: stageMembers.get(stage)?.size || 0 })));
-  }, []);
+    const localCounts: Record<string, number> = Object.fromEntries(FUNNEL_STAGES.map(s => [s, 0]));
+    candidateStageMap.forEach(stage => {
+      if (localCounts[stage] !== undefined) {
+        localCounts[stage]++;
+      }
+    });
+
+    // Merge with API funnel
+    const apiCounts: Record<string, number> = {};
+    if (Array.isArray(currentApiFunnel) && currentApiFunnel.length > 0) {
+      currentApiFunnel.forEach(item => {
+        if (item && item.stage && typeof item.value === 'number') {
+          apiCounts[item.stage] = item.value;
+        }
+      });
+    }
+
+    const mergedFunnel: DashboardFunnelStage[] = FUNNEL_STAGES.map(stage => ({
+      stage,
+      value: Math.max(localCounts[stage] || 0, apiCounts[stage] || 0)
+    }));
+
+    setDashboardFunnel(mergedFunnel);
+  }, [recentEvaluations]);
+
+  // Synchronize Funnel on mount and upon any candidate or portal event
+  useEffect(() => {
+    const handleSync = () => {
+      recomputeFunnel();
+    };
+
+    recomputeFunnel();
+
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('tasknera_portal_sync', handleSync);
+    window.addEventListener('tasknera_pipeline_sync', handleSync);
+    window.addEventListener('tasknera_candidates_updated', handleSync);
+
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('tasknera_portal_sync', handleSync);
+      window.removeEventListener('tasknera_pipeline_sync', handleSync);
+      window.removeEventListener('tasknera_candidates_updated', handleSync);
+    };
+  }, [recomputeFunnel]);
 
   // Fetch real jobs and candidate evaluations for the authenticated user
   useEffect(() => {
@@ -267,6 +427,10 @@ export default function DashboardPage() {
                 ...evaluation,
                 evaluatedAt: evaluation.evaluatedAt || evaluation.createdAt || evaluation.created_at || evaluation.date || '',
               })) : [];
+              if (Array.isArray(sumData.funnel)) {
+                apiFunnelRef.current = sumData.funnel;
+                recomputeFunnel(sumData.funnel);
+              }
               summaryLoaded = true;
             }
           }
@@ -500,6 +664,7 @@ export default function DashboardPage() {
         if (isMounted) {
           setJobs(mergedJobs);
           setRecentEvaluations(finalEvals);
+          recomputeFunnel(apiFunnelRef.current || undefined);
         }
       } catch (err) {
         console.error('[Dashboard] Error loading dashboard data:', err);
@@ -513,7 +678,7 @@ export default function DashboardPage() {
     return () => {
       isMounted = false;
     };
-  }, [user, token]);
+  }, [user, token, recomputeFunnel]);
 
   // Dynamic calculations strictly from REAL data
   const totalJobsCount = jobs.length;

@@ -197,28 +197,41 @@ export const parseJobDescriptionController = async (
           );
         };
 
-        if (
-          semRes.normalizedJd.job_title &&
-          (!result.data.positionTitle || isMessyOrUncleanTitle(result.data.positionTitle))
-        ) {
-          result.data.positionTitle = semRes.normalizedJd.job_title;
+        if (semRes.normalizedJd.job_title && semRes.normalizedJd.job_title.trim()) {
+          result.data.positionTitle = semRes.normalizedJd.job_title.trim();
           if (result.data.job)
-            result.data.job.positionTitle = semRes.normalizedJd.job_title;
+            result.data.job.positionTitle = semRes.normalizedJd.job_title.trim();
+        }
+
+        if (semRes.normalizedJd.company_name && semRes.normalizedJd.company_name.trim()) {
+          result.data.companyName = semRes.normalizedJd.company_name.trim();
+          if (result.data.job) {
+            result.data.job.company = semRes.normalizedJd.company_name.trim();
+            result.data.job.companyName = semRes.normalizedJd.company_name.trim();
+            result.data.job.client = semRes.normalizedJd.company_name.trim();
+          }
+        }
+
+        if (semRes.normalizedJd.location && semRes.normalizedJd.location.trim()) {
+          result.data.location = semRes.normalizedJd.location.trim();
+          if (result.data.job) result.data.job.location = semRes.normalizedJd.location.trim();
+        }
+
+        if (semRes.normalizedJd.work_mode) {
+          result.data.workMode = semRes.normalizedJd.work_mode;
+          if (result.data.job) result.data.job.workMode = semRes.normalizedJd.work_mode;
+        }
+
+        if (semRes.normalizedJd.salary && semRes.normalizedJd.salary.trim()) {
+          result.data.salary = semRes.normalizedJd.salary.trim();
+          if (result.data.job) result.data.job.salary = semRes.normalizedJd.salary.trim();
         }
 
         // =====================================================
         // REQUIREMENT SOURCE SELECTION
-        // Preserve deterministic extraction whenever explicit
-        // Mandatory / Preferred sections exist in the JD.
-        // Use Gemini as the classification source for unstructured JDs.
+        // Gemini Semantic Normalization is the authoritative engine.
+        // Accurately extracts mandatory & preferred requirements directly from the JD.
         // =====================================================
-
-        const hasExplicitRequirementSections = result.data.requirements.some(
-          (req: any) =>
-            req.sourceSection === "Mandatory Skills" ||
-            req.sourceSection === "Preferred Skills",
-        );
-
         const geminiMandatoryList = semRes.requirements
           .filter((r) => r.is_mandatory)
           .map((r) => r.requirement);
@@ -227,66 +240,40 @@ export const parseJobDescriptionController = async (
           .filter((r) => !r.is_mandatory)
           .map((r) => r.requirement);
 
-        if (hasExplicitRequirementSections) {
-          // The deterministic parser has already identified the
-          // explicitly labelled sections. Do not allow a partial
-          // Gemini response to overwrite those results.
+        result.data.mandatoryRequirements = geminiMandatoryList;
+        result.data.preferredRequirements = geminiPreferredList;
 
-          console.log(
-            "[JD Parsing Pipeline] Explicit requirement sections detected. Preserving deterministic extraction.",
-            {
-              deterministicMandatory: result.data.mandatoryRequirements.length,
-              deterministicPreferred: result.data.preferredRequirements.length,
-              geminiMandatory: geminiMandatoryList.length,
-              geminiPreferred: geminiPreferredList.length,
-            },
-          );
-        } else {
-          // No explicit section headings were found.
-          // Use Gemini's semantic classification.
-
-          result.data.mandatoryRequirements = geminiMandatoryList;
-          result.data.preferredRequirements = geminiPreferredList;
-
-          // Map Gemini requirements only for unstructured JDs.
-          result.data.requirements = semRes.requirements.map((inf, idx) => ({
-            id: inf.id || `req-ai-${idx + 1}`,
-            requirement: inf.requirement,
-            category: inf.category || "Technical Skill",
-
-            type:
-              inf.category === "Experience"
-                ? "EXPERIENCE"
-                : inf.category === "Education"
-                  ? "EDUCATION"
-                  : inf.category === "Certification"
-                    ? "CERTIFICATION"
-                    : "SKILL",
-
-            weight:
-              typeof inf.weight === "number"
-                ? inf.weight
-                : inf.is_mandatory
-                  ? 2.0
-                  : 1.0,
-
-            isMandatory: inf.is_mandatory,
-            mandatory: inf.is_mandatory,
-            evidenceRequired: true,
-            recruiterConfirmed: false,
-            needsVerification: false,
-            sourceEvidence: inf.source_evidence || inf.requirement,
-
-            sourceSection: inf.is_mandatory
-              ? "Mandatory Requirements"
-              : "Preferred Requirements",
-
-            confidence: (inf.confidence as "HIGH" | "MEDIUM" | "LOW") || "HIGH",
-
-            aliases: inf.aliases || [],
-            context: inf.context || "",
-          }));
-        }
+        result.data.requirements = semRes.requirements.map((inf, idx) => ({
+          id: inf.id || `req-ai-${idx + 1}`,
+          requirement: inf.requirement,
+          category: inf.category || "Technical Skill",
+          type:
+            inf.category === "Experience"
+              ? "EXPERIENCE"
+              : inf.category === "Education"
+                ? "EDUCATION"
+                : inf.category === "Certification"
+                  ? "CERTIFICATION"
+                  : "SKILL",
+          weight:
+            typeof inf.weight === "number"
+              ? inf.weight
+              : inf.is_mandatory
+                ? 2.0
+                : 1.0,
+          isMandatory: inf.is_mandatory,
+          mandatory: inf.is_mandatory,
+          evidenceRequired: true,
+          recruiterConfirmed: false,
+          needsVerification: false,
+          sourceEvidence: inf.source_evidence || inf.requirement,
+          sourceSection: inf.is_mandatory
+            ? "Mandatory Requirements"
+            : "Preferred Requirements",
+          confidence: (inf.confidence as "HIGH" | "MEDIUM" | "LOW") || "HIGH",
+          aliases: inf.aliases || [],
+          context: inf.context || "",
+        }));
 
         // Preserve existing hiring criteria.
         // Never clear the deterministic hiring criteria just
@@ -434,9 +421,7 @@ export const parseJobDescriptionController = async (
     const aiMin = normalizedExperience?.minimum_years;
     const aiMax = normalizedExperience?.maximum_years;
 
-    // Prefer deterministic extraction over Gemini.
-    // Use Gemini only when deterministic extraction fails.
-
+    // Prefer Gemini semantic experience extraction over regex when available.
     const aiExperienceBounds =
       typeof aiMin === "number" && Number.isFinite(aiMin) && aiMin > 0
         ? {
@@ -451,7 +436,7 @@ export const parseJobDescriptionController = async (
         : null;
 
     const experienceBounds =
-      parseJdExperienceBounds(result.data.experience) ?? aiExperienceBounds;
+      aiExperienceBounds ?? parseJdExperienceBounds(result.data.experience);
 
     if (experienceBounds) {
       const { min, max } = experienceBounds;

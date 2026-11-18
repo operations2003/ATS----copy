@@ -42,6 +42,10 @@ export interface NormalizedRequirement {
 
 export interface NormalizedJdSchema {
   job_title: string;
+  company_name?: string | null;
+  location?: string | null;
+  work_mode?: "Remote" | "Hybrid" | "Onsite" | null;
+  salary?: string | null;
   summary: string;
   experience: {
     minimum_years: number | null;
@@ -58,8 +62,8 @@ export interface NormalizedJdSchema {
   soft_skills: string[];
 }
 
-export const PRIMARY_GEMINI_MODEL = "gemini-2.5-flash-lite";
-export const FALLBACK_GEMINI_MODEL = "gemini-3.5-flash-lite";
+export const PRIMARY_GEMINI_MODEL = "gemini-3.1-flash-lite";
+export const FALLBACK_GEMINI_MODEL = "gemini-3.1-flash-lite-preview";
 const GEMINI_TIMEOUT_MS = 45000; // 45-second timeout for large documents (e.g. 7k+ char JDs)
 
 // HTTP Status code classifications
@@ -124,11 +128,13 @@ export async function isGeminiModelSupported(
     );
   }
 
-  // Safe heuristic fallback for confirmed supported models if query fails
+  // Safe heuristic fallback for confirmed supported official models if query fails
   const knownSupported = new Set([
-    "gemini-2.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3.8-flash",
     "gemini-3.5-flash-lite",
-    "gemini-2.5-flash",
+    "gemini-flash-latest",
   ]);
   return knownSupported.has(modelName);
 }
@@ -280,6 +286,10 @@ CRITICAL EXTRACTION RULES:
 EXPECTED JSON SCHEMA FORMAT:
 {
   "job_title": "String",
+  "company_name": "String or null if not explicitly stated in JD",
+  "location": "String or null if not stated in JD",
+  "work_mode": "Remote | Hybrid | Onsite | null",
+  "salary": "String or null if not stated in JD",
   "summary": "String",
   "experience": {
     "minimum_years": null,
@@ -314,7 +324,7 @@ EXPECTED JSON SCHEMA FORMAT:
   "soft_skills": []
 }
 
-RETURN ONLY VALID JSON conforming to this schema. No conversational text.`;
+RETURN ONLY VALID JSON conforming to this schema. No conversational text. NEVER invent random data for fields that are not in the JD; return null or empty arrays.`;
 
 /**
  * Calls Gemini to analyze and normalize a Job Description.
@@ -345,7 +355,7 @@ export async function understandJobDescriptionWithGemini(
 
   console.log("[Gemini] Request started");
 
-  const prompt = `Analyze this Job Description and return a complete, normalized semantic representation:\n\n--- JOB DESCRIPTION ---\n${jdText}\n--- END JOB DESCRIPTION ---`;
+  const prompt = `Analyze this Job Description and return a complete, normalized semantic representation without inventing or hallucinating any outside information. Extract strictly what is stated in the JD:\n\n--- JOB DESCRIPTION ---\n${jdText}\n--- END JOB DESCRIPTION ---`;
 
   const requestBody = {
     contents: [
@@ -374,16 +384,7 @@ export async function understandJobDescriptionWithGemini(
   if (isFallbackSupported) {
     candidateModels.push(FALLBACK_GEMINI_MODEL);
   } else {
-    console.warn(
-      `[Gemini] Fallback model ${FALLBACK_GEMINI_MODEL} is unavailable in this API account. Checking alternative fallback...`,
-    );
-    const isAltSupported = await isGeminiModelSupported(
-      "gemini-2.5-flash",
-      apiKey,
-    );
-    if (isAltSupported) {
-      candidateModels.push("gemini-2.5-flash");
-    }
+    candidateModels.push("gemini-3.5-flash-lite");
   }
 
   for (let mIdx = 0; mIdx < candidateModels.length; mIdx++) {

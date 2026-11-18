@@ -191,6 +191,33 @@ async function getJobAndRequirements(jobId: string, fallbackPosition?: string, f
   }
 
   if (requirements.length === 0) {
+    // If the job has actual JD text, semantically extract real requirements with Gemini
+    const textToExtract = (jobData as any)?.jd_text || (jobData as any)?.original_jd || '';
+    if (textToExtract && typeof textToExtract === 'string' && textToExtract.trim().length > 30) {
+      try {
+        const { semanticallyUnderstandJd } = await import('../services/jdAiService');
+        const semRes = await semanticallyUnderstandJd(textToExtract);
+        if (semRes && Array.isArray(semRes.requirements) && semRes.requirements.length > 0) {
+          requirements = semRes.requirements.map((r, idx) => ({
+            id: r.id || `req-ai-jd-${idx + 1}`,
+            requirement: r.requirement,
+            category: r.category,
+            is_mandatory: r.is_mandatory,
+            weight: r.weight,
+            evidence_required: true,
+            source_evidence: r.source_evidence,
+            needs_verification: false,
+            aliases: r.aliases || [],
+            context: r.context || null
+          }));
+        }
+      } catch (err: any) {
+        console.warn('[Evaluation] Dynamic Gemini JD requirement extraction notice:', err?.message || err);
+      }
+    }
+  }
+
+  if (requirements.length === 0) {
     requirements = getStandardRequirementsForPosition(jobData.position, jobData.client);
   }
 
