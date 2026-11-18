@@ -877,8 +877,8 @@ export default function CandidatesPage() {
                             <div className="font-bold text-[#1E293B] text-sm group-hover:text-brand-orange transition-colors">
                               {c.name}
                             </div>
-                            <div className="text-slate-500 text-[11px] font-medium">
-                              {c.role} • <span className="text-slate-400">{c.location}</span>
+                            <div className="text-slate-500 text-[11px] font-medium truncate max-w-[260px]" title={c.role}>
+                              {(c.role || '—').replace(/^(?:WORK\s+EXPERIENCE|PROFESSIONAL\s+EXPERIENCE|EMPLOYMENT\s+HISTORY|EXPERIENCE)\s*[:\s-]*/i, '').split(/\s+(?:Engineered|Developed|Built|Implemented|Managed|Responsible|Designed|Spearheaded|Created)\b/i)[0].trim().substring(0, 50)} • <span className="text-slate-400">{c.location}</span>
                             </div>
                           </div>
                         </div>

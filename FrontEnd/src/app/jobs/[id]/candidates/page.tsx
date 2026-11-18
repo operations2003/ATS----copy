@@ -2440,13 +2440,13 @@ export default function JobCandidatesPage() {
                         title="Select all candidates for comparison or submission"
                       />
                     </th>
-                    <th className="px-6 py-3.5">Candidate Profile</th>
-                    <th className="px-6 py-3.5">Experience & History</th>
-                    <th className="px-6 py-3.5 hidden lg:table-cell">Current Role</th>
-                    <th className="px-6 py-3.5 text-center">ATS Score</th>
-                    <th className="px-6 py-3.5 text-center">Decision Tag</th>
-                    <th className="px-6 py-3.5 text-center">Status</th>
-                    <th className="px-6 py-3.5 text-right">Action</th>
+                    <th className="px-6 py-3.5 min-w-[220px]">Candidate Profile</th>
+                    <th className="px-6 py-3.5 w-[180px] min-w-[170px]">Experience & History</th>
+                    <th className="px-6 py-3.5 hidden lg:table-cell w-[220px] max-w-[240px]">Current Role</th>
+                    <th className="px-6 py-3.5 text-center w-[120px]">ATS Score</th>
+                    <th className="px-6 py-3.5 text-center w-[150px]">Decision Tag</th>
+                    <th className="px-6 py-3.5 text-center w-[130px]">Status</th>
+                    <th className="px-6 py-3.5 text-right w-[160px]">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
@@ -2480,7 +2480,7 @@ export default function JobCandidatesPage() {
                                   }}
                                   className="font-extrabold text-slate-900 group-hover:text-brand-orange transition-colors text-left cursor-pointer text-sm tracking-tight"
                                 >
-                                  {c.name || c.fileName || 'Unnamed Candidate'}
+                                  {(c.name || c.fileName || 'Unnamed Candidate').replace(/\s+Full(?:\s*-\s*Stack)?$/i, '')}
                                 </button>
                                 {isNewlyAdded && (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0 animate-pulse">
@@ -2541,9 +2541,35 @@ export default function JobCandidatesPage() {
                         </td>
 
                         {/* Current Title & Company */}
-                        <td className="px-6 py-4 hidden lg:table-cell text-xs">
-                          <div className="font-bold text-slate-900">{c.currentTitle || '—'}</div>
-                          <div className="text-slate-500 text-[11px] font-medium mt-0.5">{c.currentCompany || '—'}</div>
+                        <td className="px-6 py-4 hidden lg:table-cell text-xs w-[220px] max-w-[240px] overflow-hidden align-middle">
+                          {(() => {
+                            const rawTitle = (c.currentTitle || '').trim();
+                            const cleanTitle = rawTitle
+                              .replace(/^(?:WORK\s+EXPERIENCE|PROFESSIONAL\s+EXPERIENCE|EMPLOYMENT\s+HISTORY|EXPERIENCE)\s*[:\s-]*/i, '')
+                              .split(/\s+(?:Engineered|Developed|Built|Implemented|Managed|Responsible|Designed|Spearheaded|Created|Architected|Led|Collaborated|Maintained|Wrote|Deployed)\b/i)[0]
+                              .trim();
+                            const displayTitle = cleanTitle.length > 70 ? `${cleanTitle.substring(0, 67)}...` : cleanTitle || '—';
+                            
+                            const rawCompany = (c.currentCompany || '').trim();
+                            const displayCompany = rawCompany.length > 40 ? `${rawCompany.substring(0, 37)}...` : rawCompany || '—';
+
+                            return (
+                              <div className="max-w-[220px] space-y-0.5">
+                                <div 
+                                  className="font-bold text-slate-900 line-clamp-2 break-words" 
+                                  title={rawTitle || displayTitle}
+                                >
+                                  {displayTitle}
+                                </div>
+                                <div 
+                                  className="text-slate-500 text-[11px] font-medium truncate" 
+                                  title={rawCompany || displayCompany}
+                                >
+                                  {displayCompany}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* ATS Score (Not auto deciding the decision tag) */}

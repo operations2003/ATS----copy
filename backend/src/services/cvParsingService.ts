@@ -887,7 +887,20 @@ function parseExperienceSection(expText: string, fullText: string): CandidateExp
       let company = '';
       let location = '';
 
-      const cleanedLine = dateInfo.cleanedText.replace(/^[\#\*\-\•\–\—\s|]+|[\#\*\-\•\–\—\s|]+$/g, '').trim();
+      let sanitizedLine = dateInfo.cleanedText
+        .replace(/^[\#\*\-\•\–\—\s|]+|[\#\*\-\•\–\—\s|]+$/g, '')
+        .replace(/^(?:WORK\s+EXPERIENCE|PROFESSIONAL\s+EXPERIENCE|EMPLOYMENT\s+HISTORY|EXPERIENCE)\s*[:\s-]*/i, '')
+        .trim();
+
+      // If bullet descriptions or action verbs were joined without newlines, cut off the description
+      const actionCut = sanitizedLine.search(/\s+(?:Engineered|Developed|Built|Implemented|Managed|Responsible\s+for|Designed|Spearheaded|Created|Architected|Led|Collaborated|Maintained|Wrote|Deployed)\b/i);
+      if (actionCut > 0 && actionCut < 120) {
+        sanitizedLine = sanitizedLine.substring(0, actionCut).trim();
+      } else if (sanitizedLine.length > 90) {
+        sanitizedLine = sanitizedLine.substring(0, 85).trim();
+      }
+
+      const cleanedLine = sanitizedLine;
 
       if (cleanedLine.length >= 3) {
         if (cleanedLine.includes('|')) {
@@ -1124,12 +1137,17 @@ function parseEducationSection(eduText: string, fullText: string): CandidateEduc
       }
 
       if (degreeStr && degreeStr.length >= 3 && !/experience|summary|skills|projects/i.test(degreeStr)) {
+        let cleanDegree = degreeStr.replace(/^(?:EDUCATION|ACADEMICS)\s*[:\s-]*/i, '').trim();
+        if (cleanDegree.length > 80) cleanDegree = cleanDegree.substring(0, 77).trim() + '...';
+        let cleanInst = (institutionStr || 'University / Institute').trim();
+        if (cleanInst.length > 90) cleanInst = cleanInst.substring(0, 87).trim() + '...';
+
         educationList.push({
-          degree: degreeStr,
-          institution: institutionStr || 'University / Institute',
+          degree: cleanDegree,
+          institution: cleanInst,
           year: dateInfo.duration,
           details: cgpaStr || null,
-          sourceEvidence: line
+          sourceEvidence: line.substring(0, 200)
         });
       }
     }
@@ -1568,6 +1586,18 @@ export function extractStructuredCandidateFromText(
           break;
         }
       }
+    }
+  }
+
+  // Ensure currentTitle never contains long text dumps, section headers, or action verbs
+  if (currentTitle) {
+    currentTitle = currentTitle
+      .replace(/^(?:WORK\s+EXPERIENCE|PROFESSIONAL\s+EXPERIENCE|EMPLOYMENT\s+HISTORY|EXPERIENCE)\s*[:\s-]*/i, '')
+      .split(/\s+(?:Engineered|Developed|Built|Implemented|Managed|Responsible\s+for|Designed|Spearheaded|Created|Architected|Led|Collaborated|Maintained|Wrote|Deployed)\b/i)[0]
+      .replace(/[,;.|-]+$/, '')
+      .trim();
+    if (currentTitle.length > 80) {
+      currentTitle = currentTitle.substring(0, 77).trim() + '...';
     }
   }
 
