@@ -18,6 +18,8 @@ import {
 import {
   extractStructuredCandidateFromText,
   validateCvTextQuality,
+  parseTenureStringToMonthsAndYears,
+  formatNumericExperience,
 } from '../services/cvParsingService';
 import { evaluateCandidateAgainstRequirements } from '../services/evaluationService';
 
@@ -635,22 +637,17 @@ export const applyPublicCandidate = async (req: Request, res: Response): Promise
       structuredProfile.technologies = structuredProfile.skills;
     }
     if (pythonResult.yearsOfExperience) {
-      const pyYearsMatch = String(pythonResult.yearsOfExperience).match(/(\d+(?:\.\d+)?)/);
-      const spYearsMatch = String(structuredProfile.totalExperience || '').match(/(\d+(?:\.\d+)?)/);
-      const pyYears = pyYearsMatch ? parseFloat(pyYearsMatch[1]) : 0;
-      const spYears = spYearsMatch ? parseFloat(spYearsMatch[1]) : 0;
+      const pyTenure = parseTenureStringToMonthsAndYears(pythonResult.yearsOfExperience);
+      const spTenure = parseTenureStringToMonthsAndYears(structuredProfile.totalExperience);
 
-      if (pyYears > 0 && spYears > 0) {
-        const bestYears = Math.max(pyYears, spYears);
-        structuredProfile.totalExperience = `${bestYears} yrs`;
-        structuredProfile.relevantExperience = `${bestYears} yrs`;
+      const bestMonths = Math.max(pyTenure.totalMonths, spTenure.totalMonths);
+      if (bestMonths > 0) {
+        const formatted = formatNumericExperience(bestMonths);
+        const bestYears = parseFloat((bestMonths / 12).toFixed(1));
+        structuredProfile.totalExperience = formatted;
+        structuredProfile.relevantExperience = formatted;
         structuredProfile.totalExperienceYears = bestYears;
-        structuredProfile.totalExperienceMonths = Math.round(bestYears * 12);
-      } else if (pyYears > 0 && (!structuredProfile.totalExperience || structuredProfile.totalExperience === '0 yrs')) {
-        structuredProfile.totalExperience = `${pyYears} yrs`;
-        structuredProfile.relevantExperience = `${pyYears} yrs`;
-        structuredProfile.totalExperienceYears = pyYears;
-        structuredProfile.totalExperienceMonths = Math.round(pyYears * 12);
+        structuredProfile.totalExperienceMonths = bestMonths;
       }
     }
 

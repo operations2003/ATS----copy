@@ -25,7 +25,7 @@
  */
 
 import { CandidateRecord } from "../controllers/candidateController";
-import { calculateExperienceMonths } from "./cvParsingService";
+import { calculateExperienceMonths, parseTenureStringToMonthsAndYears } from "./cvParsingService";
 
 export type MatchStatus = "MATCHED" | "PARTIAL" | "NOT_MATCHED" | "UNKNOWN";
 
@@ -229,10 +229,7 @@ const EXACT_SYNONYM_GROUPS: string[][] = [
     "windchill customization",
     "windchill development",
     "windchill client architecture",
-    "wca",
-    "form processors",
-    "action models",
-    "data utilities",
+    "windchill wca",
   ],
   ["java", "j2ee", "core java", "java/j2ee", "jee"],
   ["spring boot", "springboot", "spring framework"],
@@ -253,14 +250,14 @@ const EXACT_SYNONYM_GROUPS: string[][] = [
     "sap mm",
     "sap materials management",
     "materials management (mm)",
-    "materials management",
-    "purchasing and procurement",
-    "procurement",
-    "purchasing",
-    "sourcing and procurement",
     "sap mm solutioning",
-    "vendor management",
-    "materials management solutioning",
+    "sap mm module",
+  ],
+  [
+    "procurement",
+    "purchasing and procurement",
+    "sourcing and procurement",
+    "purchasing",
   ],
   [
     "sap ibp",
@@ -302,17 +299,11 @@ const EXACT_SYNONYM_GROUPS: string[][] = [
     "exceeding quota",
     "sales targets",
     "revenue targets",
-    "quota",
   ],
-  [
-    "crm",
-    "crm platforms",
-    "crm systems",
-    "salesforce",
-    "hubspot",
-    "zoho",
-    "crm software",
-  ],
+  ["crm", "crm platform", "crm platforms", "crm systems", "crm software"],
+  ["salesforce", "salesforce crm", "sfdc"],
+  ["hubspot", "hubspot crm"],
+  ["zoho", "zoho crm"],
   [
     "backend services",
     "backend development",
@@ -824,7 +815,14 @@ export function matchSkillRequirement(
     const totalEvaluated = matchedParts.length + missingParts.length;
     if (totalEvaluated > 0) {
       const matchRatio = matchedParts.length / totalEvaluated;
-      if ((isOrRequirement && matchedParts.length > 0) || matchRatio >= 0.5) {
+      if (isOrRequirement && matchedParts.length > 0) {
+        return {
+          status: "MATCHED",
+          evidence: `Verified alternative technology match: ${matchedParts.map((m) => m.part).join(", ")}.`,
+          source: matchedParts[0]?.source || "Candidate CV Record",
+          confidence: "EXPLICIT",
+        };
+      } else if (missingParts.length === 0 || matchRatio >= 0.85) {
         return {
           status: "MATCHED",
           evidence: `Verified coverage across core technologies: ${matchedParts.map((m) => m.part).join(", ")}.`,
@@ -972,12 +970,23 @@ export function matchSkillRequirement(
       const sentences = rawText.split(/(?<=[.!?\n])\s+/);
       const matchSentence = sentences.find((s) => regex.test(s));
       if (matchSentence && matchSentence.trim().length > 10) {
-        return {
-          status: "MATCHED",
-          evidence: matchSentence.replace(/^[-•*]\s*/, "").trim(),
-          source: "CV Overview / Summary",
-          confidence: "STRONG_SEMANTIC",
-        };
+        const hasActionVerb = /\b(built|developed|implemented|architected|maintained|managed|configured|deployed|designed|engineered|used|utilized|spearheaded|coded|program|created)\b/i.test(matchSentence);
+        if (hasActionVerb) {
+          return {
+            status: "MATCHED",
+            evidence: matchSentence.replace(/^[-•*]\s*/, "").trim(),
+            source: "CV Overview / Summary",
+            confidence: "STRONG_SEMANTIC",
+          };
+        } else {
+          return {
+            status: "PARTIAL",
+            evidence: `Mentioned in CV text without documented project or role depth: "${matchSentence.replace(/^[-•*]\s*/, "").trim()}"`,
+            source: "CV Overview / Mention",
+            confidence: "WEAK_INFERENCE",
+            failureReason: `Skill "${term}" is mentioned in CV text but lacks documented project or role application depth.`,
+          };
+        }
       }
     }
   }
@@ -1042,25 +1051,24 @@ export function calculateProfessionalTenure(
   candidate: CandidateRecord,
 ): number {
   const candExps = candidate.experience || [];
-  if (!Array.isArray(candExps) || candExps.length === 0) {
-    const rawTotalMatch = (candidate.totalExperience || "").match(
-      /(\d+(?:\.\d+)?)/,
-    );
-    return rawTotalMatch ? parseFloat(rawTotalMatch[1]) : 0;
-  }
-
   let totalYears = 0;
   const currentYear = new Date().getFullYear();
 
   for (const exp of candExps) {
     let roleYears = 0;
     if (exp.duration) {
-      const yrMatch = exp.duration.match(/(\d+(?:\.\d+)?)\s*(?:years?|yrs?)/i);
-      if (yrMatch) {
-        roleYears = parseFloat(yrMatch[1]);
+      // Check month range first e.g. "8-10 months", "10 months"
+      const moRange = exp.duration.match(/(\d+)\s*(?:-|to|–|—)\s*(\d+)\s*(?:months?|mos?)/i);
+      if (moRange) {
+        roleYears = parseFloat(moRange[2]) / 12;
       } else {
-        const moMatch = exp.duration.match(/(\d+)\s*(?:months?|mos?)/i);
-        if (moMatch) roleYears = parseFloat(moMatch[1]) / 12;
+        const yrMatch = exp.duration.match(/(\d+(?:\.\d+)?)\s*(?:years?|yrs?)/i);
+        if (yrMatch) {
+          roleYears = parseFloat(yrMatch[1]);
+        } else {
+          const moMatch = exp.duration.match(/(\d+)\s*(?:months?|mos?)/i);
+          if (moMatch) roleYears = parseFloat(moMatch[1]) / 12;
+        }
       }
     }
 
@@ -1094,19 +1102,17 @@ export function calculateProfessionalTenure(
   }
 
   // Parse totalExperience safely distinguishing years vs months
-  if (totalYears === 0 && candidate.totalExperience) {
-    const yrMatch = candidate.totalExperience.match(
-      /(\d+(?:\.\d+)?)\s*(?:years?|yrs?)/i,
-    );
-    if (yrMatch) {
-      totalYears = parseFloat(yrMatch[1]);
-    } else {
-      const moMatch = candidate.totalExperience.match(
-        /(\d+)\s*(?:months?|mos?)/i,
-      );
-      if (moMatch) {
-        totalYears = parseFloat(moMatch[1]) / 12;
-      }
+  if (candidate.totalExperience || typeof candidate.totalExperienceYears === "number") {
+    let expYearsFromCandidate = 0;
+    if (typeof candidate.totalExperienceYears === "number" && candidate.totalExperienceYears > 0) {
+      expYearsFromCandidate = candidate.totalExperienceYears;
+    } else if (candidate.totalExperience) {
+      const tenure = parseTenureStringToMonthsAndYears(candidate.totalExperience);
+      expYearsFromCandidate = tenure.totalYears;
+    }
+
+    if (expYearsFromCandidate > 0) {
+      totalYears = Math.max(totalYears, expYearsFromCandidate);
     }
   }
 
@@ -1301,9 +1307,7 @@ export function calculateSpecificTenure(
       candidate.totalExperienceYears > 0
         ? candidate.totalExperienceYears
         : candidate.totalExperience
-          ? parseFloat(
-              String(candidate.totalExperience).replace(/[^0-9.]/g, ""),
-            )
+          ? parseTenureStringToMonthsAndYears(candidate.totalExperience).totalYears
           : 0;
     if (specificYears === 0 && totalYrs > 0) {
       for (const term of targetTerms) {

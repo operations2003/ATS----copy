@@ -11,7 +11,8 @@ import {
   validateCvTextQuality,
   calculateCareerGaps,
   calculateNonOverlappingExperienceMonths,
-  formatNumericExperience
+  formatNumericExperience,
+  parseTenureStringToMonthsAndYears
 } from '../services/cvParsingService';
 import { evaluateCandidateAgainstRequirements } from '../services/evaluationService';
 import { calculateCentralizedATSScore } from '../services/centralizedATSScoringService';
@@ -329,29 +330,36 @@ export function mapDbCandidateToRecord(c: any, defaultJobId?: string): Candidate
     roleMonths = nonOverlap.totalMonths;
   }
 
-  // Parse explicit totalExp from candidate record (e.g. "10.8 yrs (10y 10m)", "6.5 yrs", "10 yrs")
+  // Parse explicit totalExp from candidate record (e.g. "10.8 yrs (10y 10m)", "6.5 yrs", "10 months", "8-10 months")
   let parsedTotalExpMonths = 0;
   let parsedTotalExpYears: number | undefined = undefined;
   if (totalExp) {
-    const yrMatch = String(totalExp).match(/(\d+(?:\.\d+)?)\s*(?:years?|yrs?|y\b)?/i);
-    const moMatch = String(totalExp).match(/(\d+)\s*(?:months?|mos?)/i);
-    if (yrMatch && parseFloat(yrMatch[1]) > 0 && parseFloat(yrMatch[1]) < 70) {
-      parsedTotalExpYears = parseFloat(yrMatch[1]);
-      parsedTotalExpMonths = Math.round(parsedTotalExpYears * 12);
-    }
-    if (moMatch && parseInt(moMatch[1], 10) > 0) {
-      parsedTotalExpMonths += parseInt(moMatch[1], 10);
+    const tenure = parseTenureStringToMonthsAndYears(totalExp);
+    if (tenure.totalMonths > 0) {
+      parsedTotalExpMonths = tenure.totalMonths;
+      parsedTotalExpYears = tenure.totalYears;
     }
   }
 
-  // Check if raw_text mentions explicit overall experience in summary (e.g. "over 6.5 years of IT experience")
-  if (c.raw_text) {
-    const rawExpMatch = c.raw_text.match(/(?:over|more\s+than|about|around|with|having)?\s*(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)(?:\s*(?:and\s*)?(\d+)\s*(?:months?|mos?))?\s+(?:of\s+)?(?:[a-zA-Z\s\/\-\+]{0,40})?experience/i) ||
-      c.raw_text.match(/\b(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:[a-zA-Z\s\/\-\+]{0,35})?(?:experience|tenure|background|expertise)\b/i);
-    if (rawExpMatch) {
-      const rawYears = parseFloat(rawExpMatch[1]);
-      if (!isNaN(rawYears) && rawYears > 0 && rawYears < 70) {
-        if (parsedTotalExpYears === undefined || rawYears > parsedTotalExpYears) {
+  // Check if raw_text mentions explicit overall experience in summary
+  if (c.raw_text && (!parsedTotalExpYears || parsedTotalExpYears === 0)) {
+    // Check for month range first in raw_text (e.g. "8-10 months of experience")
+    const rawMonthRange = c.raw_text.match(/\b(\d+)\s*(?:-|to|–|—)\s*(\d+)\s*(?:months?|mos?)\s+(?:of\s+)?experience\b/i);
+    const rawSingleMonth = c.raw_text.match(/\b(\d+)\s*(?:months?|mos?)\s+(?:of\s+)?(?:hands-on\s*|industry\s*|professional\s*|relevant\s*|total\s*|work\s*|it\s*)?experience\b/i);
+    if (rawMonthRange) {
+      const mos = parseInt(rawMonthRange[2], 10);
+      parsedTotalExpMonths = mos;
+      parsedTotalExpYears = parseFloat((mos / 12).toFixed(1));
+    } else if (rawSingleMonth) {
+      const mos = parseInt(rawSingleMonth[1], 10);
+      parsedTotalExpMonths = mos;
+      parsedTotalExpYears = parseFloat((mos / 12).toFixed(1));
+    } else {
+      const rawExpMatch = c.raw_text.match(/(?:over|more\s+than|about|around|with|having)?\s*(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)(?:\s*(?:and\s*)?(\d+)\s*(?:months?|mos?))?\s+(?:of\s+)?(?:[a-zA-Z\s\/\-\+]{0,40})?experience/i) ||
+        c.raw_text.match(/\b(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:[a-zA-Z\s\/\-\+]{0,35})?(?:experience|tenure|background|expertise)\b/i);
+      if (rawExpMatch) {
+        const rawYears = parseFloat(rawExpMatch[1]);
+        if (!isNaN(rawYears) && rawYears > 0 && rawYears < 70) {
           parsedTotalExpYears = rawYears;
           parsedTotalExpMonths = Math.round(rawYears * 12);
         }
@@ -364,9 +372,9 @@ export function mapDbCandidateToRecord(c: any, defaultJobId?: string): Candidate
     ? Math.max(parsedTotalExpYears, effectiveMonths > 0 ? parseFloat((effectiveMonths / 12).toFixed(1)) : 0)
     : (effectiveMonths > 0 ? parseFloat((effectiveMonths / 12).toFixed(1)) : undefined);
 
-  const finalExpString = effectiveYears !== undefined && effectiveYears > 0
-    ? `${effectiveYears} yrs`
-    : (effectiveMonths > 0 ? formatNumericExperience(effectiveMonths) : (totalExp || (experience.length ? `${experience.length} yrs` : '0 yrs')));
+  const finalExpString = effectiveMonths > 0
+    ? formatNumericExperience(effectiveMonths)
+    : (effectiveYears !== undefined && effectiveYears > 0 ? `${effectiveYears} yrs` : (totalExp || (experience.length ? `${experience.length} yrs` : '0 yrs')));
   return {
     id: c.id,
     jobId: associatedJobId,
@@ -2033,22 +2041,17 @@ export const uploadCandidateCVs = async (req: AuthRequest, res: Response): Promi
           structuredProfile.technologies = mergedSkills;
         }
         if (pythonResult.yearsOfExperience) {
-          const pyYearsMatch = String(pythonResult.yearsOfExperience).match(/(\d+(?:\.\d+)?)/);
-          const spYearsMatch = String(structuredProfile.totalExperience || '').match(/(\d+(?:\.\d+)?)/);
-          const pyYears = pyYearsMatch ? parseFloat(pyYearsMatch[1]) : 0;
-          const spYears = spYearsMatch ? parseFloat(spYearsMatch[1]) : 0;
+          const pyTenure = parseTenureStringToMonthsAndYears(pythonResult.yearsOfExperience);
+          const spTenure = parseTenureStringToMonthsAndYears(structuredProfile.totalExperience);
 
-          if (pyYears > 0 && spYears > 0) {
-            const bestYears = Math.max(pyYears, spYears);
-            structuredProfile.totalExperience = `${bestYears} yrs`;
-            structuredProfile.relevantExperience = `${bestYears} yrs`;
+          const bestMonths = Math.max(pyTenure.totalMonths, spTenure.totalMonths);
+          if (bestMonths > 0) {
+            const formatted = formatNumericExperience(bestMonths);
+            const bestYears = parseFloat((bestMonths / 12).toFixed(1));
+            structuredProfile.totalExperience = formatted;
+            structuredProfile.relevantExperience = formatted;
             structuredProfile.totalExperienceYears = bestYears;
-            structuredProfile.totalExperienceMonths = Math.round(bestYears * 12);
-          } else if (pyYears > 0) {
-            structuredProfile.totalExperience = `${pyYears} yrs`;
-            structuredProfile.relevantExperience = `${pyYears} yrs`;
-            structuredProfile.totalExperienceYears = pyYears;
-            structuredProfile.totalExperienceMonths = Math.round(pyYears * 12);
+            structuredProfile.totalExperienceMonths = bestMonths;
           }
         }
         if (pythonResult.currentTitle) {

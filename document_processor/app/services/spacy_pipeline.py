@@ -233,11 +233,21 @@ def extract_experience_tenure(experience_text: str, relevant_skill_keywords: Opt
 
     # Fallback to general regex if no structured date intervals were found
     if total_months == 0:
-        exp_match = re.search(r'(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)', experience_text, re.IGNORECASE)
-        if exp_match:
-            years = float(exp_match.group(1))
-            total_months = int(years * 12)
+        # Check for month ranges first e.g. "8-10 months", "10 months"
+        month_range_match = re.search(r'(\d+)\s*(?:-|to|–|—)\s*(\d+)\s*(?:months?|mos?)', experience_text, re.IGNORECASE)
+        single_month_match = re.search(r'(\d+)\s*(?:months?|mos?)', experience_text, re.IGNORECASE)
+        if month_range_match:
+            total_months = int(month_range_match.group(2))
             relevant_months = total_months if clean_relevant_skills else int(total_months * 0.7)
+        elif single_month_match:
+            total_months = int(single_month_match.group(1))
+            relevant_months = total_months if clean_relevant_skills else int(total_months * 0.7)
+        else:
+            exp_match = re.search(r'(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)', experience_text, re.IGNORECASE)
+            if exp_match:
+                years = float(exp_match.group(1))
+                total_months = int(years * 12)
+                relevant_months = total_months if clean_relevant_skills else int(total_months * 0.7)
 
     return {
         "total_experience_years": round(total_months / 12.0, 1),

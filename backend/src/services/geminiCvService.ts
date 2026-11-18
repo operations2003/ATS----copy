@@ -13,7 +13,15 @@
  * - Safe error reporting without leaking PII or secrets
  */
 
-import { CandidateParsedProfile, CandidateExperience, CandidateEducation, CandidateProject, CandidateCertification } from './cvParsingService';
+import {
+  CandidateParsedProfile,
+  CandidateExperience,
+  CandidateEducation,
+  CandidateProject,
+  CandidateCertification,
+  formatNumericExperience,
+  parseTenureStringToMonthsAndYears,
+} from './cvParsingService';
 import { isGeminiModelSupported, PRIMARY_GEMINI_MODEL, FALLBACK_GEMINI_MODEL } from './geminiService';
 
 // Configurable environment parameters
@@ -78,7 +86,8 @@ CRITICAL EXTRACTION RULES:
 2. EXPERIENCE TENURE & DATES:
    - Extract each job role separately with exact start_date and end_date as written (e.g., "Jan 2021", "2019", "Present").
    - Extract company name and job title cleanly without prefixes.
-   - Calculate total_experience_years accurately from career timeline. Do not count education as professional experience.
+   - Calculate total_experience_years accurately from career timeline as a float in years. Do not count education as professional experience.
+   - CRITICAL TENURE RULE FOR MONTHS: If candidate experience is in months (e.g., "8-10 months", "10 months", "6 mos"), total_experience_years MUST be represented as a decimal fraction of a year (e.g., 10 months = 0.8, 6 months = 0.5). NEVER convert months into whole years (e.g., NEVER output 10.0 or 8.0 for "8-10 months")!
    - Avoid double-counting overlapping jobs.
 
 3. SKILLS & TECHNOLOGIES:
@@ -452,11 +461,15 @@ export function validateAndSanitizeCvJson(
 
   // Experience calculation
   let totalYears: number | undefined = undefined;
+  let totalMonths: number | undefined = undefined;
   if (typeof raw.total_experience_years === 'number' && raw.total_experience_years > 0 && raw.total_experience_years < 60) {
     totalYears = parseFloat(raw.total_experience_years.toFixed(1));
+    totalMonths = Math.round(totalYears * 12);
   }
 
-  const expString = totalYears !== undefined ? `${totalYears} yrs` : (experiences.length > 0 ? `${experiences.length} yrs` : null);
+  const expString = totalMonths !== undefined && totalMonths > 0
+    ? formatNumericExperience(totalMonths)
+    : (totalYears !== undefined ? `${totalYears} yrs` : (experiences.length > 0 ? `${experiences.length} yrs` : null));
 
   // Confidence assessment
   let confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'NEEDS_REVIEW' = 'HIGH';

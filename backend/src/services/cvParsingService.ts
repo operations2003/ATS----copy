@@ -491,6 +491,84 @@ export function formatNumericExperience(totalMonths: number): string {
 }
 
 /**
+ * Safely parses any experience string or number into months and decimal years.
+ * Accurately handles month ranges (e.g. "8-10 months" -> 10 months, 0.8 yrs),
+ * single month tenures (e.g. "10 months" -> 10 months, 0.8 yrs),
+ * year-month combinations (e.g. "2 yrs 4 mos" -> 28 months, 2.3 yrs),
+ * and standard year formats, preventing tenure misinterpretation.
+ */
+export function parseTenureStringToMonthsAndYears(exp: string | number | null | undefined): { totalMonths: number; totalYears: number; formatted: string } {
+  if (exp === null || exp === undefined || exp === '') {
+    return { totalMonths: 0, totalYears: 0, formatted: '0 yrs' };
+  }
+
+  if (typeof exp === 'number') {
+    if (isNaN(exp) || exp <= 0) return { totalMonths: 0, totalYears: 0, formatted: '0 yrs' };
+    const totalMonths = Math.round(exp * 12);
+    const totalYears = parseFloat(exp.toFixed(1));
+    return { totalMonths, totalYears, formatted: formatNumericExperience(totalMonths) };
+  }
+
+  const str = String(exp).trim();
+  if (!str || str === '0' || /^0\s*(?:yrs?|years?|mos?|months?)?$/i.test(str)) {
+    return { totalMonths: 0, totalYears: 0, formatted: '0 yrs' };
+  }
+
+  // 1. Month range: e.g. "8-10 months", "8 to 10 mos", "8 – 10 months", "8-10 m"
+  const monthRange = str.match(/(\d+)\s*(?:-|to|–|—)\s*(\d+)\s*(?:months?|mos?|m\b)/i);
+  if (monthRange) {
+    const mos = parseInt(monthRange[2], 10);
+    const totalYears = parseFloat((mos / 12).toFixed(1));
+    return { totalMonths: mos, totalYears, formatted: formatNumericExperience(mos) };
+  }
+
+  // 2. Year and Month combo: e.g. "2 yrs 4 mos", "2 years and 3 months", "2y 4m", "10.8 yrs (10y 10m)"
+  const yrMoMatch = str.match(/(\d+(?:\.\d+)?)\s*(?:years?|yrs?|y\b)(?:\s*(?:and|,)?\s*(\d+)\s*(?:months?|mos?|m\b))?/i);
+  if (yrMoMatch) {
+    const yrs = parseFloat(yrMoMatch[1]);
+    const mos = yrMoMatch[2] ? parseInt(yrMoMatch[2], 10) : 0;
+    const totalMonths = Math.round(yrs * 12) + mos;
+    const totalYears = parseFloat((totalMonths / 12).toFixed(1));
+    return { totalMonths, totalYears, formatted: formatNumericExperience(totalMonths) };
+  }
+
+  // 3. Month only: e.g. "10 months", "8 mos", "11m"
+  const singleMoMatch = str.match(/(\d+)\s*(?:months?|mos?|m\b)/i);
+  if (singleMoMatch) {
+    const mos = parseInt(singleMoMatch[1], 10);
+    const totalYears = parseFloat((mos / 12).toFixed(1));
+    return { totalMonths: mos, totalYears, formatted: formatNumericExperience(mos) };
+  }
+
+  // 4. Year range: e.g. "4-6 years", "4 to 6 yrs" -> take upper bound
+  const yrRangeMatch = str.match(/(\d+(?:\.\d+)?)\s*(?:-|to|–|—)\s*(\d+(?:\.\d+)?)\s*(?:years?|yrs?)/i);
+  if (yrRangeMatch) {
+    const yrs = parseFloat(yrRangeMatch[2]);
+    const totalMonths = Math.round(yrs * 12);
+    return { totalMonths, totalYears: yrs, formatted: formatNumericExperience(totalMonths) };
+  }
+
+  // 5. Bare decimal or number: e.g. "0.8", "5.5", "5"
+  const bareNumMatch = str.match(/^(\d+(?:\.\d+)?)$/);
+  if (bareNumMatch) {
+    const num = parseFloat(bareNumMatch[1]);
+    const totalMonths = Math.round(num * 12);
+    const totalYears = parseFloat(num.toFixed(1));
+    return { totalMonths, totalYears, formatted: formatNumericExperience(totalMonths) };
+  }
+
+  // 6. Fallback: match any number followed by years
+  const fallbackYr = str.match(/(\d+(?:\.\d+)?)\s*(?:years?|yrs?)/i);
+  if (fallbackYr) {
+    const yrs = parseFloat(fallbackYr[1]);
+    const totalMonths = Math.round(yrs * 12);
+    return { totalMonths, totalYears: yrs, formatted: formatNumericExperience(totalMonths) };
+  }
+
+  return { totalMonths: 0, totalYears: 0, formatted: '0 yrs' };
+}
+
+/**
  * Calculates non-overlapping professional employment tenure in months.
  * Strictly avoids double-counting overlapping employment intervals.
  * Excludes internships, student/academic projects, or education from professional employment tenure per business rules.
@@ -1512,16 +1590,45 @@ export function extractStructuredCandidateFromText(
   let totalExperienceMonths = 0;
   let totalExperienceYears = 0;
 
-  // Pass A: Explicit Total Experience labeled lines (e.g. "Total Experience: 5 Years 6 Months", "Overall Experience: 5+ years", "Relevant Experience: 5 Yrs")
-  const explicitHeaderMatch = cleanText.match(/(?:total|overall|relevant|cumulative|career|professional|work)\s+experience\s*[:\s-]+\s*(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?|y)?(?:\s*(?:and\s*)?(\d+)\s*(?:months?|mos?|m)?)?/i);
-  if (explicitHeaderMatch) {
-    const yrs = parseFloat(explicitHeaderMatch[1]);
-    const mos = explicitHeaderMatch[2] ? parseInt(explicitHeaderMatch[2], 10) : 0;
-    if (!isNaN(yrs) && yrs > 0 && yrs <= 55) {
-      totalExperienceMonths = Math.round(yrs * 12) + mos;
-      totalExperienceYears = parseFloat((totalExperienceMonths / 12).toFixed(1));
-      totalExperience = formatNumericExperience(totalExperienceMonths);
-      sourceEvidence['totalExperience'] = `${explicitHeaderMatch[0]} -> ${totalExperience}`;
+  // Pass 0: Explicit Month Range or Month-only Experience (e.g. "8-10 months", "Total Experience: 8-10 months", "10 months")
+  const monthRangeMatch = cleanText.match(/(?:total|overall|relevant|cumulative|career|professional|work)?\s*experience\s*[:\s-]+\s*(\d+)\s*(?:-|to|–|—)\s*(\d+)\s*(?:months?|mos?|m\b)/i) ||
+    cleanText.match(/\b(\d+)\s*(?:-|to|–|—)\s*(\d+)\s*(?:months?|mos?)\s+(?:of\s+)?experience\b/i);
+  if (monthRangeMatch) {
+    const mos = parseInt(monthRangeMatch[2], 10);
+    if (!isNaN(mos) && mos > 0 && mos < 120) {
+      totalExperienceMonths = mos;
+      totalExperienceYears = parseFloat((mos / 12).toFixed(1));
+      totalExperience = formatNumericExperience(mos);
+      sourceEvidence['totalExperience'] = `${monthRangeMatch[0]} -> ${totalExperience}`;
+    }
+  }
+
+  if (!totalExperience) {
+    const singleMonthMatch = cleanText.match(/(?:total|overall|relevant|cumulative|career|professional|work)\s+experience\s*[:\s-]+\s*(\d+)\s*(?:months?|mos?|m\b)/i) ||
+      cleanText.match(/\b(\d+)\s*(?:months?|mos?)\s+(?:of\s+)?(?:hands-on\s*|industry\s*|professional\s*|relevant\s*|total\s*|work\s*|it\s*)?experience\b/i);
+    if (singleMonthMatch) {
+      const mos = parseInt(singleMonthMatch[1], 10);
+      if (!isNaN(mos) && mos > 0 && mos < 120) {
+        totalExperienceMonths = mos;
+        totalExperienceYears = parseFloat((mos / 12).toFixed(1));
+        totalExperience = formatNumericExperience(mos);
+        sourceEvidence['totalExperience'] = `${singleMonthMatch[0]} -> ${totalExperience}`;
+      }
+    }
+  }
+
+  // Pass A: Explicit Total Experience labeled lines with MANDATORY year unit
+  if (!totalExperience) {
+    const explicitHeaderMatch = cleanText.match(/(?:total|overall|relevant|cumulative|career|professional|work)\s+experience\s*[:\s-]+\s*(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?|y\b)(?:\s*(?:and\s*)?(\d+)\s*(?:months?|mos?|m\b)?)?/i);
+    if (explicitHeaderMatch) {
+      const yrs = parseFloat(explicitHeaderMatch[1]);
+      const mos = explicitHeaderMatch[2] ? parseInt(explicitHeaderMatch[2], 10) : 0;
+      if (!isNaN(yrs) && yrs > 0 && yrs <= 55) {
+        totalExperienceMonths = Math.round(yrs * 12) + mos;
+        totalExperienceYears = parseFloat((totalExperienceMonths / 12).toFixed(1));
+        totalExperience = formatNumericExperience(totalExperienceMonths);
+        sourceEvidence['totalExperience'] = `${explicitHeaderMatch[0]} -> ${totalExperience}`;
+      }
     }
   }
 

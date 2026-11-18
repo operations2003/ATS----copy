@@ -1,3 +1,5 @@
+import { parseTenureStringToMonthsAndYears } from '../services/cvParsingService';
+
 export const SUPPORTED_CATEGORIES = [
   'Experience',
   'Technical Skill',
@@ -1121,13 +1123,13 @@ export const computeComprehensiveMatchScore = (
   // Extract required experience years from JD requirements or JD text
   const finalRequiredYears = extractRequiredExperienceYears(job, 3.0);
 
-  // Parse candidate career years
+  // Parse candidate career years safely distinguishing years vs months
   let totalCareerYears = 0;
-  if (typeof candidate.totalExperienceYears === 'number' && !isNaN(candidate.totalExperienceYears)) {
+  if (typeof candidate.totalExperienceYears === 'number' && !isNaN(candidate.totalExperienceYears) && candidate.totalExperienceYears > 0) {
     totalCareerYears = candidate.totalExperienceYears;
   } else if (candidate.totalExperience) {
-    const parsed = parseFloat(String(candidate.totalExperience).replace(/[^0-9.]/g, ''));
-    if (!isNaN(parsed)) totalCareerYears = parsed;
+    const tenure = parseTenureStringToMonthsAndYears(candidate.totalExperience);
+    totalCareerYears = tenure.totalYears;
   }
 
   // Filter out junk / commercial / exclusion requirements from evaluation

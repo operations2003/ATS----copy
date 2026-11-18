@@ -100,14 +100,33 @@ def extract_skills(text: str) -> List[str]:
     return sorted(list(matched_skills))
 
 def extract_years_of_experience(text: str) -> Optional[str]:
-    # 1. Explicit Total/Overall Experience labels (e.g., "Total Experience: 5.5 Years", "Overall Experience: 5+ Yrs")
-    explicit_pattern = r'(?:total|overall|relevant|cumulative|career|professional|work)\s+experience\s*[:\s-]+\s*(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?|y)?(?:\s*(?:and\s*)?(\d+)\s*(?:months?|mos?|m)?)?'
+    # 0. Month ranges or single month experience (e.g. "8-10 months experience", "Total Experience: 8-10 months", "10 months")
+    month_range_pattern = r'(?:total|overall|relevant|cumulative|career|professional|work)?\s*experience\s*[:\s-]+\s*(\d+)\s*(?:-|to|–|—)\s*(\d+)\s*(?:months?|mos?|m\b)'
+    m_range = re.search(month_range_pattern, text, re.IGNORECASE)
+    if not m_range:
+        m_range = re.search(r'\b(\d+)\s*(?:-|to|–|—)\s*(\d+)\s*(?:months?|mos?)\s+(?:of\s+)?experience\b', text, re.IGNORECASE)
+    if m_range:
+        upper_mos = int(m_range.group(2))
+        return f"{upper_mos} months"
+
+    single_month_pattern = r'(?:total|overall|relevant|cumulative|career|professional|work)?\s*experience\s*[:\s-]+\s*(\d+)\s*(?:months?|mos?|m\b)'
+    s_month = re.search(single_month_pattern, text, re.IGNORECASE)
+    if not s_month:
+        s_month = re.search(r'\b(\d+)\s*(?:months?|mos?)\s+(?:of\s+)?(?:hands-on\s*|industry\s*|professional\s*|relevant\s*|total\s*|work\s*|it\s*)?experience\b', text, re.IGNORECASE)
+    if s_month:
+        mos = int(s_month.group(1))
+        return f"{mos} months"
+
+    # 1. Explicit Total/Overall Experience labels with MANDATORY years unit
+    explicit_pattern = r'(?:total|overall|relevant|cumulative|career|professional|work)\s+experience\s*[:\s-]+\s*(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?|y\b)(?:\s*(?:and\s*)?(\d+)\s*(?:months?|mos?|m\b)?)?'
     explicit_match = re.search(explicit_pattern, text, re.IGNORECASE)
     if explicit_match:
         yrs = float(explicit_match.group(1))
         mos = int(explicit_match.group(2)) if explicit_match.group(2) else 0
         total = yrs + (mos / 12.0)
-        if 0.5 <= total <= 50:
+        if 0.1 <= total <= 50:
+            if total < 1.0:
+                return f"{round(total * 12)} months"
             return f"{round(total, 1)} years"
 
     # 2. Inline career summary mentions (e.g. "Over 5 years of experience", "having 5+ years of IT experience")
