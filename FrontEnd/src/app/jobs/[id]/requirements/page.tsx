@@ -37,6 +37,59 @@ export interface RequirementItem {
   isRecruiterAdded?: boolean;
 }
 
+function deduplicateRequirementItems(items: RequirementItem[]): RequirementItem[] {
+  if (!Array.isArray(items) || items.length <= 1) return items || [];
+  const result: RequirementItem[] = [];
+
+  const normalize = (t: string) =>
+    (t || '')
+      .toLowerCase()
+      .replace(/^[\s*•●▪▫➢✓✔·\-\d\.\)\(\]]+/, '')
+      .replace(/\b(?:years?|yrs?)\s+of\s+experience\b/g, 'years exp')
+      .replace(/\b(?:years?|yrs?)\s+experience\b/g, 'years exp')
+      .replace(/\b(?:years?|yrs?)\b/g, 'years')
+      .replace(/(\d+)\s*(?:-|to|–|—)\s*(\d+)/g, '$1-$2')
+      .replace(/[^a-z0-9\s\+\-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  for (const item of items) {
+    const key = normalize(item.requirement);
+    if (!key) continue;
+
+    const existingIdx = result.findIndex(existing => {
+      const exKey = normalize(existing.requirement);
+      if (exKey === key) return true;
+      if ((exKey.includes(key) || key.includes(exKey)) && Math.abs(exKey.length - key.length) < 15) return true;
+      return false;
+    });
+
+    if (existingIdx === -1) {
+      result.push({ ...item });
+    } else {
+      const existing = result[existingIdx];
+      const mergedMandatory = item.isMandatory || existing.isMandatory;
+      const mergedWeight = Math.max(existing.weight || 1.0, item.weight || 1.0);
+      const mergedConfirmed = item.recruiterConfirmed || existing.recruiterConfirmed;
+      const mergedEvidenceReq = item.evidenceRequired || existing.evidenceRequired;
+      const mergedText = item.requirement.length > existing.requirement.length ? item.requirement : existing.requirement;
+
+      result[existingIdx] = {
+        ...existing,
+        requirement: mergedText,
+        isMandatory: mergedMandatory,
+        weight: mergedWeight,
+        recruiterConfirmed: mergedConfirmed,
+        evidenceRequired: mergedEvidenceReq,
+        category: (existing.category && existing.category !== 'Other') ? existing.category : (item.category || existing.category),
+        sourceEvidence: (item.sourceEvidence || '').length > (existing.sourceEvidence || '').length ? item.sourceEvidence : existing.sourceEvidence,
+      };
+    }
+  }
+
+  return result;
+}
+
 const DEFAULT_SAMPLE_REQUIREMENTS: Record<string, { title: string; client: string; reqs: RequirementItem[] }> = {
   'jd-1': {
     title: 'Salesforce Manufacturing Cloud Developer',
@@ -144,7 +197,7 @@ export default function RequirementsReviewPage() {
             needsVerification: Boolean(r.needsVerification ?? r.needs_verification)
           }));
 
-          setRequirements(apiReqs);
+          setRequirements(deduplicateRequirementItems(apiReqs));
           if (Array.isArray(reqData.warnings)) {
             setWarnings(reqData.warnings);
           }
@@ -164,20 +217,20 @@ export default function RequirementsReviewPage() {
             sourceEvidence: r.source_evidence || r.sourceEvidence || r.requirement,
             needsVerification: Boolean(r.needs_verification ?? r.needsVerification)
           }));
-          setRequirements(fallbackReqs);
+          setRequirements(deduplicateRequirementItems(fallbackReqs));
         } else {
           // Provide rich sample requirements if no records found
           const sample = DEFAULT_SAMPLE_REQUIREMENTS[jobId] || DEFAULT_SAMPLE_REQUIREMENTS['default'];
           setJobTitle(prev => prev === 'Job Specification' ? sample.title : prev);
           setClientName(prev => !prev ? sample.client : prev);
-          setRequirements(sample.reqs);
+          setRequirements(deduplicateRequirementItems(sample.reqs));
         }
       } catch (err: any) {
         console.error('Error fetching job requirements, using fallback data:', err);
         const sample = DEFAULT_SAMPLE_REQUIREMENTS[jobId] || DEFAULT_SAMPLE_REQUIREMENTS['default'];
         setJobTitle(prev => prev === 'Job Specification' ? sample.title : prev);
         setClientName(prev => !prev ? sample.client : prev);
-        setRequirements(sample.reqs);
+        setRequirements(deduplicateRequirementItems(sample.reqs));
       } finally {
         setLoading(false);
       }
@@ -289,7 +342,7 @@ export default function RequirementsReviewPage() {
       isRecruiterAdded: true
     };
 
-    setRequirements((prev) => [...prev, newItem]);
+    setRequirements((prev) => deduplicateRequirementItems([...prev, newItem]));
     setNewText('');
     setAddFieldError('');
     setShowAddForm(false);
@@ -300,15 +353,17 @@ export default function RequirementsReviewPage() {
     setErrorMsg('');
     setSuccessMsg('');
 
+    const cleanReqs = deduplicateRequirementItems(requirements);
+
     // Validation 1: Check empty requirements
-    const emptyItem = requirements.find((r) => !r.requirement || !r.requirement.trim());
+    const emptyItem = cleanReqs.find((r) => !r.requirement || !r.requirement.trim());
     if (emptyItem) {
       setErrorMsg('Requirement text cannot be empty. Please remove or fix blank items.');
       return;
     }
 
     // Validation 2: Check weight range (1.0x - 3.0x)
-    const invalidWeightItem = requirements.find((r) => r.weight < 1.0 || r.weight > 3.0);
+    const invalidWeightItem = cleanReqs.find((r) => r.weight < 1.0 || r.weight > 3.0);
     if (invalidWeightItem) {
       setErrorMsg(`Invalid weight for "${invalidWeightItem.requirement}". Weight must be between 1.0x and 3.0x.`);
       return;
@@ -321,7 +376,7 @@ export default function RequirementsReviewPage() {
       const authToken = token || localStorage.getItem('tasknera_token');
 
       const payload = {
-        requirements: requirements.map((r) => ({
+        requirements: cleanReqs.map((r) => ({
           id: r.id.startsWith('req-custom') ? undefined : r.id,
           jobId: jobId,
           requirement: r.requirement.trim(),

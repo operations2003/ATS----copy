@@ -115,6 +115,161 @@ export const classifyRequirementMandatory = (text: string): { isMandatory: boole
 };
 
 /**
+ * Normalizes a requirement string for robust duplicate detection.
+ * Removes markdown formatting, punctuation, standardizes years/numbers, and lowercases.
+ */
+export const normalizeRequirementKey = (text: string): string => {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    .toLowerCase()
+    .replace(/^[\s*•●▪▫➢✓✔·\-\d\.\)\(\]]+/, '') // strip leading bullets/numbers
+    .replace(/\\le\b|\$\\le\$/g, '≤')
+    .replace(/\\ge\b|\$\\ge\$/g, '≥')
+    .replace(/\b(?:years?|yrs?)\s+of\s+experience\b/g, 'years experience')
+    .replace(/\b(?:years?|yrs?)\s+experience\b/g, 'years exp')
+    .replace(/\b(?:years?|yrs?)\b/g, 'years')
+    .replace(/(\d+)\s*(?:-|to|–|—)\s*(\d+)/g, '$1-$2') // normalize ranges 4 - 6 -> 4-6
+    .replace(/[^a-z0-9\s\+\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+/**
+ * Checks if two requirement strings refer to essentially the same requirement.
+ */
+export const areRequirementsDuplicate = (textA: string, textB: string): boolean => {
+  const normA = normalizeRequirementKey(textA);
+  const normB = normalizeRequirementKey(textB);
+
+  if (!normA || !normB) return false;
+  if (normA === normB) return true;
+
+  // If one contains the other and length difference is minor
+  if ((normA.includes(normB) || normB.includes(normA)) && Math.abs(normA.length - normB.length) < 15) {
+    return true;
+  }
+
+  // Token-based Jaccard similarity after removing boilerplate requirement qualifiers
+  const stopWords = new Set([
+    'and', 'for', 'with', 'the', 'in', 'of', 'to', 'a', 'an', 'is', 'as', 'on', 'at', 'or',
+    'experience', 'exp', 'strong', 'knowledge', 'proficiency', 'proficient', 'understanding',
+    'hands-on', 'handson', 'proven', 'deep', 'solid', 'good', 'skills', 'skill', 'demonstrated',
+    'practical', 'familiarity', 'ability', 'expert', 'expertise', 'working', 'overall', 'professional',
+    'track', 'record', 'competency', 'competencies', 'background', 'must', 'have', 'required', 'nice'
+  ]);
+  const tokensA = new Set(normA.split(/\s+/).filter(t => t.length > 1 && !stopWords.has(t)));
+  const tokensB = new Set(normB.split(/\s+/).filter(t => t.length > 1 && !stopWords.has(t)));
+
+  if (tokensA.size === 0 || tokensB.size === 0) return false;
+
+  let intersection = 0;
+  tokensA.forEach(t => {
+    if (tokensB.has(t)) intersection++;
+  });
+
+  const union = new Set([...tokensA, ...tokensB]).size;
+  const jaccard = union > 0 ? intersection / union : 0;
+  const overlapA = intersection / tokensA.size;
+  const overlapB = intersection / tokensB.size;
+
+  // If both have numbers (e.g. experience years), the numbers must match to be duplicates
+  const numsA = normA.match(/\b\d+(?:-\d+)?\+?\b/g) || [];
+  const numsB = normB.match(/\b\d+(?:-\d+)?\+?\b/g) || [];
+  if (numsA.length > 0 && numsB.length > 0) {
+    const setNumsB = new Set(numsB);
+    const numbersMatch = numsA.some(n => setNumsB.has(n));
+    if (!numbersMatch) return false; // Different experience years (e.g. 2 years vs 5 years) are NOT duplicates!
+  }
+
+  return jaccard >= 0.75 || (overlapA >= 0.85 && overlapB >= 0.85);
+};
+
+/**
+ * Intelligently deduplicates an array of requirement objects.
+ * When duplicates are detected:
+ * - Keeps the cleanest/most informative requirement text.
+ * - Flags as mandatory if EITHER duplicate was mandatory.
+ * - Retains the higher weight.
+ * - Merges aliases and related terms.
+ * - Preserves evidence requirements and source evidence.
+ */
+export function deduplicateRequirements<T extends Record<string, any>>(requirements: T[]): T[] {
+  if (!Array.isArray(requirements) || requirements.length <= 1) {
+    return requirements || [];
+  }
+
+  const result: T[] = [];
+
+  for (const item of requirements) {
+    const itemReqText = String(item.requirement || item.name || item.text || '').trim();
+    if (!itemReqText) continue;
+
+    // Find if duplicate already exists in result
+    const existingIdx = result.findIndex(existing => {
+      const existingReqText = String(existing.requirement || existing.name || existing.text || '').trim();
+      return areRequirementsDuplicate(itemReqText, existingReqText);
+    });
+
+    if (existingIdx === -1) {
+      result.push({ ...item });
+    } else {
+      // Merge into existing item
+      const existing = result[existingIdx];
+      const isItemMandatory = Boolean(item.isMandatory ?? item.is_mandatory ?? item.mandatory);
+      const isExistingMandatory = Boolean(existing.isMandatory ?? existing.is_mandatory ?? existing.mandatory);
+
+      const mergedMandatory = isItemMandatory || isExistingMandatory;
+      const mergedWeight = Math.max(
+        typeof existing.weight === 'number' ? existing.weight : (isExistingMandatory ? 2.0 : 1.0),
+        typeof item.weight === 'number' ? item.weight : (isItemMandatory ? 2.0 : 1.0)
+      );
+
+      const itemAliases = Array.isArray(item.aliases) ? item.aliases : [];
+      const existingAliases = Array.isArray(existing.aliases) ? existing.aliases : [];
+      const mergedAliases = Array.from(new Set([...existingAliases, ...itemAliases, itemReqText.toLowerCase()]));
+
+      const itemEvidenceReq = Boolean(item.evidenceRequired ?? item.evidence_required);
+      const existingEvidenceReq = Boolean(existing.evidenceRequired ?? existing.evidence_required);
+
+      const existingSourceEvidence = existing.sourceEvidence || existing.source_evidence || '';
+      const itemSourceEvidence = item.sourceEvidence || item.source_evidence || '';
+      const mergedSourceEvidence = (itemSourceEvidence.length > existingSourceEvidence.length)
+        ? itemSourceEvidence
+        : (existingSourceEvidence || itemReqText);
+
+      // Prefer more specific category over 'Other'
+      const mergedCategory = (existing.category && existing.category !== 'Other')
+        ? existing.category
+        : (item.category || existing.category || 'Technical Skill');
+
+      // Pick cleaner/longer requirement text if informative
+      const mergedReqText = (itemReqText.length > String(existing.requirement || existing.name || '').length && !itemReqText.includes('...'))
+        ? itemReqText
+        : (existing.requirement || existing.name || itemReqText);
+
+      result[existingIdx] = {
+        ...existing,
+        requirement: mergedReqText,
+        name: existing.name ? mergedReqText : undefined,
+        isMandatory: mergedMandatory,
+        is_mandatory: mergedMandatory,
+        mandatory: mergedMandatory,
+        weight: mergedWeight,
+        category: mergedCategory,
+        aliases: mergedAliases,
+        evidenceRequired: existingEvidenceReq || itemEvidenceReq,
+        evidence_required: existingEvidenceReq || itemEvidenceReq,
+        sourceEvidence: mergedSourceEvidence,
+        source_evidence: mergedSourceEvidence,
+        context: existing.context || item.context || undefined,
+      };
+    }
+  }
+
+  return result;
+}
+
+/**
  * Detects obvious or potential duplicate requirements in a list.
  * Returns array of warning messages describing potential duplicates.
  */
@@ -122,42 +277,13 @@ export const detectDuplicateRequirements = (requirements: Array<{ id?: string; r
   const warnings: string[] = [];
   if (!requirements || requirements.length < 2) return warnings;
 
-  // Helper to get normalized word token set
-  const getTokens = (str: string) => {
-    return new Set(
-      str
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '')
-        .split(/\s+/)
-        .filter(w => w.length > 2 && !['and', 'for', 'with', 'the', 'in', 'of', 'to'].includes(w))
-    );
-  };
-
   for (let i = 0; i < requirements.length; i++) {
     for (let j = i + 1; j < requirements.length; j++) {
       const reqA = requirements[i].requirement.trim();
       const reqB = requirements[j].requirement.trim();
 
-      if (reqA.toLowerCase() === reqB.toLowerCase()) {
-        warnings.push(`Exact duplicate detected: "${reqA}"`);
-        continue;
-      }
-
-      const tokensA = getTokens(reqA);
-      const tokensB = getTokens(reqB);
-
-      if (tokensA.size === 0 || tokensB.size === 0) continue;
-
-      let intersectionCount = 0;
-      tokensA.forEach(t => {
-        if (tokensB.has(t)) intersectionCount++;
-      });
-
-      const similarityA = intersectionCount / tokensA.size;
-      const similarityB = intersectionCount / tokensB.size;
-
-      if (similarityA >= 0.8 && similarityB >= 0.8) {
-        warnings.push(`Potential duplicate detected between "${reqA}" and "${reqB}"`);
+      if (areRequirementsDuplicate(reqA, reqB)) {
+        warnings.push(`Duplicate requirement detected: "${reqA}" matches "${reqB}"`);
       }
     }
   }

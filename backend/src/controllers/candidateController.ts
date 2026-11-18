@@ -17,7 +17,7 @@ import { evaluateCandidateAgainstRequirements } from '../services/evaluationServ
 import { calculateCentralizedATSScore } from '../services/centralizedATSScoringService';
 import { getStandardRequirementsForPosition, EVALUATION_CACHE } from './evaluationController';
 import { getJobFromStoreOrDb, GLOBAL_JOB_STORE } from './jobController';
-import { getEffectiveSkills } from '../utils/requirementUtils';
+import { getEffectiveSkills, deduplicateRequirements } from '../utils/requirementUtils';
 import {
   getConsumedJdCount,
   isJdAlreadyEvaluated,
@@ -839,6 +839,70 @@ export const getCandidatesForJob = async (req: AuthRequest, res: Response): Prom
         : []);
 
     if (reqs.length === 0) {
+      const normJd = targetJob?.normalized_jd || targetJob?.normalizedJd;
+      if (normJd && typeof normJd === 'object') {
+        const unpackedReqs: any[] = [];
+        const mand = Array.isArray(normJd.mandatory_requirements) ? normJd.mandatory_requirements : [];
+        const pref = Array.isArray(normJd.preferred_requirements) ? normJd.preferred_requirements : [];
+
+        mand.forEach((m: any, idx: number) => {
+          unpackedReqs.push({
+            id: `req-norm-m-${idx + 1}`,
+            requirement: m.name || m.requirement,
+            category: m.category || "Technical Skill",
+            weight: typeof m.weight === 'number' ? m.weight : 2.0,
+            is_mandatory: true,
+            isMandatory: true,
+            mandatory: true,
+            evidence_required: true,
+            source_evidence: m.description || m.context || m.name,
+            aliases: m.aliases || [],
+            context: m.context || null
+          });
+        });
+
+        pref.forEach((p: any, idx: number) => {
+          unpackedReqs.push({
+            id: `req-norm-p-${idx + 1}`,
+            requirement: p.name || p.requirement,
+            category: p.category || "Technical Skill",
+            weight: typeof p.weight === 'number' ? p.weight : 1.0,
+            is_mandatory: false,
+            isMandatory: false,
+            mandatory: false,
+            evidence_required: true,
+            source_evidence: p.description || p.context || p.name,
+            aliases: p.aliases || [],
+            context: p.context || null
+          });
+        });
+
+        if (normJd.experience?.minimum_years) {
+          const min = normJd.experience.minimum_years;
+          const max = normJd.experience.maximum_years;
+          const expLabel = max ? `${min}-${max} years overall professional experience` : `${min}+ years overall professional experience`;
+          unpackedReqs.unshift({
+            id: "req-norm-overall-exp",
+            requirement: expLabel,
+            category: "Experience",
+            weight: 2.0,
+            is_mandatory: true,
+            isMandatory: true,
+            mandatory: true,
+            evidence_required: true,
+            source_evidence: normJd.experience.description || expLabel,
+            aliases: [`${min} years`],
+            context: "Overall professional experience"
+          });
+        }
+
+        if (unpackedReqs.length > 0) {
+          reqs = deduplicateRequirements(unpackedReqs);
+        }
+      }
+    }
+
+    if (reqs.length === 0) {
       const jdText = targetJob?.jd_text || targetJob?.original_jd || '';
       if (jdText && typeof jdText === 'string' && jdText.trim().length > 30) {
         try {
@@ -850,6 +914,8 @@ export const getCandidatesForJob = async (req: AuthRequest, res: Response): Prom
               requirement: r.requirement,
               category: r.category,
               is_mandatory: r.is_mandatory,
+              isMandatory: r.is_mandatory,
+              mandatory: r.is_mandatory,
               weight: r.weight,
               evidence_required: true,
               source_evidence: r.source_evidence,
@@ -865,6 +931,19 @@ export const getCandidatesForJob = async (req: AuthRequest, res: Response): Prom
     if (reqs.length === 0) {
       reqs = getStandardRequirementsForPosition(jobTitle, jobClient);
     }
+
+    reqs = deduplicateRequirements(
+      reqs.map((r: any) => {
+        const isMand = Boolean(r.is_mandatory ?? r.isMandatory ?? r.mandatory);
+        return {
+          ...r,
+          is_mandatory: isMand,
+          isMandatory: isMand,
+          mandatory: isMand,
+          weight: typeof r.weight === 'number' ? r.weight : (isMand ? 2.0 : 1.0)
+        };
+      })
+    );
 
     const enrichedList = await Promise.all(resultList.map(async (c) => {
       let finalScore = (c as any).matchScore ?? (c as any).atsScore;
@@ -1080,6 +1159,70 @@ export async function evaluateAndEnrichCandidateRecord(
       : (customReqs.length > 0 ? customReqs : []);
 
     if (reqs.length === 0) {
+      const normJd = targetJob?.normalized_jd || targetJob?.normalizedJd;
+      if (normJd && typeof normJd === 'object') {
+        const unpackedReqs: any[] = [];
+        const mand = Array.isArray(normJd.mandatory_requirements) ? normJd.mandatory_requirements : [];
+        const pref = Array.isArray(normJd.preferred_requirements) ? normJd.preferred_requirements : [];
+
+        mand.forEach((m: any, idx: number) => {
+          unpackedReqs.push({
+            id: `req-norm-m-${idx + 1}`,
+            requirement: m.name || m.requirement,
+            category: m.category || "Technical Skill",
+            weight: typeof m.weight === 'number' ? m.weight : 2.0,
+            is_mandatory: true,
+            isMandatory: true,
+            mandatory: true,
+            evidence_required: true,
+            source_evidence: m.description || m.context || m.name,
+            aliases: m.aliases || [],
+            context: m.context || null
+          });
+        });
+
+        pref.forEach((p: any, idx: number) => {
+          unpackedReqs.push({
+            id: `req-norm-p-${idx + 1}`,
+            requirement: p.name || p.requirement,
+            category: p.category || "Technical Skill",
+            weight: typeof p.weight === 'number' ? p.weight : 1.0,
+            is_mandatory: false,
+            isMandatory: false,
+            mandatory: false,
+            evidence_required: true,
+            source_evidence: p.description || p.context || p.name,
+            aliases: p.aliases || [],
+            context: p.context || null
+          });
+        });
+
+        if (normJd.experience?.minimum_years) {
+          const min = normJd.experience.minimum_years;
+          const max = normJd.experience.maximum_years;
+          const expLabel = max ? `${min}-${max} years overall professional experience` : `${min}+ years overall professional experience`;
+          unpackedReqs.unshift({
+            id: "req-norm-overall-exp",
+            requirement: expLabel,
+            category: "Experience",
+            weight: 2.0,
+            is_mandatory: true,
+            isMandatory: true,
+            mandatory: true,
+            evidence_required: true,
+            source_evidence: normJd.experience.description || expLabel,
+            aliases: [`${min} years`],
+            context: "Overall professional experience"
+          });
+        }
+
+        if (unpackedReqs.length > 0) {
+          reqs = deduplicateRequirements(unpackedReqs);
+        }
+      }
+    }
+
+    if (reqs.length === 0) {
       const jdText = targetJob?.jd_text || targetJob?.original_jd || '';
       if (jdText && typeof jdText === 'string' && jdText.trim().length > 30) {
         try {
@@ -1091,6 +1234,8 @@ export async function evaluateAndEnrichCandidateRecord(
               requirement: r.requirement,
               category: r.category,
               is_mandatory: r.is_mandatory,
+              isMandatory: r.is_mandatory,
+              mandatory: r.is_mandatory,
               weight: r.weight,
               evidence_required: true,
               source_evidence: r.source_evidence,
@@ -1106,6 +1251,19 @@ export async function evaluateAndEnrichCandidateRecord(
     if (reqs.length === 0) {
       reqs = getStandardRequirementsForPosition(jobTitle, jobClient);
     }
+
+    reqs = deduplicateRequirements(
+      reqs.map((r: any) => {
+        const isMand = Boolean(r.is_mandatory ?? r.isMandatory ?? r.mandatory);
+        return {
+          ...r,
+          is_mandatory: isMand,
+          isMandatory: isMand,
+          mandatory: isMand,
+          weight: typeof r.weight === 'number' ? r.weight : (isMand ? 2.0 : 1.0)
+        };
+      })
+    );
 
     if (!targetJob && (reqJobPosition || customReqs.length > 0)) {
       targetJob = {

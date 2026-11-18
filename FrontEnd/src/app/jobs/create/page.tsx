@@ -243,7 +243,37 @@ function CreateJobContent() {
           }).filter(r => r.requirement && r.requirement.length >= 2)
         : [];
 
-      setRequirements(formattedReqs);
+      // Deduplicate formatted requirements
+      const deduplicatedReqs: ExtractedRequirement[] = [];
+      for (const item of formattedReqs) {
+        const normKey = (item.requirement || '')
+          .toLowerCase()
+          .replace(/^[\s*•●▪▫➢✓✔·\-\d\.\)\(\]]+/, '')
+          .replace(/(\d+)\s*(?:-|to|–|—)\s*(\d+)/g, '$1-$2')
+          .replace(/[^a-z0-9\s\+\-]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (!normKey) continue;
+        const existingIdx = deduplicatedReqs.findIndex(existing => {
+          const exKey = (existing.requirement || '')
+            .toLowerCase()
+            .replace(/^[\s*•●▪▫➢✓✔·\-\d\.\)\(\]]+/, '')
+            .replace(/(\d+)\s*(?:-|to|–|—)\s*(\d+)/g, '$1-$2')
+            .replace(/[^a-z0-9\s\+\-]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          return exKey === normKey || ((exKey.includes(normKey) || normKey.includes(exKey)) && Math.abs(exKey.length - normKey.length) < 15);
+        });
+        if (existingIdx === -1) {
+          deduplicatedReqs.push(item);
+        } else {
+          const existing = deduplicatedReqs[existingIdx];
+          existing.mandatory = existing.mandatory || item.mandatory;
+          existing.weight = Math.max(existing.weight, item.weight);
+        }
+      }
+
+      setRequirements(deduplicatedReqs);
       setIsScanning(false);
       setScanComplete(true);
     } catch (err: any) {

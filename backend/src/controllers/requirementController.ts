@@ -6,8 +6,11 @@ import {
   normalizeCategory,
   formatRequirementObject,
   detectDuplicateRequirements,
+  deduplicateRequirements,
+  areRequirementsDuplicate,
   SUPPORTED_CATEGORIES
 } from '../utils/requirementUtils';
+import { GLOBAL_JOB_STORE } from './jobController';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -104,15 +107,75 @@ export const getRequirements = async (req: AuthRequest, res: Response): Promise<
           orderBy: { created_at: 'asc' }
         });
         if (dbRequirements && dbRequirements.length > 0) {
-          formattedReqs = dbRequirements.map(formatRequirementObject);
+          formattedReqs = deduplicateRequirements(dbRequirements.map(formatRequirementObject));
         }
       }
     } catch (dbErr) {
       console.warn('[Get Requirements] Database read failed; using fallback:', dbErr);
     }
 
+    // Check GLOBAL_JOB_STORE or job.normalized_jd if DB had no rows
     if (!formattedReqs || formattedReqs.length === 0) {
-      formattedReqs = DUMMY_FALLBACK_REQS['default'];
+      const storedJob = GLOBAL_JOB_STORE.get(rawJobId);
+      if (storedJob && Array.isArray(storedJob.requirements) && storedJob.requirements.length > 0) {
+        formattedReqs = deduplicateRequirements(storedJob.requirements.map(formatRequirementObject));
+      } else {
+        // Try reading Job record from DB to check for normalized_jd
+        if (rawJobId && UUID_REGEX.test(rawJobId)) {
+          try {
+            const dbJob = await prisma.job.findUnique({
+              where: { id: rawJobId },
+              select: { normalized_jd: true, position: true }
+            });
+            const normJd: any = dbJob?.normalized_jd;
+            if (normJd && (normJd.mandatory_requirements || normJd.preferred_requirements)) {
+              const unpackedReqs: any[] = [];
+              const mand = Array.isArray(normJd.mandatory_requirements) ? normJd.mandatory_requirements : [];
+              const pref = Array.isArray(normJd.preferred_requirements) ? normJd.preferred_requirements : [];
+
+              mand.forEach((m: any, idx: number) => {
+                unpackedReqs.push({
+                  id: `req-norm-m-${idx + 1}`,
+                  jobId: rawJobId,
+                  requirement: m.name || m.requirement,
+                  category: normalizeCategory(m.category),
+                  weight: typeof m.weight === 'number' ? m.weight : 2.0,
+                  isMandatory: true,
+                  evidenceRequired: false,
+                  recruiterConfirmed: false,
+                  sourceEvidence: m.description || m.context || m.name,
+                  needsVerification: false
+                });
+              });
+
+              pref.forEach((p: any, idx: number) => {
+                unpackedReqs.push({
+                  id: `req-norm-p-${idx + 1}`,
+                  jobId: rawJobId,
+                  requirement: p.name || p.requirement,
+                  category: normalizeCategory(p.category),
+                  weight: typeof p.weight === 'number' ? p.weight : 1.0,
+                  isMandatory: false,
+                  evidenceRequired: false,
+                  recruiterConfirmed: false,
+                  sourceEvidence: p.description || p.context || p.name,
+                  needsVerification: false
+                });
+              });
+
+              if (unpackedReqs.length > 0) {
+                formattedReqs = deduplicateRequirements(unpackedReqs);
+              }
+            }
+          } catch {}
+        }
+      }
+    }
+
+    if (!formattedReqs || formattedReqs.length === 0) {
+      formattedReqs = deduplicateRequirements(DUMMY_FALLBACK_REQS['default']);
+    } else {
+      formattedReqs = deduplicateRequirements(formattedReqs);
     }
 
     const warnings = detectDuplicateRequirements(formattedReqs);
@@ -348,9 +411,11 @@ export const confirmRequirements = async (req: AuthRequest, res: Response): Prom
       return;
     }
 
+    const cleanRequirements = deduplicateRequirements(requirements);
+
     // Validate all requirements before initiating database transaction
-    for (let i = 0; i < requirements.length; i++) {
-      const item = requirements[i];
+    for (let i = 0; i < cleanRequirements.length; i++) {
+      const item = cleanRequirements[i];
       if (!item.requirement || typeof item.requirement !== 'string' || !item.requirement.trim()) {
         res.status(400).json({ error: `Requirement at index ${i} cannot be empty.` });
         return;
@@ -363,7 +428,7 @@ export const confirmRequirements = async (req: AuthRequest, res: Response): Prom
         return;
       }
 
-      const itemWeight = typeof item.weight === 'number' ? item.weight : 1.0;
+      const itemWeight = typeof item.weight === 'number' ? item.weight : (Boolean(item.isMandatory ?? item.is_mandatory) ? 2.0 : 1.0);
       if (itemWeight < 1.0 || itemWeight > 3.0) {
         res.status(400).json({ error: `Requirement at index ${i} has invalid weight ${item.weight}. Must be between 1.0 and 3.0 inclusive.` });
         return;
@@ -379,13 +444,13 @@ export const confirmRequirements = async (req: AuthRequest, res: Response): Prom
 
       // 2. Create updated & confirmed requirement set
       const createdReqs = await Promise.all(
-        requirements.map((r: any) =>
+        cleanRequirements.map((r: any) =>
           tx.requirement.create({
             data: {
               job_id: jobId,
               requirement: String(r.requirement).trim(),
               category: normalizeCategory(r.category),
-              weight: typeof r.weight === 'number' ? r.weight : 1.0,
+              weight: typeof r.weight === 'number' ? r.weight : (Boolean(r.isMandatory ?? r.is_mandatory) ? 2.0 : 1.0),
               is_mandatory: Boolean(r.isMandatory ?? r.is_mandatory ?? false),
               evidence_required: Boolean(r.evidenceRequired ?? r.evidence_required ?? false),
               recruiter_confirmed: true, // Mark confirmed requirements
@@ -406,6 +471,16 @@ export const confirmRequirements = async (req: AuthRequest, res: Response): Prom
     });
 
     const formattedConfirmed = result.map(formatRequirementObject);
+
+    // Keep GLOBAL_JOB_STORE synchronized with confirmed requirements
+    if (GLOBAL_JOB_STORE.has(jobId)) {
+      const existingJob = GLOBAL_JOB_STORE.get(jobId);
+      GLOBAL_JOB_STORE.set(jobId, {
+        ...existingJob,
+        status: 'published',
+        requirements: formattedConfirmed
+      });
+    }
 
     res.status(200).json({
       success: true,

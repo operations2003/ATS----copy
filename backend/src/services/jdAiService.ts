@@ -14,6 +14,10 @@ import {
   NormalizedJdSchema,
   NormalizedRequirement,
 } from "./geminiService";
+import {
+  deduplicateRequirements,
+  areRequirementsDuplicate,
+} from "../utils/requirementUtils";
 
 export interface ControlledAiRequirement {
   id: string;
@@ -131,10 +135,18 @@ export async function semanticallyUnderstandJd(jdText: string): Promise<{
       const minimumYears = geminiResult.experience?.minimum_years;
       const maximumYears = geminiResult.experience?.maximum_years;
 
+      const experienceLabel =
+        maximumYears !== null
+          ? `${minimumYears}-${maximumYears} years overall professional experience`
+          : `${minimumYears}+ years overall professional experience`;
+
       const specificExperiencePattern =
         /\b(?:gen\s?ai|generative\s+ai|llms?|machine learning|deep learning|nlp|rag|langchain|langgraph|python|sql|fastapi|tensorflow|pytorch|aws|azure|gcp|sales|b2b)\b/i;
 
       const hasOverallExperienceRequirement = mappedRequirements.some((req) => {
+        if (areRequirementsDuplicate(req.requirement, experienceLabel)) {
+          return true;
+        }
         const text = `${req.requirement} ${req.source_evidence} ${req.context || ""}`;
 
         const hasYears =
@@ -154,11 +166,6 @@ export async function semanticallyUnderstandJd(jdText: string): Promise<{
         typeof minimumYears === "number" &&
         !hasOverallExperienceRequirement
       ) {
-        const experienceLabel =
-          maximumYears !== null
-            ? `${minimumYears}-${maximumYears} years overall professional experience`
-            : `${minimumYears}+ years overall professional experience`;
-
         mappedRequirements.unshift({
           id: "req-ai-overall-exp",
           requirement: experienceLabel,
@@ -174,9 +181,11 @@ export async function semanticallyUnderstandJd(jdText: string): Promise<{
         });
       }
 
+      const deduplicatedMapped = deduplicateRequirements(mappedRequirements);
+
       return {
         normalizedJd: geminiResult,
-        requirements: mappedRequirements,
+        requirements: deduplicatedMapped,
         aiModel: "semantic-ai-v2",
         status: "COMPLETED",
       };

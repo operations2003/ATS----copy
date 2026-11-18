@@ -34,6 +34,7 @@ import {
 } from '../controllers/candidateController';
 import { calculateCentralizedATSScore } from './centralizedATSScoringService';
 import { getStandardRequirementsForPosition } from '../controllers/evaluationController';
+import { deduplicateRequirements } from '../utils/requirementUtils';
 
 const STORAGE_ROOT = process.env.STORAGE_DIR || path.resolve(process.cwd(), 'uploads', 'batches');
 const MAX_BATCH_SIZE = parseInt(process.env.MAX_BATCH_SIZE || '250', 10);
@@ -396,7 +397,67 @@ export class BulkUploadService {
           });
 
           if (jobRecord) {
-            const reqs = jobRecord.requirements || [];
+            let reqs = jobRecord.requirements || [];
+            if (reqs.length === 0 && jobRecord.normalized_jd) {
+              const normJd: any = jobRecord.normalized_jd;
+              const unpackedReqs: any[] = [];
+              const mand = Array.isArray(normJd.mandatory_requirements) ? normJd.mandatory_requirements : [];
+              const pref = Array.isArray(normJd.preferred_requirements) ? normJd.preferred_requirements : [];
+
+              mand.forEach((m: any, idx: number) => {
+                unpackedReqs.push({
+                  id: `req-norm-m-${idx + 1}`,
+                  requirement: m.name || m.requirement,
+                  category: m.category || "Technical Skill",
+                  weight: typeof m.weight === 'number' ? m.weight : 2.0,
+                  is_mandatory: true,
+                  source_evidence: m.description || m.context || m.name,
+                  aliases: m.aliases || [],
+                  context: m.context || null
+                });
+              });
+
+              pref.forEach((p: any, idx: number) => {
+                unpackedReqs.push({
+                  id: `req-norm-p-${idx + 1}`,
+                  requirement: p.name || p.requirement,
+                  category: p.category || "Technical Skill",
+                  weight: typeof p.weight === 'number' ? p.weight : 1.0,
+                  is_mandatory: false,
+                  source_evidence: p.description || p.context || p.name,
+                  aliases: p.aliases || [],
+                  context: p.context || null
+                });
+              });
+
+              if (normJd.experience?.minimum_years) {
+                const min = normJd.experience.minimum_years;
+                const max = normJd.experience.maximum_years;
+                const expLabel = max ? `${min}-${max} years overall professional experience` : `${min}+ years overall professional experience`;
+                unpackedReqs.unshift({
+                  id: "req-norm-overall-exp",
+                  requirement: expLabel,
+                  category: "Experience",
+                  weight: 2.0,
+                  is_mandatory: true,
+                  source_evidence: normJd.experience.description || expLabel,
+                  aliases: [`${min} years`],
+                  context: "Overall professional experience"
+                });
+              }
+
+              if (unpackedReqs.length > 0) {
+                reqs = unpackedReqs as any;
+              }
+            }
+
+            reqs = deduplicateRequirements(
+              reqs.map((r: any) => ({
+                ...r,
+                is_mandatory: Boolean(r.is_mandatory ?? r.isMandatory),
+                weight: typeof r.weight === 'number' ? r.weight : (Boolean(r.is_mandatory ?? r.isMandatory) ? 2.0 : 1.0)
+              }))
+            );
             const scoringInputCandidate: CandidateRecord = {
               id: item.id,
               jobId,

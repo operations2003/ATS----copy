@@ -10,6 +10,7 @@ import { calculateCentralizedATSScore } from '../services/centralizedATSScoringS
  */
 import { getJobFromStoreOrDb } from './jobController';
 import { markJdAsConsumed } from '../services/organizationService';
+import { deduplicateRequirements } from '../utils/requirementUtils';
 
 /**
  * Standard requirement helper for fallback jobs or unseeded requisitions across multiple domains
@@ -127,55 +128,62 @@ async function getJobAndRequirements(jobId: string, fallbackPosition?: string, f
   let jobData: any = null;
   let requirements: any[] = [];
 
-  // 1. Check in-memory GLOBAL_JOB_STORE first (ensures custom/client IDs work immediately)
-  const storeJob = await getJobFromStoreOrDb(jobId);
-  if (storeJob) {
-    jobData = {
-      id: storeJob.id,
-      position: storeJob.position || storeJob.title || fallbackPosition,
-      title: storeJob.position || storeJob.title || fallbackPosition,
-      client: storeJob.client || storeJob.company || fallbackClient,
-      company: storeJob.client || storeJob.company || fallbackClient,
-      jd_text: storeJob.jd_text || undefined,
-      created_by: storeJob.created_by,
-      organizationId: storeJob.organizationId,
-      creatorRole: storeJob.user?.role,
-      creatorEmail: storeJob.user?.email,
-    };
-    if (storeJob.requirements && storeJob.requirements.length > 0) {
-      requirements = storeJob.requirements;
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(jobId);
+
+  // 1. If UUID, check PostgreSQL first for authoritative confirmed requirements & job metadata
+  if (isUuid) {
+    try {
+      const dbJob = await prisma.job.findUnique({
+        where: { id: jobId },
+        include: { requirements: true, user: true }
+      });
+
+      if (dbJob) {
+        jobData = {
+          id: dbJob.id,
+          position: dbJob.position,
+          title: dbJob.position,
+          client: dbJob.client,
+          company: dbJob.client,
+          jd_text: dbJob.jd_text || dbJob.original_jd || undefined,
+          original_jd: dbJob.original_jd || dbJob.jd_text || undefined,
+          normalized_jd: dbJob.normalized_jd,
+          created_by: dbJob.created_by,
+          organizationId: dbJob.organizationId,
+          creatorRole: dbJob.user?.role,
+          creatorEmail: dbJob.user?.email,
+        };
+        if (dbJob.requirements && dbJob.requirements.length > 0) {
+          requirements = dbJob.requirements;
+        }
+      }
+    } catch (e) {
+      console.warn('[Evaluation Controller] Job DB fetch error:', e);
     }
   }
 
-  // 2. Try DB if UUID and not found yet
-  if (!jobData) {
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(jobId);
-    if (isUuid) {
-      try {
-        const dbJob = await prisma.job.findUnique({
-          where: { id: jobId },
-          include: { requirements: true, user: true }
-        });
-
-        if (dbJob) {
-          jobData = {
-            id: dbJob.id,
-            position: dbJob.position,
-            title: dbJob.position,
-            client: dbJob.client,
-            company: dbJob.client,
-            jd_text: dbJob.jd_text || undefined,
-            created_by: dbJob.created_by,
-            organizationId: dbJob.organizationId,
-            creatorRole: dbJob.user?.role,
-            creatorEmail: dbJob.user?.email,
-          };
-          if (dbJob.requirements && dbJob.requirements.length > 0) {
-            requirements = dbJob.requirements;
-          }
-        }
-      } catch (e) {
-        console.warn('[Evaluation Controller] Job DB fetch error:', e);
+  // 2. Check in-memory store if DB query did not find job or requirements
+  if (!jobData || requirements.length === 0) {
+    const storeJob = await getJobFromStoreOrDb(jobId);
+    if (storeJob) {
+      if (!jobData) {
+        jobData = {
+          id: storeJob.id,
+          position: storeJob.position || storeJob.title || fallbackPosition,
+          title: storeJob.position || storeJob.title || fallbackPosition,
+          client: storeJob.client || storeJob.company || fallbackClient,
+          company: storeJob.client || storeJob.company || fallbackClient,
+          jd_text: storeJob.jd_text || storeJob.original_jd || undefined,
+          original_jd: storeJob.original_jd || storeJob.jd_text || undefined,
+          normalized_jd: storeJob.normalized_jd || storeJob.normalizedJd,
+          created_by: storeJob.created_by,
+          organizationId: storeJob.organizationId,
+          creatorRole: storeJob.user?.role,
+          creatorEmail: storeJob.user?.email,
+        };
+      }
+      if (requirements.length === 0 && storeJob.requirements && storeJob.requirements.length > 0) {
+        requirements = storeJob.requirements;
       }
     }
   }
@@ -190,8 +198,73 @@ async function getJobAndRequirements(jobId: string, fallbackPosition?: string, f
     };
   }
 
+  // 3. If requirements are not yet confirmed in DB, unpack directly from normalized_jd (Gemini semantic representation)
   if (requirements.length === 0) {
-    // If the job has actual JD text, semantically extract real requirements with Gemini
+    const normJd = jobData?.normalized_jd || (jobData as any)?.normalizedJd;
+    if (normJd && typeof normJd === 'object') {
+      const unpackedReqs: any[] = [];
+      const mand = Array.isArray(normJd.mandatory_requirements) ? normJd.mandatory_requirements : [];
+      const pref = Array.isArray(normJd.preferred_requirements) ? normJd.preferred_requirements : [];
+
+      mand.forEach((m: any, idx: number) => {
+        unpackedReqs.push({
+          id: `req-norm-m-${idx + 1}`,
+          requirement: m.name || m.requirement,
+          category: m.category || "Technical Skill",
+          weight: typeof m.weight === 'number' ? m.weight : 2.0,
+          is_mandatory: true,
+          isMandatory: true,
+          mandatory: true,
+          evidence_required: true,
+          source_evidence: m.description || m.context || m.name,
+          aliases: m.aliases || [],
+          context: m.context || null
+        });
+      });
+
+      pref.forEach((p: any, idx: number) => {
+        unpackedReqs.push({
+          id: `req-norm-p-${idx + 1}`,
+          requirement: p.name || p.requirement,
+          category: p.category || "Technical Skill",
+          weight: typeof p.weight === 'number' ? p.weight : 1.0,
+          is_mandatory: false,
+          isMandatory: false,
+          mandatory: false,
+          evidence_required: true,
+          source_evidence: p.description || p.context || p.name,
+          aliases: p.aliases || [],
+          context: p.context || null
+        });
+      });
+
+      if (normJd.experience?.minimum_years) {
+        const min = normJd.experience.minimum_years;
+        const max = normJd.experience.maximum_years;
+        const expLabel = max ? `${min}-${max} years overall professional experience` : `${min}+ years overall professional experience`;
+        unpackedReqs.unshift({
+          id: "req-norm-overall-exp",
+          requirement: expLabel,
+          category: "Experience",
+          weight: 2.0,
+          is_mandatory: true,
+          isMandatory: true,
+          mandatory: true,
+          evidence_required: true,
+          source_evidence: normJd.experience.description || expLabel,
+          aliases: [`${min} years`],
+          context: "Overall professional experience"
+        });
+      }
+
+      if (unpackedReqs.length > 0) {
+        requirements = deduplicateRequirements(unpackedReqs);
+      }
+    }
+  }
+
+  // 4. If still empty, perform on-demand semantic understanding with Gemini
+  if (requirements.length === 0) {
     const textToExtract = (jobData as any)?.jd_text || (jobData as any)?.original_jd || '';
     if (textToExtract && typeof textToExtract === 'string' && textToExtract.trim().length > 30) {
       try {
@@ -203,6 +276,8 @@ async function getJobAndRequirements(jobId: string, fallbackPosition?: string, f
             requirement: r.requirement,
             category: r.category,
             is_mandatory: r.is_mandatory,
+            isMandatory: r.is_mandatory,
+            mandatory: r.is_mandatory,
             weight: r.weight,
             evidence_required: true,
             source_evidence: r.source_evidence,
@@ -220,6 +295,20 @@ async function getJobAndRequirements(jobId: string, fallbackPosition?: string, f
   if (requirements.length === 0) {
     requirements = getStandardRequirementsForPosition(jobData.position, jobData.client);
   }
+
+  // Global deduplication and canonical mandatory property normalization
+  requirements = deduplicateRequirements(
+    requirements.map((r: any) => {
+      const isMand = Boolean(r.is_mandatory ?? r.isMandatory ?? r.mandatory);
+      return {
+        ...r,
+        is_mandatory: isMand,
+        isMandatory: isMand,
+        mandatory: isMand,
+        weight: typeof r.weight === 'number' ? r.weight : (isMand ? 2.0 : 1.0)
+      };
+    })
+  );
 
   return { jobData, requirements };
 }

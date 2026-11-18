@@ -12,6 +12,12 @@
  * - Enforces structured JSON schema output and provides resilient timeout & error handling.
  */
 
+import {
+  deduplicateRequirements,
+  normalizeRequirementKey,
+  areRequirementsDuplicate,
+} from "../utils/requirementUtils";
+
 export interface NormalizedRequirement {
   name: string;
   category:
@@ -575,6 +581,56 @@ function sanitizeNormalizedJd(
       ? data.experience.maximum_years
       : null;
 
+  const rawMandatory = sanitizeReqList(data?.mandatory_requirements || []);
+  const sanitizedMandatory: NormalizedRequirement[] = deduplicateRequirements(
+    rawMandatory.map((r) => ({
+      ...r,
+      requirement: r.name,
+      is_mandatory: true,
+      mandatory: true,
+    })),
+  ).map((r) => ({
+    name: r.name || r.requirement,
+    category: r.category,
+    description: r.description,
+    aliases: r.aliases || [],
+    related_terms: r.related_terms || [],
+    context: r.context || "",
+    weight: r.weight,
+  }));
+
+  const rawPreferred = sanitizeReqList(data?.preferred_requirements || []);
+  const sanitizedPreferred: NormalizedRequirement[] = deduplicateRequirements(
+    rawPreferred.map((r) => ({
+      ...r,
+      requirement: r.name,
+      is_mandatory: false,
+      mandatory: false,
+    })),
+  )
+    .filter(
+      (pref) =>
+        !sanitizedMandatory.some((mand) =>
+          areRequirementsDuplicate(pref.name, mand.name),
+        ),
+    )
+    .map((r) => ({
+      name: r.name || r.requirement,
+      category: r.category,
+      description: r.description,
+      aliases: r.aliases || [],
+      related_terms: r.related_terms || [],
+      context: r.context || "",
+      weight: r.weight,
+    }));
+
+  const dedupeStrings = (arr: any[]): string[] => {
+    if (!Array.isArray(arr)) return [];
+    return Array.from(
+      new Set(arr.map((s) => String(s || "").trim()).filter(Boolean)),
+    );
+  };
+
   return {
     job_title: String(data?.job_title || "").trim(),
     summary: String(data?.summary || "").trim(),
@@ -583,25 +639,13 @@ function sanitizeNormalizedJd(
       maximum_years: maxExp,
       description: String(data?.experience?.description || "").trim(),
     },
-    education: Array.isArray(data?.education)
-      ? data.education.map(String).filter(Boolean)
-      : [],
-    mandatory_requirements: sanitizeReqList(data?.mandatory_requirements || []),
-    preferred_requirements: sanitizeReqList(data?.preferred_requirements || []),
-    responsibilities: Array.isArray(data?.responsibilities)
-      ? data.responsibilities.map(String).filter(Boolean)
-      : [],
-    technologies: Array.isArray(data?.technologies)
-      ? data.technologies.map(String).filter(Boolean)
-      : [],
-    certifications: Array.isArray(data?.certifications)
-      ? data.certifications.map(String).filter(Boolean)
-      : [],
-    domain_knowledge: Array.isArray(data?.domain_knowledge)
-      ? data.domain_knowledge.map(String).filter(Boolean)
-      : [],
-    soft_skills: Array.isArray(data?.soft_skills)
-      ? data.soft_skills.map(String).filter(Boolean)
-      : [],
+    education: dedupeStrings(data?.education || []),
+    mandatory_requirements: sanitizedMandatory,
+    preferred_requirements: sanitizedPreferred,
+    responsibilities: dedupeStrings(data?.responsibilities || []),
+    technologies: dedupeStrings(data?.technologies || []),
+    certifications: dedupeStrings(data?.certifications || []),
+    domain_knowledge: dedupeStrings(data?.domain_knowledge || []),
+    soft_skills: dedupeStrings(data?.soft_skills || []),
   };
 }

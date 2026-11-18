@@ -5,6 +5,10 @@ import {
   extractTextFromBuffer,
   parseJobDescription,
 } from "../services/jdParsingService";
+import {
+  deduplicateRequirements,
+  areRequirementsDuplicate,
+} from "../utils/requirementUtils";
 import { extractDocumentTextViaPython } from "../services/pythonDocumentClient";
 import { CANDIDATE_STORE } from "./candidateController";
 import {
@@ -232,48 +236,51 @@ export const parseJobDescriptionController = async (
         // Gemini Semantic Normalization is the authoritative engine.
         // Accurately extracts mandatory & preferred requirements directly from the JD.
         // =====================================================
-        const geminiMandatoryList = semRes.requirements
-          .filter((r) => r.is_mandatory)
+        const rawAiRequirements = deduplicateRequirements(
+          semRes.requirements.map((inf, idx) => ({
+            id: inf.id || `req-ai-${idx + 1}`,
+            requirement: inf.requirement,
+            category: inf.category || "Technical Skill",
+            type:
+              inf.category === "Experience"
+                ? "EXPERIENCE"
+                : inf.category === "Education"
+                  ? "EDUCATION"
+                  : inf.category === "Certification"
+                    ? "CERTIFICATION"
+                    : "SKILL",
+            weight:
+              typeof inf.weight === "number"
+                ? inf.weight
+                : inf.is_mandatory
+                  ? 2.0
+                  : 1.0,
+            isMandatory: inf.is_mandatory,
+            mandatory: inf.is_mandatory,
+            evidenceRequired: true,
+            recruiterConfirmed: false,
+            needsVerification: false,
+            sourceEvidence: inf.source_evidence || inf.requirement,
+            sourceSection: inf.is_mandatory
+              ? "Mandatory Requirements"
+              : "Preferred Requirements",
+            confidence: (inf.confidence as "HIGH" | "MEDIUM" | "LOW") || "HIGH",
+            aliases: inf.aliases || [],
+            context: inf.context || "",
+          }))
+        );
+
+        const geminiMandatoryList = rawAiRequirements
+          .filter((r) => r.isMandatory)
           .map((r) => r.requirement);
 
-        const geminiPreferredList = semRes.requirements
-          .filter((r) => !r.is_mandatory)
+        const geminiPreferredList = rawAiRequirements
+          .filter((r) => !r.isMandatory)
           .map((r) => r.requirement);
 
         result.data.mandatoryRequirements = geminiMandatoryList;
         result.data.preferredRequirements = geminiPreferredList;
-
-        result.data.requirements = semRes.requirements.map((inf, idx) => ({
-          id: inf.id || `req-ai-${idx + 1}`,
-          requirement: inf.requirement,
-          category: inf.category || "Technical Skill",
-          type:
-            inf.category === "Experience"
-              ? "EXPERIENCE"
-              : inf.category === "Education"
-                ? "EDUCATION"
-                : inf.category === "Certification"
-                  ? "CERTIFICATION"
-                  : "SKILL",
-          weight:
-            typeof inf.weight === "number"
-              ? inf.weight
-              : inf.is_mandatory
-                ? 2.0
-                : 1.0,
-          isMandatory: inf.is_mandatory,
-          mandatory: inf.is_mandatory,
-          evidenceRequired: true,
-          recruiterConfirmed: false,
-          needsVerification: false,
-          sourceEvidence: inf.source_evidence || inf.requirement,
-          sourceSection: inf.is_mandatory
-            ? "Mandatory Requirements"
-            : "Preferred Requirements",
-          confidence: (inf.confidence as "HIGH" | "MEDIUM" | "LOW") || "HIGH",
-          aliases: inf.aliases || [],
-          context: inf.context || "",
-        }));
+        result.data.requirements = rawAiRequirements as any;
 
         // Preserve existing hiring criteria.
         // Never clear the deterministic hiring criteria just
@@ -310,38 +317,6 @@ export const parseJobDescriptionController = async (
         ) {
           result.data.responsibilities = semRes.normalizedJd.responsibilities;
         }
-
-        result.data.requirements = semRes.requirements.map((inf, idx) => ({
-          id: inf.id || `req-ai-${idx + 1}`,
-          requirement: inf.requirement,
-          category: inf.category || "Technical Skill",
-          type:
-            inf.category === "Experience"
-              ? "EXPERIENCE"
-              : inf.category === "Education"
-                ? "EDUCATION"
-                : inf.category === "Certification"
-                  ? "CERTIFICATION"
-                  : "SKILL",
-          weight:
-            typeof inf.weight === "number"
-              ? inf.weight
-              : inf.is_mandatory
-                ? 2.0
-                : 1.0,
-          isMandatory: inf.is_mandatory,
-          mandatory: inf.is_mandatory,
-          evidenceRequired: true,
-          recruiterConfirmed: false,
-          needsVerification: false,
-          sourceEvidence: inf.source_evidence || inf.requirement,
-          sourceSection: inf.is_mandatory
-            ? "Mandatory Requirements"
-            : "Preferred Requirements",
-          confidence: (inf.confidence as "HIGH" | "MEDIUM" | "LOW") || "HIGH",
-          aliases: inf.aliases || [],
-          context: inf.context || "",
-        }));
 
         result.data.validation.counts.mandatoryCount =
           result.data.mandatoryRequirements.length;
@@ -512,6 +487,7 @@ export const parseJobDescriptionController = async (
       };
 
       result.data.requirements.unshift(overallExperienceRequirement);
+      result.data.requirements = deduplicateRequirements(result.data.requirements);
 
       // Remove duplicate or outdated generic experience
       // entries from mandatory and preferred lists.
@@ -522,14 +498,29 @@ export const parseJobDescriptionController = async (
             !(hasYearValue(item) && !specificExperiencePattern.test(item)),
         );
 
-      result.data.mandatoryRequirements = [
+      const rawMandatoryStrings = [
         requiredExperienceLabel,
         ...removeOldExperience(result.data.mandatoryRequirements),
       ];
 
-      result.data.preferredRequirements = removeOldExperience(
+      result.data.mandatoryRequirements = deduplicateRequirements(
+        rawMandatoryStrings.map((r) => ({ requirement: r, is_mandatory: true }))
+      ).map((r: any) => r.requirement);
+
+      const rawPreferredStrings = removeOldExperience(
         result.data.preferredRequirements,
       );
+
+      result.data.preferredRequirements = deduplicateRequirements(
+        rawPreferredStrings.map((r) => ({ requirement: r, is_mandatory: false }))
+      )
+        .filter(
+          (pref: any) =>
+            !result.data.mandatoryRequirements.some((mand: string) =>
+              areRequirementsDuplicate(pref.requirement, mand)
+            )
+        )
+        .map((r: any) => r.requirement);
 
       // Synchronize metadata and job object.
       result.data.experience = experienceText;
@@ -550,6 +541,9 @@ export const parseJobDescriptionController = async (
           description: experienceText,
         };
       }
+
+      // Final complete deduplication of all extracted requirements
+      result.data.requirements = deduplicateRequirements(result.data.requirements) as any;
 
       // Update validation counts.
       result.data.validation.counts.mandatoryCount =
@@ -679,29 +673,31 @@ export const createJob = async (
 
     // Format requirements if passed
     let requirementsData = Array.isArray(requirements)
-      ? requirements
-          .map((r: any) => ({
-            requirement: String(r.requirement || r.text || "").trim(),
-            category: r.category ? String(r.category).trim() : "Other",
-            is_mandatory: Boolean(r.is_mandatory ?? r.isMandatory ?? false),
-            weight: typeof r.weight === "number" ? r.weight : 1.0,
-            evidence_required: Boolean(
-              r.evidence_required ?? r.evidenceRequired ?? false,
-            ),
-            source_evidence: String(
-              r.sourceEvidence ||
-                r.source_evidence ||
-                r.requirement ||
-                r.text ||
-                "",
-            ).trim(),
-            needs_verification: Boolean(
-              r.needsVerification ?? r.needs_verification ?? false,
-            ),
-            aliases: Array.isArray(r.aliases) ? r.aliases : [],
-            context: r.context ? String(r.context).trim() : null,
-          }))
-          .filter((r: any) => r.requirement.length > 0)
+      ? deduplicateRequirements(
+          requirements
+            .map((r: any) => ({
+              requirement: String(r.requirement || r.text || "").trim(),
+              category: r.category ? String(r.category).trim() : "Other",
+              is_mandatory: Boolean(r.is_mandatory ?? r.isMandatory ?? false),
+              weight: typeof r.weight === "number" ? r.weight : (Boolean(r.is_mandatory ?? r.isMandatory) ? 2.0 : 1.0),
+              evidence_required: Boolean(
+                r.evidence_required ?? r.evidenceRequired ?? false,
+              ),
+              source_evidence: String(
+                r.sourceEvidence ||
+                  r.source_evidence ||
+                  r.requirement ||
+                  r.text ||
+                  "",
+              ).trim(),
+              needs_verification: Boolean(
+                r.needsVerification ?? r.needs_verification ?? false,
+              ),
+              aliases: Array.isArray(r.aliases) ? r.aliases : [],
+              context: r.context ? String(r.context).trim() : null,
+            }))
+            .filter((r: any) => r.requirement.length > 0)
+        )
       : [];
 
     // Semantic AI Representation
@@ -728,17 +724,19 @@ export const createJob = async (
 
           // If no explicit requirements were provided, seed them from Gemini
           if (requirementsData.length === 0 && semRes.requirements.length > 0) {
-            requirementsData = semRes.requirements.map((inf) => ({
-              requirement: inf.requirement,
-              category: inf.category,
-              is_mandatory: inf.is_mandatory,
-              weight: inf.weight,
-              evidence_required: true,
-              source_evidence: inf.source_evidence,
-              needs_verification: false,
-              aliases: inf.aliases || [],
-              context: inf.context || null,
-            }));
+            requirementsData = deduplicateRequirements(
+              semRes.requirements.map((inf) => ({
+                requirement: inf.requirement,
+                category: inf.category,
+                is_mandatory: inf.is_mandatory,
+                weight: inf.weight,
+                evidence_required: true,
+                source_evidence: inf.source_evidence,
+                needs_verification: false,
+                aliases: inf.aliases || [],
+                context: inf.context || null,
+              }))
+            );
           }
         }
       } catch (semErr: any) {
@@ -1031,9 +1029,6 @@ export const normalizeJobWithAiController = async (
 export async function getJobFromStoreOrDb(jobId: string): Promise<any | null> {
   if (!jobId) return null;
   const cleanId = String(jobId).trim();
-  if (GLOBAL_JOB_STORE.has(cleanId)) {
-    return GLOBAL_JOB_STORE.get(cleanId);
-  }
   const isUuid =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       cleanId,
@@ -1051,6 +1046,9 @@ export async function getJobFromStoreOrDb(jobId: string): Promise<any | null> {
     } catch {
       // ignore
     }
+  }
+  if (GLOBAL_JOB_STORE.has(cleanId)) {
+    return GLOBAL_JOB_STORE.get(cleanId);
   }
   for (const [key, val] of GLOBAL_JOB_STORE.entries()) {
     if (key === cleanId || val.id === cleanId) return val;
