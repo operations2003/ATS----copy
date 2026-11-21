@@ -246,3 +246,38 @@ export const deleteClientPortal = async (req: AuthRequest, res: Response): Promi
     res.status(500).json({ error: 'Failed to delete client portal' });
   }
 };
+
+// PUT /api/client-portals/:id
+export const updateClientPortal = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    const { id } = req.params;
+    const updates = req.body;
+
+    loadPortals();
+
+    const idx = portalCache.findIndex(p => p.id === id);
+    if (idx === -1) {
+      res.status(404).json({ error: 'Client portal not found' });
+      return;
+    }
+
+    portalCache[idx] = {
+      ...portalCache[idx],
+      ...updates,
+      id
+    };
+
+    savePortals(portalCache);
+
+    res.status(200).json({ success: true, clientPortal: portalCache[idx] });
+  } catch (err: any) {
+    console.error('[Update Client Portal Error]', err);
+    res.status(500).json({ error: 'Failed to update client portal' });
+  }
+};

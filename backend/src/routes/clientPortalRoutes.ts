@@ -4,7 +4,8 @@ import {
   getClientPortals,
   saveClientPortal,
   assignClientPortal,
-  deleteClientPortal
+  deleteClientPortal,
+  updateClientPortal
 } from '../controllers/clientPortalController';
 
 const router = Router();
@@ -18,7 +19,10 @@ router.post('/', protect, saveClientPortal);
 // Assign a client portal to a recruiter/member
 router.post('/assign', protect, assignClientPortal);
 
-// Delete client portal (ADMIN ONLY - enforced in controller)
+// Update/edit client portal details
+router.put('/:id', protect, updateClientPortal);
+
+// Delete client portal
 router.delete('/:id', protect, deleteClientPortal);
 
 export default router;

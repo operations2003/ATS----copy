@@ -121,6 +121,18 @@ export default function ClientsPage() {
   const [linkToDelete, setLinkToDelete] = useState<SharedClientLink | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Edit Client Portal Modal State
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingLink, setEditingLink] = useState<SharedClientLink | null>(null);
+  const [editClientName, setEditClientName] = useState('');
+  const [editContactName, setEditContactName] = useState('');
+  const [editClientEmail, setEditClientEmail] = useState('');
+  const [editClientPhone, setEditClientPhone] = useState('');
+  const [editWelcomeNote, setEditWelcomeNote] = useState('');
+  const [editAssignedMember, setEditAssignedMember] = useState('');
+  const [editExpirationOption, setEditExpirationOption] = useState<string>('keep');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setCachedRole(localStorage.getItem('tasknera_role'));
@@ -997,6 +1009,125 @@ export default function ClientsPage() {
     showToast('Client JD upload link generated successfully!');
   };
 
+  const handleOpenEditModal = (link: SharedClientLink) => {
+    setEditingLink(link);
+    setEditClientName(link.clientName || '');
+    setEditContactName(link.contactName || '');
+    setEditClientEmail(link.clientEmail || '');
+    setEditClientPhone(link.clientPhone || '');
+    setEditWelcomeNote(link.welcomeNote || '');
+    setEditAssignedMember(link.assignedMember || '');
+    setEditExpirationOption('keep');
+    setEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingLink) return;
+    if (!editClientName.trim()) {
+      showToast('Client company name cannot be empty');
+      return;
+    }
+
+    setIsSavingEdit(true);
+    const oldClientName = editingLink.clientName;
+    const newClientName = editClientName.trim();
+
+    // Determine new expiration if modified
+    let newExpiresAt = editingLink.expiresAt;
+    if (editExpirationOption !== 'keep') {
+      if (editExpirationOption === 'never') {
+        newExpiresAt = 'Never';
+      } else {
+        const days = parseInt(editExpirationOption, 10);
+        if (!isNaN(days) && days > 0) {
+          const expDate = new Date();
+          expDate.setDate(expDate.getDate() + days);
+          newExpiresAt = expDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+      }
+    }
+
+    // Determine assigned role
+    let newAssignedRole = editingLink.assignedMemberRole;
+    if (editAssignedMember) {
+      const found = teamMembers.find(m => m.name.toLowerCase().trim() === editAssignedMember.toLowerCase().trim());
+      if (found) {
+        newAssignedRole = found.role;
+      } else if (!newAssignedRole) {
+        newAssignedRole = 'Technical Recruiter';
+      }
+    }
+
+    // Update share URL query param if name changed
+    let updatedShareUrl = editingLink.shareUrl;
+    try {
+      const u = new URL(editingLink.shareUrl);
+      u.searchParams.set('client', newClientName);
+      updatedShareUrl = u.toString();
+    } catch {
+      updatedShareUrl = editingLink.shareUrl.replace(/client=[^&]*/, `client=${encodeURIComponent(newClientName)}`);
+    }
+
+    const updatedLink: SharedClientLink = {
+      ...editingLink,
+      clientName: newClientName,
+      contactName: editContactName.trim() || undefined,
+      clientEmail: editClientEmail.trim() || undefined,
+      clientPhone: editClientPhone.trim() || undefined,
+      welcomeNote: editWelcomeNote.trim() || undefined,
+      assignedMember: editAssignedMember.trim() || undefined,
+      assignedMemberRole: editAssignedMember.trim() ? newAssignedRole : undefined,
+      assignedAt: editAssignedMember.trim() ? (editingLink.assignedAt || new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })) : undefined,
+      expiresAt: newExpiresAt,
+      shareUrl: updatedShareUrl
+    };
+
+    const updatedLinksList = sharedLinks.map(l => (l.id === editingLink.id ? updatedLink : l));
+    setSharedLinks(updatedLinksList);
+
+    // Save to local storage
+    try {
+      localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updatedLinksList));
+    } catch {}
+
+    // If client name changed, migrate client JDs cache
+    if (oldClientName.toLowerCase().trim() !== newClientName.toLowerCase().trim()) {
+      try {
+        const oldCleanKey = `tasknera_client_jds_${oldClientName.replace(/\s+/g, '_')}`;
+        const oldKey = `tasknera_client_jds_${oldClientName}`;
+        const newCleanKey = `tasknera_client_jds_${newClientName.replace(/\s+/g, '_')}`;
+        const newKey = `tasknera_client_jds_${newClientName}`;
+
+        const existingJds = localStorage.getItem(oldCleanKey) || localStorage.getItem(oldKey);
+        if (existingJds) {
+          localStorage.setItem(newCleanKey, existingJds);
+          localStorage.setItem(newKey, existingJds);
+        }
+      } catch {}
+    }
+
+    // Call backend API PUT /api/client-portals/:id
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+      await fetch(`${backendUrl}/client-portals/${editingLink.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(updatedLink)
+      });
+    } catch (err) {
+      console.warn('Failed to update client portal on backend:', err);
+    }
+
+    setIsSavingEdit(false);
+    setEditModalOpen(false);
+    setEditingLink(null);
+    showToast(`✓ Updated client portal for ${newClientName}`);
+  };
+
   const handleOpenDeleteConfirm = (link: SharedClientLink) => {
     setLinkToDelete(link);
     setDeleteConfirmOpen(true);
@@ -1188,6 +1319,16 @@ export default function ClientsPage() {
                           </span>
                           <button
                             type="button"
+                            title="Edit Client Portal"
+                            onClick={() => handleOpenEditModal(link)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-[#3563E9] hover:bg-blue-50 transition-colors cursor-pointer border border-transparent hover:border-blue-100"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
                             title="Delete Client Portal"
                             onClick={() => handleOpenDeleteConfirm(link)}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer border border-transparent hover:border-rose-100"
@@ -1291,6 +1432,17 @@ export default function ClientsPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
                           <span>Client JDs</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditModal(link)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                          title={`Edit ${link.clientName} portal details`}
+                        >
+                          <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                          <span>Edit</span>
                         </button>
                         <button
                           type="button"
@@ -2180,6 +2332,20 @@ export default function ClientsPage() {
                       type="button"
                       onClick={() => {
                         setViewJdModalOpen(false);
+                        handleOpenEditModal(activeViewJdLink);
+                      }}
+                      className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-bold cursor-pointer transition-colors inline-flex items-center gap-1.5"
+                      title="Edit this client's portal details"
+                    >
+                      <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                      <span>Edit Details</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewJdModalOpen(false);
                         handleOpenDeleteConfirm(activeViewJdLink);
                       }}
                       className="px-3.5 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold cursor-pointer transition-colors inline-flex items-center gap-1.5"
@@ -2202,6 +2368,188 @@ export default function ClientsPage() {
             </div>
           );
         })()}
+
+        {/* Edit Client Portal Modal */}
+        {editModalOpen && editingLink && (
+          <div
+            className="fixed inset-0 z-[300] flex items-center justify-center overflow-y-auto bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-200"
+            onMouseDown={e => {
+              if (e.target === e.currentTarget && !isSavingEdit) setEditModalOpen(false);
+            }}
+          >
+            <div className="my-auto w-full max-w-xl rounded-2xl bg-white p-6 sm:p-7 shadow-2xl border border-[#EAECF0]">
+              <div className="flex items-start justify-between border-b border-[#EAECF0] pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-[#3563E9] shadow-xs border border-blue-100">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-[#101828]">Edit Client Portal</h2>
+                    <p className="text-xs text-[#667085]">
+                      Update client details, contact information, validity, or assigned recruiter
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isSavingEdit}
+                  onClick={() => setEditModalOpen(false)}
+                  className="rounded-lg p-1.5 text-xl leading-none text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                {/* Row 1: Company Name & Contact Name */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                      Client Company Name <span className="text-[#3563E9]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={editClientName}
+                      onChange={e => setEditClientName(e.target.value)}
+                      placeholder="e.g. Acme Corporation, Stripe, etc."
+                      className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                      Client Contact / Hiring Manager
+                    </label>
+                    <input
+                      type="text"
+                      value={editContactName}
+                      onChange={e => setEditContactName(e.target.value)}
+                      placeholder="e.g. John Doe (Talent Lead)"
+                      className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 2: Email & Phone */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                      Client Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={editClientEmail}
+                      onChange={e => setEditClientEmail(e.target.value)}
+                      placeholder="e.g. hiring.lead@client.com"
+                      className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-medium text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                      Client Phone / WhatsApp
+                    </label>
+                    <input
+                      type="tel"
+                      value={editClientPhone}
+                      onChange={e => setEditClientPhone(e.target.value)}
+                      placeholder="e.g. +1 (555) 019-2834"
+                      className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-medium text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 3: Instructions / Welcome Note */}
+                <div>
+                  <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                    Instructions / Welcome Note for Client
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={editWelcomeNote}
+                    onChange={e => setEditWelcomeNote(e.target.value)}
+                    placeholder="e.g. Please upload your open role descriptions here."
+                    className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-medium text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20 resize-none"
+                  />
+                </div>
+
+                {/* Row 4: Assigned Recruiter */}
+                <div>
+                  <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                    Assigned Requisition Owner / Recruiter
+                  </label>
+                  <select
+                    value={editAssignedMember}
+                    onChange={e => setEditAssignedMember(e.target.value)}
+                    className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
+                  >
+                    <option value="">-- No Recruiter Assigned (Unassigned) --</option>
+                    {teamMembers.map(m => (
+                      <option key={m.id} value={m.name}>
+                        {m.name} • {m.role} {m.team ? `(${m.team})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Row 5: Link Validity */}
+                <div>
+                  <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                    Link Validity / Expiration
+                  </label>
+                  <select
+                    value={editExpirationOption}
+                    onChange={e => setEditExpirationOption(e.target.value)}
+                    className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
+                  >
+                    <option value="keep">Keep Current ({editingLink.expiresAt})</option>
+                    <option value="14">Set / Extend by 14 Days</option>
+                    <option value="30">Set / Extend by 30 Days</option>
+                    <option value="60">Set / Extend by 60 Days</option>
+                    <option value="90">Set / Extend by 90 Days</option>
+                    <option value="never">Permanent (Never expires)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3 border-t border-[#EAECF0] pt-4">
+                <button
+                  type="button"
+                  disabled={isSavingEdit}
+                  onClick={() => setEditModalOpen(false)}
+                  className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-semibold text-[#182230] hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingEdit}
+                  onClick={handleSaveEdit}
+                  className="rounded-xl bg-[#3563E9] px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-[#2851D6] transition-colors cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-60"
+                >
+                  {isSavingEdit ? (
+                    <>
+                      <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span>Save Changes</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Delete Client Portal Confirmation Modal */}
         {deleteConfirmOpen && linkToDelete && (
