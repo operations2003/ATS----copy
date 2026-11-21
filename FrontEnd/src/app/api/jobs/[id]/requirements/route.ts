@@ -113,13 +113,35 @@ export async function POST(
       created_at: new Date().toISOString(),
     };
 
-    requirementsStore.push(newReq);
+    // Deduplicate: reject if an identical/near-identical requirement already exists for this job
+    const normalize = (t: string) =>
+      (t || '').toLowerCase()
+        .replace(/\b(?:years?|yrs?)\s+of\s+experience\b/g, 'years exp')
+        .replace(/\b(?:years?|yrs?)\s+experience\b/g, 'years exp')
+        .replace(/\b(?:years?|yrs?)\b/g, 'years')
+        .replace(/(\d+)\s*(?:-|to|–|—)\s*(\d+)/g, '$1-$2')
+        .replace(/[^a-z0-9\s\+\-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const newKey = normalize(newReq.requirement);
+    const existingForJob = requirementsStore.filter(r => r.job_id === id);
+    const isDuplicate = existingForJob.some(r => {
+      const exKey = normalize(r.requirement);
+      if (exKey === newKey) return true;
+      if ((exKey.includes(newKey) || newKey.includes(exKey)) && Math.abs(exKey.length - newKey.length) < 15) return true;
+      return false;
+    });
+
+    if (!isDuplicate) {
+      requirementsStore.push(newReq);
+    }
 
     return NextResponse.json({
       success: true,
       requirement: newReq,
       data: newReq,
-      message: 'Requirement added successfully'
+      message: isDuplicate ? 'Requirement already exists (duplicate skipped)' : 'Requirement added successfully'
     }, { status: 201 });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

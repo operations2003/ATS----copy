@@ -1002,13 +1002,12 @@ export const computeComprehensiveMatchScore = (
   // Extract required experience years from JD requirements or JD text
   const finalRequiredYears = extractRequiredExperienceYears(job, 3.0);
 
-  // Parse candidate career years
+  // Parse candidate career years — use the robust parser to handle "8-10 months", "1.5 years", etc.
   let totalCareerYears = 0;
   if (typeof candidate.totalExperienceYears === 'number' && !isNaN(candidate.totalExperienceYears)) {
     totalCareerYears = candidate.totalExperienceYears;
   } else if (candidate.totalExperience) {
-    const parsed = parseFloat(String(candidate.totalExperience).replace(/[^0-9.]/g, ''));
-    if (!isNaN(parsed)) totalCareerYears = parsed;
+    totalCareerYears = parseExperienceYearsNumber(candidate.totalExperience);
   }
 
   // Filter out junk / commercial / exclusion requirements from evaluation

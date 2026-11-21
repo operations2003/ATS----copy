@@ -232,6 +232,14 @@ export const createRequirement = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
+    // Deduplication check: prevent identical/near-identical requirements from being added twice
+    const existingReqsForJob = await prisma.requirement.findMany({ where: { job_id: jobId } });
+    const isDuplicate = existingReqsForJob.some(r => areRequirementsDuplicate(r.requirement, requirement.trim()));
+    if (isDuplicate) {
+      res.status(409).json({ error: 'A requirement with the same or very similar text already exists for this job.' });
+      return;
+    }
+
     const newReq = await prisma.requirement.create({
       data: {
         job_id: jobId,

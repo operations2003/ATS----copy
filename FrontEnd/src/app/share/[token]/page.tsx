@@ -2114,14 +2114,6 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
               <span>Agency Activity &amp; Audit Log</span>
             </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => setIsJdModalOpen(true)}
-            className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-[#3563E9] hover:underline cursor-pointer"
-          >
-            <span>+ Submit another role</span>
-          </button>
         </div>
 
         {/* ── TAB 1: SCREENED & SUBMITTED CANDIDATE PROFILES ── */}

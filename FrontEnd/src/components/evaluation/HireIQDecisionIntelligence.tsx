@@ -278,9 +278,25 @@ function buildClientFallbackDecisionIntelligence(
   const totalRequirements = requirements.length;
   const provenPercentage = totalRequirements > 0 ? Math.round((provenCount / totalRequirements) * 100) : 0;
 
-  const rawExpText = String(c.totalExperience || c.exp || '7');
-  const expMatch = rawExpText.match(/(\d+(?:\.\d+)?)/);
-  const totalExperienceYears = expMatch ? parseFloat(expMatch[1]) : 7;
+  const rawExpText = String(c.totalExperience || c.exp || '');
+  // Robust experience parser: handles "8-10 months", "1.5 years", "6 months", "2 years 3 months"
+  const _parseExpYears = (str: string): number => {
+    if (!str || !str.trim()) return 0;
+    const s = str.toLowerCase().trim();
+    // "X years Y months" or "X.Y years"
+    const yrMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:years?|yrs?)/i);
+    const moMatch = s.match(/(\d+)\s*(?:months?|mos?)/i);
+    let total = 0;
+    if (yrMatch) total += parseFloat(yrMatch[1]);
+    if (moMatch) total += parseInt(moMatch[1], 10) / 12;
+    if (total > 0) return parseFloat(total.toFixed(2));
+    // Fallback: standalone number (assume years only if large enough)
+    const numMatch = s.match(/^(\d+(?:\.\d+)?)$/);
+    return numMatch ? parseFloat(numMatch[1]) : 0;
+  };
+  const totalExperienceYears = c.totalExperienceYears != null
+    ? Number(c.totalExperienceYears)
+    : _parseExpYears(rawExpText);
 
   let recommendation: 'RECOMMENDED' | 'STRONG MATCH' | 'SHORTLIST' | 'REVIEW' | 'NOT RECOMMENDED' = 'SHORTLIST';
   if (atsScore >= 90) recommendation = 'RECOMMENDED';
