@@ -129,24 +129,33 @@ export default function SuperAdminPage() {
         } catch {}
       }
 
-      if (orgRes && Array.isArray(orgRes.organizations) && orgRes.organizations.length > 0) {
-        const mergedOrgs = orgRes.organizations.map((o) => {
-          const adminEmail = (o.clientAdmin?.email || '').toLowerCase().trim();
-          const orgName = (o.name || '').toLowerCase().trim();
-          if (localOverrides[o.id] !== undefined) {
-            return { ...o, allowJdUpload: localOverrides[o.id] };
-          } else if (adminEmail && localOverrides[adminEmail] !== undefined) {
-            return { ...o, allowJdUpload: localOverrides[adminEmail] };
-          } else if (orgName && localOverrides[orgName] !== undefined) {
-            return { ...o, allowJdUpload: localOverrides[orgName] };
+      if (orgRes && Array.isArray(orgRes.organizations)) {
+        if (orgRes.organizations.length === 0) {
+          setOrganizations([]);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('tasknera_cached_orgs', JSON.stringify([]));
+            } catch {}
           }
-          return o;
-        });
-        setOrganizations(mergedOrgs);
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('tasknera_cached_orgs', JSON.stringify(mergedOrgs));
-          } catch {}
+        } else {
+          const mergedOrgs = orgRes.organizations.map((o) => {
+            const adminEmail = (o.clientAdmin?.email || '').toLowerCase().trim();
+            const orgName = (o.name || '').toLowerCase().trim();
+            if (localOverrides[o.id] !== undefined) {
+              return { ...o, allowJdUpload: localOverrides[o.id] };
+            } else if (adminEmail && localOverrides[adminEmail] !== undefined) {
+              return { ...o, allowJdUpload: localOverrides[adminEmail] };
+            } else if (orgName && localOverrides[orgName] !== undefined) {
+              return { ...o, allowJdUpload: localOverrides[orgName] };
+            }
+            return o;
+          });
+          setOrganizations(mergedOrgs);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('tasknera_cached_orgs', JSON.stringify(mergedOrgs));
+            } catch {}
+          }
         }
       } else if (typeof window !== 'undefined') {
         try {
@@ -326,6 +335,60 @@ export default function SuperAdminPage() {
       await loadData();
     } catch (err: any) {
       alert(err.message || 'Failed to toggle status');
+    }
+  };
+
+  const handleDeleteOrg = async (org: ClientOrganization) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to remove organization "${org.name}"?\n\nThis will permanently delete the organization, its client admin, users, and all associated job requisitions and candidate data.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+      await fetchApi(`/super-admin/organizations/${org.id}`, { method: 'DELETE' }, token);
+
+      setOrganizations((prev) => {
+        const next = prev.filter((o) => o.id !== org.id);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('tasknera_cached_orgs', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
+      await loadData();
+    } catch (err: any) {
+      alert(`Failed to remove organization: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAllOrgs = async () => {
+    const confirmed = window.confirm(
+      `⚠️ WARNING: Are you sure you want to remove ALL accounts from Super Admin?\n\nThis will permanently delete all client organizations, all client users, jobs, candidates, and evaluations.\n\nClick OK to proceed.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+      await fetchApi('/super-admin/organizations', { method: 'DELETE' }, token);
+
+      setOrganizations([]);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('tasknera_cached_orgs', JSON.stringify([]));
+          localStorage.removeItem('tasknera_org_jd_permissions');
+        } catch {}
+      }
+      await loadData();
+    } catch (err: any) {
+      alert(`Failed to remove all organizations: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -546,6 +609,19 @@ export default function SuperAdminPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {organizations.length > 0 && (
+              <button
+                onClick={handleDeleteAllOrgs}
+                disabled={loading}
+                className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-200 border border-rose-500/30 text-sm font-semibold rounded-xl transition-all cursor-pointer transform active:scale-95"
+                title="Remove All Client Accounts from Super Admin"
+              >
+                <svg className="w-4 h-4 text-rose-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>Remove All Accounts</span>
+              </button>
+            )}
             <button
               onClick={() => setShowCreateModal(true)}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-orange hover:bg-orange-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-orange-500/25 transition-all cursor-pointer transform active:scale-95"
@@ -868,6 +944,18 @@ export default function SuperAdminPage() {
                                 title={org.status === 'ACTIVE' ? 'Suspend Organization' : 'Activate Organization'}
                               >
                                 {org.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
+                              </button>
+
+                              {/* Delete Account */}
+                              <button
+                                onClick={() => handleDeleteOrg(org)}
+                                className="px-2.5 py-1.5 text-rose-700 hover:bg-rose-50 font-semibold rounded-lg border border-rose-200 transition-colors cursor-pointer flex items-center gap-1"
+                                title="Remove Account & All Associated Data"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                <span>Delete</span>
                               </button>
                             </div>
                           </td>

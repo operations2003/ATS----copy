@@ -8,7 +8,9 @@ import {
   updateOrganizationJdPermission,
   toggleOrganizationStatus,
   resetClientAdminPassword,
-  getAllOrganizationsWithStats
+  getAllOrganizationsWithStats,
+  deleteOrganization,
+  deleteAllOrganizations
 } from '../services/organizationService';
 
 /**
@@ -304,3 +306,41 @@ export const updateJdPermission = async (req: AuthRequest, res: Response): Promi
     res.status(400).json({ error: error.message || 'Failed to update JD upload permission' });
   }
 };
+
+/**
+ * Super Admin: Delete a single client organization and its associated accounts/data
+ * DELETE /api/super-admin/organizations/:id
+ */
+export const removeOrganization = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const organizationId = String(req.params.id);
+    const result = await deleteOrganization(organizationId, req.user?.userId);
+    res.status(200).json({
+      success: true,
+      message: `Organization "${result.name}" and its associated accounts have been removed.`,
+      organizationId
+    });
+  } catch (error: any) {
+    console.error('[SuperAdmin Controller] Error deleting organization:', error);
+    res.status(400).json({ error: error.message || 'Failed to remove organization' });
+  }
+};
+
+/**
+ * Super Admin: Remove ALL client organizations and accounts from the system
+ * DELETE /api/super-admin/organizations
+ */
+export const removeAllOrganizations = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const result = await deleteAllOrganizations(req.user?.userId);
+    res.status(200).json({
+      success: true,
+      message: `All (${result.deletedCount}) client organizations and accounts have been removed.`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error: any) {
+    console.error('[SuperAdmin Controller] Error deleting all organizations:', error);
+    res.status(400).json({ error: error.message || 'Failed to remove all organizations' });
+  }
+};
+

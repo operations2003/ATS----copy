@@ -9,7 +9,9 @@ import {
   resetAdminPassword,
   updateJdPermission,
   getPlatformStats,
-  getAuditLogs
+  getAuditLogs,
+  removeOrganization,
+  removeAllOrganizations
 } from '../controllers/superAdminController';
 
 const router = Router();
@@ -20,6 +22,8 @@ router.use(authorize('SUPER_ADMIN'));
 
 router.get('/organizations', getOrganizations);
 router.post('/organizations', createOrganization);
+router.delete('/organizations/:id', removeOrganization);
+router.delete('/organizations', removeAllOrganizations);
 router.patch('/organizations/:id/limits', updateLimits);
 router.patch('/organizations/:id/subscription', updateSubscription);
 router.post('/organizations/:id/toggle-status', toggleStatus);

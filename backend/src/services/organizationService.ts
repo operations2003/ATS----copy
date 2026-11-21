@@ -819,3 +819,106 @@ export async function getAllOrganizationsWithStats() {
   return orgStats;
 }
 
+/**
+ * Super Admin: Delete a single client organization and its associated accounts/data
+ */
+export async function deleteOrganization(organizationId: string, superAdminUserId?: string): Promise<{ success: boolean; name: string }> {
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId }
+  });
+
+  if (!org) {
+    throw new Error(`Organization with ID "${organizationId}" not found.`);
+  }
+
+  // 1. Delete dependent evaluation, activity, share, and batch records
+  await prisma.candidateHiringActivity.deleteMany({
+    where: { organizationId }
+  }).catch(() => {});
+
+  await prisma.evaluation.deleteMany({
+    where: { organizationId }
+  }).catch(() => {});
+
+  // Deleting shares cascades to items
+  await prisma.clientCandidateShare.deleteMany({
+    where: { organizationId }
+  }).catch(() => {});
+
+  // Deleting batches cascades to items
+  await prisma.bulkUploadBatch.deleteMany({
+    where: { organizationId }
+  }).catch(() => {});
+
+  await prisma.candidateApplication.deleteMany({
+    where: { job: { organizationId } }
+  }).catch(() => {});
+
+  // 2. Delete candidates
+  await prisma.candidate.deleteMany({
+    where: { organizationId }
+  }).catch(() => {});
+
+  // 3. Delete jobs
+  await prisma.job.deleteMany({
+    where: { organizationId }
+  }).catch(() => {});
+
+  // 4. Delete audit logs
+  await prisma.auditLog.deleteMany({
+    where: { organizationId }
+  }).catch(() => {});
+
+  // 5. Delete non-super-admin users belonging to this organization
+  await prisma.user.deleteMany({
+    where: {
+      organizationId,
+      role: { not: 'SUPER_ADMIN' },
+      email: { notIn: ['operations@tasknera.com', 'demo@gmail.com', 'admin@gmail.com'] }
+    }
+  }).catch(() => {});
+
+  // 6. Detach any super-admin user that had this organizationId
+  await prisma.user.updateMany({
+    where: {
+      organizationId,
+      role: 'SUPER_ADMIN'
+    },
+    data: { organizationId: null }
+  }).catch(() => {});
+
+  // 7. Delete organization record
+  await prisma.organization.delete({
+    where: { id: organizationId }
+  });
+
+  return { success: true, name: org.name };
+}
+
+/**
+ * Super Admin: Remove ALL client organizations and accounts from the system
+ */
+export async function deleteAllOrganizations(superAdminUserId?: string): Promise<{ success: boolean; deletedCount: number }> {
+  const orgs = await prisma.organization.findMany();
+  const count = orgs.length;
+
+  for (const org of orgs) {
+    await deleteOrganization(org.id, superAdminUserId);
+  }
+
+  // Also clean any leftover client users not in super admin
+  await prisma.user.deleteMany({
+    where: {
+      role: { not: 'SUPER_ADMIN' },
+      email: { notIn: ['operations@tasknera.com', 'demo@gmail.com', 'admin@gmail.com'] }
+    }
+  }).catch(() => {});
+
+  await prisma.user.updateMany({
+    where: { role: 'SUPER_ADMIN' },
+    data: { organizationId: null }
+  }).catch(() => {});
+
+  return { success: true, deletedCount: count };
+}
+
