@@ -10,7 +10,6 @@ export interface SubscriptionStatusInfo {
 }
 
 const DESIGNATED_ADMIN_EMAIL = 'operations@tasknera.com';
-const TASKNERA_CLIENT_ADMIN_EMAIL = 'sheetalbedi@tasknera.com';
 
 /**
  * Calculate user / organization subscription & 14-day free trial status
@@ -23,7 +22,6 @@ export const calculateSubscriptionStatus = async (user: any): Promise<Subscripti
     user.role === 'SUPER_ADMIN';
 
   const isClientAdminTasknera =
-    cleanEmail === TASKNERA_CLIENT_ADMIN_EMAIL ||
     cleanEmail === 'admin@tasknera.com';
 
   if (isSuperAdminEmail || isClientAdminTasknera) {

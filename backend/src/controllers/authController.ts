@@ -17,8 +17,6 @@ const generateToken = (userId: string, email: string, role: UserRole, organizati
 
 const DESIGNATED_ADMIN_EMAIL = 'operations@tasknera.com';
 const DESIGNATED_ADMIN_PASSWORD = 'Asad@9312506515';
-const TASKNERA_CLIENT_ADMIN_EMAIL = 'sheetalbedi@tasknera.com';
-const TASKNERA_CLIENT_ADMIN_PASSWORD = 'Tasknera@9312506515';
 
 export { SubscriptionStatusInfo, calculateSubscriptionStatus };
 
@@ -63,46 +61,7 @@ export const ensureDefaultAdmin = async (): Promise<void> => {
       console.log(`[Auth] Designated Administrator account (${adminEmail}) verified as SUPER_ADMIN in database.`);
     }
 
-    // 2. Ensure Tasknera Global Client Admin exists
-    const taskneraOrgAdminEmail = TASKNERA_CLIENT_ADMIN_EMAIL.toLowerCase().trim();
-    const taskneraOrgAdminPassword = await bcrypt.hash(TASKNERA_CLIENT_ADMIN_PASSWORD, 10);
-    const existingOrgAdmin = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { email: taskneraOrgAdminEmail },
-          { email: 'admin@tasknera.com' }
-        ]
-      }
-    });
-    if (!existingOrgAdmin) {
-      await prisma.user.create({
-        data: {
-          name: 'Sheetal Bedi',
-          email: taskneraOrgAdminEmail,
-          password: taskneraOrgAdminPassword,
-          role: 'CLIENT_ADMIN' as any,
-          organizationId: 'org-tasknera',
-          isActive: true
-        } as any
-      });
-      console.log(`[Auth] Tasknera Global Client Admin (${taskneraOrgAdminEmail}) initialized.`);
-    } else {
-      await prisma.user.update({
-        where: { id: existingOrgAdmin.id },
-        data: {
-          name: 'Sheetal Bedi',
-          email: taskneraOrgAdminEmail,
-          role: 'CLIENT_ADMIN' as any,
-          organizationId: 'org-tasknera',
-          password: taskneraOrgAdminPassword,
-          isActive: true
-        } as any
-      });
-      console.log(`[Auth] Tasknera Global Client Admin (${taskneraOrgAdminEmail}) updated.`);
-    }
-
-    // 3. Demote any other accounts that were previous admins
-    // 2.1 Ensure Demo Admin exists
+    // 2. Ensure Demo Admin exists
     const demoAdminEmail = 'demo@gmail.com';
     const demoHashedPassword = await bcrypt.hash('demo@1234', 10);
     const existingDemo = await prisma.user.findFirst({
@@ -136,7 +95,7 @@ export const ensureDefaultAdmin = async (): Promise<void> => {
       console.log(`[Auth] Demo Admin account (${demoAdminEmail}) verified as SUPER_ADMIN.`);
     }
 
-    const designatedAdmins = [adminEmail, taskneraOrgAdminEmail, 'shubham@tasknera.com', 'demo@gmail.com'];
+    const designatedAdmins = [adminEmail, 'shubham@tasknera.com', 'demo@gmail.com'];
     await prisma.user.updateMany({
       where: {
         email: { notIn: designatedAdmins },
@@ -340,64 +299,6 @@ export const signin = async (req: Request, res: Response): Promise<void> => {
             isExpired: false,
             daysLeft: 9999,
             plan: 'SUPER_ADMIN',
-            expiresAt: null
-          }
-        }
-      });
-      return;
-    }
-
-    // Direct validation for Tasknera client admin (ensures login works reliably even during DB sync)
-    if (cleanEmail === TASKNERA_CLIENT_ADMIN_EMAIL.toLowerCase().trim() && password === TASKNERA_CLIENT_ADMIN_PASSWORD) {
-      let adminId = '19841361-84ef-43ae-a856-df82ed997a32';
-      try {
-        const dbAdmin = await prisma.user.findFirst({
-          where: {
-            OR: [
-              { email: TASKNERA_CLIENT_ADMIN_EMAIL },
-              { email: 'admin@tasknera.com' }
-            ]
-          }
-        });
-        if (dbAdmin) {
-          adminId = dbAdmin.id;
-        }
-      } catch (e) {
-        console.warn('[Auth] Tasknera client admin DB lookup failed, falling back:', e);
-      }
-
-      const orgId = 'org-tasknera';
-      const userRole: UserRole = 'CLIENT_ADMIN';
-      let sheetalAllowJd = true;
-      try {
-        const org = await prisma.organization.findUnique({
-          where: { id: orgId },
-          select: { allowJdUpload: true }
-        });
-        if (org && org.allowJdUpload === false) {
-          sheetalAllowJd = false;
-        }
-      } catch {}
-
-      const token = generateToken(adminId, TASKNERA_CLIENT_ADMIN_EMAIL, userRole, orgId);
-
-      res.status(200).json({
-        message: 'Signed in successfully',
-        token,
-        user: {
-          id: adminId,
-          name: 'Sheetal Bedi',
-          email: TASKNERA_CLIENT_ADMIN_EMAIL,
-          role: userRole,
-          organizationId: orgId,
-          allowJdUpload: sheetalAllowJd,
-          createdAt: new Date().toISOString(),
-          subscription: {
-            isSubscribed: true,
-            isTrial: false,
-            isExpired: false,
-            daysLeft: 9999,
-            plan: 'ENTERPRISE',
             expiresAt: null
           }
         }
