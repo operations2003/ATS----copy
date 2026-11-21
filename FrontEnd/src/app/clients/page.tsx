@@ -514,66 +514,6 @@ export default function ClientsPage() {
     };
   }, [user, cachedRole]);
 
-  // Derives unique client names from shared links and existing ATS jobs
-  const availableClientNames = useMemo(() => {
-    const set = new Set<string>();
-    sharedLinks.forEach(l => {
-      if (l.clientName?.trim()) set.add(l.clientName.trim());
-    });
-    jobs.forEach(j => {
-      if (j.client?.trim()) set.add(j.client.trim());
-    });
-    return Array.from(set);
-  }, [sharedLinks, jobs]);
-
-  // Aggregate client account cards from existing jobs AND shared client portals
-  const clientAccounts = useMemo(() => {
-    const map = new Map<string, { name: string; jobsCount: number; jobTitles: string[] }>();
-    sharedLinks.forEach(l => {
-      const client = l.clientName?.trim();
-      if (client && !map.has(client)) {
-        map.set(client, { name: client, jobsCount: 0, jobTitles: [] });
-      }
-      if (client) {
-        const entry = map.get(client)!;
-        const uploadedJds = getClientUploadedJds(client);
-        entry.jobsCount = Math.max(entry.jobsCount, uploadedJds.length);
-        uploadedJds.forEach(uj => {
-          if (uj.title && !entry.jobTitles.includes(uj.title)) {
-            entry.jobTitles.push(uj.title);
-          }
-        });
-      }
-    });
-    jobs.forEach(j => {
-      const client = j.client?.trim() || 'General Client';
-      if (!map.has(client)) {
-        map.set(client, { name: client, jobsCount: 0, jobTitles: [] });
-      }
-      const entry = map.get(client)!;
-      entry.jobsCount += 1;
-      if (j.title && !entry.jobTitles.includes(j.title)) {
-        entry.jobTitles.push(j.title);
-      }
-    });
-    return Array.from(map.values());
-  }, [jobs, sharedLinks]);
-
-  const totalConnectedRequisitions = useMemo(() => {
-    const seen = new Set<string>();
-    jobs.forEach(j => seen.add(String(j.id || j.title)));
-    sharedLinks.forEach(l => {
-      const u = getClientUploadedJds(l.clientName);
-      u.forEach(j => seen.add(String(j.id || j.title)));
-    });
-    return Math.max(jobs.length, seen.size);
-  }, [jobs, sharedLinks]);
-
-  // Counts JDs uploaded by this client (from backend authoritative portal, local storage, or jobs pool)
-  const getClientUploadedJdsCount = (clientName: string) => {
-    return getClientUploadedJds(clientName).length;
-  };
-
   interface ClientJdItem {
     id: string;
     title: string;
@@ -589,13 +529,13 @@ export default function ClientsPage() {
 
   // Helper to retrieve detailed uploaded JDs for a client (two-way synced with client portal)
   const getClientUploadedJds = (clientName: string): ClientJdItem[] => {
-    const cleanClient = clientName.toLowerCase().trim();
+    const cleanClient = (clientName || '').toLowerCase().trim();
     const resultList: ClientJdItem[] = [];
     const seenIds = new Set<string>();
 
     // 1. First priority: authoritative backend client portal JDs
     const portal = sharedLinks.find(
-      l => l.clientName.toLowerCase().trim() === cleanClient
+      l => l.clientName && l.clientName.toLowerCase().trim() === cleanClient
     );
     if (portal && Array.isArray(portal.jds) && portal.jds.length > 0) {
       portal.jds.forEach((item: any, idx: number) => {
@@ -620,7 +560,7 @@ export default function ClientsPage() {
     // 2. Second priority: local storage tasknera_client_jds_${clientName}
     if (typeof window !== 'undefined') {
       try {
-        const raw = localStorage.getItem(`tasknera_client_jds_${clientName.replace(/\s+/g, '_')}`);
+        const raw = localStorage.getItem(`tasknera_client_jds_${(clientName || '').replace(/\s+/g, '_')}`);
         if (raw) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -703,6 +643,66 @@ export default function ClientsPage() {
 
     return resultList;
   };
+
+  // Counts JDs uploaded by this client (from backend authoritative portal, local storage, or jobs pool)
+  const getClientUploadedJdsCount = (clientName: string) => {
+    return getClientUploadedJds(clientName).length;
+  };
+
+  // Derives unique client names from shared links and existing ATS jobs
+  const availableClientNames = useMemo(() => {
+    const set = new Set<string>();
+    sharedLinks.forEach(l => {
+      if (l.clientName?.trim()) set.add(l.clientName.trim());
+    });
+    jobs.forEach(j => {
+      if (j.client?.trim()) set.add(j.client.trim());
+    });
+    return Array.from(set);
+  }, [sharedLinks, jobs]);
+
+  // Aggregate client account cards from existing jobs AND shared client portals
+  const clientAccounts = useMemo(() => {
+    const map = new Map<string, { name: string; jobsCount: number; jobTitles: string[] }>();
+    sharedLinks.forEach(l => {
+      const client = l.clientName?.trim();
+      if (client && !map.has(client)) {
+        map.set(client, { name: client, jobsCount: 0, jobTitles: [] });
+      }
+      if (client) {
+        const entry = map.get(client)!;
+        const uploadedJds = getClientUploadedJds(client);
+        entry.jobsCount = Math.max(entry.jobsCount, uploadedJds.length);
+        uploadedJds.forEach(uj => {
+          if (uj.title && !entry.jobTitles.includes(uj.title)) {
+            entry.jobTitles.push(uj.title);
+          }
+        });
+      }
+    });
+    jobs.forEach(j => {
+      const client = j.client?.trim() || 'General Client';
+      if (!map.has(client)) {
+        map.set(client, { name: client, jobsCount: 0, jobTitles: [] });
+      }
+      const entry = map.get(client)!;
+      entry.jobsCount += 1;
+      if (j.title && !entry.jobTitles.includes(j.title)) {
+        entry.jobTitles.push(j.title);
+      }
+    });
+    return Array.from(map.values());
+  }, [jobs, sharedLinks]);
+
+  const totalConnectedRequisitions = useMemo(() => {
+    const seen = new Set<string>();
+    jobs.forEach(j => seen.add(String(j.id || j.title)));
+    sharedLinks.forEach(l => {
+      const u = getClientUploadedJds(l.clientName);
+      u.forEach(j => seen.add(String(j.id || j.title)));
+    });
+    return Math.max(jobs.length, seen.size);
+  }, [jobs, sharedLinks]);
 
   const handleOpenJdViewer = (link: SharedClientLink) => {
     setActiveViewJdLink(link);
