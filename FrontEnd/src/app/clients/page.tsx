@@ -131,9 +131,7 @@ export default function ClientsPage() {
   const isAdmin = isSuperAdmin || isClientAdmin;
 
   useEffect(() => {
-    if (isClientLoaded && !authLoading && !isAdmin) {
-      router.replace('/dashboard');
-    }
+    // All logged-in users can access the Clients section
   }, [isClientLoaded, authLoading, isAdmin, router]);
 
   useEffect(() => {
@@ -951,8 +949,8 @@ export default function ClientsPage() {
     }, 3500);
   };
 
-  // Non-admin Access Restriction Guard
-  if (isClientLoaded && !authLoading && !isAdmin) {
+  // All authenticated users can access the Clients section
+  if (false) {
     return (
       <div className="min-h-screen bg-[#F7F8FC] flex flex-col justify-between">
         <Header />
