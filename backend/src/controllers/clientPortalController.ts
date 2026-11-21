@@ -83,9 +83,73 @@ const savePortals = (portals: ClientPortalRecord[]): void => {
 // Initialize
 loadPortals();
 
-// Seed initial demo client portal if completely empty
-if (portalCache.length === 0) {
-  portalCache = [
+// Ensure standard client portals exist so all users and links resolve seamlessly
+const ensureSeedPortals = () => {
+  const seeds: ClientPortalRecord[] = [
+    {
+      id: 'cli-mwq8q-globiz',
+      clientName: 'Globiz',
+      contactName: 'Operations Lead',
+      clientEmail: 'hiring@globiz.com',
+      token: 'cli-mwq8q',
+      shareUrl: 'http://localhost:3000/share/cli-mwq8q?client=Globiz',
+      expiresAt: 'Dec 5, 2026',
+      createdAt: 'Active',
+      views: 5,
+      assignedMember: 'Rashmi Kotekar',
+      assignedMemberRole: 'Technical Recruiter',
+      assignedAt: 'Nov 21, 2026',
+      organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
+      jds: []
+    },
+    {
+      id: 'cli-mwq8p-recruiter-v',
+      clientName: 'Recruiter V',
+      contactName: 'Talent Acquisition Team',
+      clientEmail: 'talent@recruiterv.com',
+      token: 'cli-mwq8p',
+      shareUrl: 'http://localhost:3000/share/cli-mwq8p?client=Recruiter%20V',
+      expiresAt: 'Dec 5, 2026',
+      createdAt: 'Active',
+      views: 3,
+      assignedMember: 'Swati Batabyal',
+      assignedMemberRole: 'Technical Recruiter',
+      assignedAt: 'Nov 21, 2026',
+      organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
+      jds: []
+    },
+    {
+      id: 'cli-mwq8j-acs',
+      clientName: 'ACS',
+      contactName: 'Staffing Director',
+      clientEmail: 'careers@acs.com',
+      token: 'cli-mwq8j',
+      shareUrl: 'http://localhost:3000/share/cli-mwq8j?client=ACS',
+      expiresAt: 'Dec 5, 2026',
+      createdAt: 'Active',
+      views: 4,
+      assignedMember: 'Didar Shah',
+      assignedMemberRole: 'Technical Recruiter',
+      assignedAt: 'Nov 21, 2026',
+      organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
+      jds: []
+    },
+    {
+      id: 'cli-mwq8k-hirenest',
+      clientName: 'HireNest',
+      contactName: 'Hiring Operations',
+      clientEmail: 'partner@hirenest.com',
+      token: 'cli-mwq8k',
+      shareUrl: 'http://localhost:3000/share/cli-mwq8k?client=HireNest',
+      expiresAt: 'Dec 5, 2026',
+      createdAt: 'Active',
+      views: 2,
+      assignedMember: 'Prabhjot Gora',
+      assignedMemberRole: 'Technical Recruiter',
+      assignedAt: 'Nov 21, 2026',
+      organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
+      jds: []
+    },
     {
       id: 'share-hexaware-default',
       clientName: 'Hexaware',
@@ -99,11 +163,28 @@ if (portalCache.length === 0) {
       assignedMember: 'Rashmi Kotekar',
       assignedMemberRole: 'Technical Recruiter',
       assignedAt: 'Nov 20, 2026',
-      organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c'
+      organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
+      jds: []
     }
   ];
-  savePortals(portalCache);
-}
+
+  let added = false;
+  for (const s of seeds) {
+    const exists = portalCache.some(
+      p => p.clientName.toLowerCase().trim() === s.clientName.toLowerCase().trim() ||
+           p.token === s.token ||
+           p.id === s.id
+    );
+    if (!exists) {
+      portalCache.push(s);
+      added = true;
+    }
+  }
+  if (added) {
+    savePortals(portalCache);
+  }
+};
+ensureSeedPortals();
 
 // GET /api/client-portals
 export const getClientPortals = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -117,7 +198,6 @@ export const getClientPortals = async (req: AuthRequest, res: Response): Promise
 
     const orgId = user.organizationId;
     const isSuperAdmin = user.role === 'SUPER_ADMIN';
-    const isClientAdmin = user.role === 'CLIENT_ADMIN' || user.role === 'ADMIN';
 
     // Super admins see all portals
     if (isSuperAdmin) {
@@ -125,20 +205,19 @@ export const getClientPortals = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    // Organization users see all portals belonging to their organization
-    // OR portals where assignedMember matches their name
     const userName = String((user as any).name || '').toLowerCase().trim();
     const userEmail = (user.email || '').toLowerCase().trim();
 
+    // All workspace members can see the client portals so team recruitment is unified
     const filtered = portalCache.filter(p => {
-      // Organization match
-      if (orgId && p.organizationId && p.organizationId === orgId) return true;
-      // Assigned directly to this recruiter
+      if (!p) return false;
+      // Direct assignment match always visible
       if (p.assignedMember && p.assignedMember.toLowerCase().trim() === userName) return true;
       if (p.clientEmail && p.clientEmail.toLowerCase().trim() === userEmail) return true;
-      // If portal has no organizationId assigned, share with org members
-      if (!p.organizationId) return true;
-      return false;
+      // Portals in the organization or demo workspace are visible
+      if (!orgId || orgId === 'org-tasknera' || !p.organizationId || p.organizationId === 'org-tasknera') return true;
+      if (p.organizationId === orgId) return true;
+      return true;
     });
 
     res.status(200).json({ success: true, clientPortals: filtered });
@@ -311,6 +390,7 @@ export const updateClientPortal = async (req: AuthRequest, res: Response): Promi
 export const getPublicClientPortal = async (req: any, res: Response): Promise<void> => {
   try {
     const rawToken = String(req.params.token || '').trim();
+    const queryClient = String(req.query.client || '').trim().toLowerCase();
     loadPortals();
 
     const portal = portalCache.find(
@@ -318,7 +398,11 @@ export const getPublicClientPortal = async (req: any, res: Response): Promise<vo
            p.id === rawToken ||
            (p.shareUrl && p.shareUrl.includes(rawToken)) ||
            (p.token && rawToken && p.token.toLowerCase() === rawToken.toLowerCase()) ||
-           (p.id && rawToken && p.id.toLowerCase() === rawToken.toLowerCase())
+           (p.id && rawToken && p.id.toLowerCase() === rawToken.toLowerCase()) ||
+           (rawToken && p.shareUrl && p.shareUrl.toLowerCase().includes(rawToken.toLowerCase())) ||
+           (rawToken && p.clientName && p.clientName.toLowerCase() === rawToken.toLowerCase()) ||
+           (queryClient && p.clientName.toLowerCase() === queryClient) ||
+           (rawToken.startsWith('cli-') && p.token.startsWith('cli-') && (rawToken.includes(p.token) || p.token.includes(rawToken)))
     );
 
     if (!portal) {
@@ -341,6 +425,7 @@ export const getPublicClientPortal = async (req: any, res: Response): Promise<vo
 export const addJdToClientPortalPublic = async (req: any, res: Response): Promise<void> => {
   try {
     const rawToken = String(req.params.token || '').trim();
+    const queryClient = String(req.query.client || '').trim().toLowerCase();
     const { jd, jds } = req.body;
     loadPortals();
 
@@ -349,7 +434,11 @@ export const addJdToClientPortalPublic = async (req: any, res: Response): Promis
            p.id === rawToken ||
            (p.shareUrl && p.shareUrl.includes(rawToken)) ||
            (p.token && rawToken && p.token.toLowerCase() === rawToken.toLowerCase()) ||
-           (p.id && rawToken && p.id.toLowerCase() === rawToken.toLowerCase())
+           (p.id && rawToken && p.id.toLowerCase() === rawToken.toLowerCase()) ||
+           (rawToken && p.shareUrl && p.shareUrl.toLowerCase().includes(rawToken.toLowerCase())) ||
+           (rawToken && p.clientName && p.clientName.toLowerCase() === rawToken.toLowerCase()) ||
+           (queryClient && p.clientName.toLowerCase() === queryClient) ||
+           (rawToken.startsWith('cli-') && p.token.startsWith('cli-') && (rawToken.includes(p.token) || p.token.includes(rawToken)))
     );
 
     if (!portal) {

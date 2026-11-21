@@ -266,6 +266,7 @@ function ClientSharePortalContent() {
   const [activities, setActivities] = useState<TransparencyActivityItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const hasAutoPromptedRef = React.useRef(false);
+  const isInitialLoadRef = React.useRef(true);
 
   const [expandedDossierIds, setExpandedDossierIds] = useState<Record<string, boolean>>({});
 
@@ -715,9 +716,11 @@ function ClientSharePortalContent() {
   // ─────────────────────────────────────────────────────────────────────────────
   // Initial Data Synchronization
   // ─────────────────────────────────────────────────────────────────────────────
-  const loadPortalData = useCallback(async () => {
+  const loadPortalData = useCallback(async (isSilent = false) => {
     try {
-      setIsLoading(true);
+      if (!isSilent && isInitialLoadRef.current) {
+        setIsLoading(true);
+      }
 
       // Resolve client from token in backend API first, or fallback to query param / local storage
       let resolvedClient = clientParam;
@@ -769,9 +772,13 @@ function ClientSharePortalContent() {
       }
 
       if (!resolvedClient) {
-        resolvedClient = 'Client Partner';
+        resolvedClient = clientName && clientName !== 'Client Partner' ? clientName : 'Client Partner';
       }
-      setClientName(resolvedClient);
+      if (resolvedClient && resolvedClient !== 'Client Partner') {
+        setClientName(resolvedClient);
+      } else if (!clientName || clientName === 'Client Partner') {
+        setClientName(resolvedClient);
+      }
       if (resolvedContact) {
         setContactName(resolvedContact);
       }
@@ -937,7 +944,11 @@ function ClientSharePortalContent() {
         }
       }
 
-      setJobs(finalJobs);
+      if (finalJobs.length > 0) {
+        setJobs(finalJobs);
+      } else if (!isSilent) {
+        setJobs([]);
+      }
 
       const finalJobIds = new Set(finalJobs.map(j => j.id));
       const finalJobTitles = new Set(finalJobs.map(j => j.title.toLowerCase().trim()));
@@ -1210,7 +1221,11 @@ function ClientSharePortalContent() {
         return buildFull30FieldsCandidate(c, matchingJob, resolvedClient, assignedRecruiter);
       });
 
-      setCandidates(full30Candidates);
+      if (full30Candidates.length > 0) {
+        setCandidates(full30Candidates);
+      } else if (!isSilent) {
+        setCandidates([]);
+      }
 
       // Default expand all 30-field dossiers for immediate transparency
       const initialExpanded: Record<string, boolean> = {};
@@ -1258,15 +1273,18 @@ function ClientSharePortalContent() {
     } catch (e) {
       console.error('[Client Portal] Load error:', e);
     } finally {
-      setIsLoading(false);
+      if (isInitialLoadRef.current) {
+        setIsLoading(false);
+        isInitialLoadRef.current = false;
+      }
     }
-  }, [clientParam, contactParam, token]);
+  }, [clientParam, contactParam, token, clientName]);
 
   useEffect(() => {
-    loadPortalData();
+    loadPortalData(false);
     // Live bidirectional sync: poll backend every 5 seconds for new JDs uploaded from ATS or client
     const pollInterval = setInterval(() => {
-      loadPortalData();
+      loadPortalData(true);
     }, 5000);
     return () => clearInterval(pollInterval);
   }, [loadPortalData]);
@@ -1274,7 +1292,7 @@ function ClientSharePortalContent() {
   // Real-time live listener: automatically reload portal when recruiter moves candidates in pipeline
   useEffect(() => {
     const handleSync = () => {
-      loadPortalData();
+      loadPortalData(true);
     };
     window.addEventListener('storage', handleSync);
     window.addEventListener('tasknera_portal_sync', handleSync);

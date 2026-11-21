@@ -164,14 +164,16 @@ export default function ClientsPage() {
   }, [isClientLoaded, authLoading, isAdmin, router]);
 
   useEffect(() => {
-    // Load client share links from backend API and localStorage
+    // Load client share links from backend API and localStorage with union merge
     const loadClientPortals = async () => {
       // 1. Initial hydration from local storage
+      let localPortals: SharedClientLink[] = [];
       try {
         const stored = localStorage.getItem(CLIENT_SHARES_STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed) && parsed.length > 0) {
+            localPortals = parsed;
             setSharedLinks(parsed);
           }
         }
@@ -186,10 +188,52 @@ export default function ClientsPage() {
         });
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data.clientPortals) && data.clientPortals.length > 0) {
-            setSharedLinks(data.clientPortals);
+          const serverPortals: SharedClientLink[] = Array.isArray(data.clientPortals) ? data.clientPortals : [];
+
+          // Merge local and server portals without losing any client or assigned recruiter
+          const mergedMap = new Map<string, SharedClientLink>();
+          const getLinkKey = (p: SharedClientLink) =>
+            (p.token || p.id || p.clientName || '').toLowerCase().trim();
+
+          // Seed server portals first
+          serverPortals.forEach(p => {
+            const k = getLinkKey(p);
+            if (k) mergedMap.set(k, p);
+          });
+
+          // Overlay/sync local portals
+          localPortals.forEach(lp => {
+            const k = getLinkKey(lp);
+            if (!k) return;
+            if (!mergedMap.has(k)) {
+              mergedMap.set(k, lp);
+              // Push to backend so it's globally available across all browsers/sessions
+              if (token) {
+                fetch(`${backendUrl}/client-portals`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                  body: JSON.stringify(lp)
+                }).catch(() => {});
+              }
+            } else {
+              // Retain assigned member or extra JDs if local portal had them
+              const existing = mergedMap.get(k)!;
+              const updated = {
+                ...existing,
+                assignedMember: existing.assignedMember || lp.assignedMember,
+                assignedMemberRole: existing.assignedMemberRole || lp.assignedMemberRole,
+                assignedAt: existing.assignedAt || lp.assignedAt,
+                jds: (existing.jds && existing.jds.length > 0) ? existing.jds : (lp.jds || [])
+              };
+              mergedMap.set(k, updated);
+            }
+          });
+
+          const finalLinks = Array.from(mergedMap.values());
+          if (finalLinks.length > 0) {
+            setSharedLinks(finalLinks);
             try {
-              localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(data.clientPortals));
+              localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(finalLinks));
             } catch {}
           }
         }
