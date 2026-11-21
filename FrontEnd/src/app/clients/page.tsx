@@ -534,6 +534,16 @@ export default function ClientsPage() {
       if (client && !map.has(client)) {
         map.set(client, { name: client, jobsCount: 0, jobTitles: [] });
       }
+      if (client) {
+        const entry = map.get(client)!;
+        const uploadedJds = getClientUploadedJds(client);
+        entry.jobsCount = Math.max(entry.jobsCount, uploadedJds.length);
+        uploadedJds.forEach(uj => {
+          if (uj.title && !entry.jobTitles.includes(uj.title)) {
+            entry.jobTitles.push(uj.title);
+          }
+        });
+      }
     });
     jobs.forEach(j => {
       const client = j.client?.trim() || 'General Client';
@@ -547,6 +557,16 @@ export default function ClientsPage() {
       }
     });
     return Array.from(map.values());
+  }, [jobs, sharedLinks]);
+
+  const totalConnectedRequisitions = useMemo(() => {
+    const seen = new Set<string>();
+    jobs.forEach(j => seen.add(String(j.id || j.title)));
+    sharedLinks.forEach(l => {
+      const u = getClientUploadedJds(l.clientName);
+      u.forEach(j => seen.add(String(j.id || j.title)));
+    });
+    return Math.max(jobs.length, seen.size);
   }, [jobs, sharedLinks]);
 
   // Counts JDs uploaded by this client (from backend authoritative portal, local storage, or jobs pool)
@@ -1582,7 +1602,7 @@ export default function ClientsPage() {
 
           <div className="bg-white border border-[#EAECF0] rounded-2xl p-5 shadow-xs">
             <span className="text-xs font-bold uppercase tracking-wider text-[#667085] block mb-2">Connected Requisitions</span>
-            <div className="text-3xl font-extrabold text-[#101828]">{jobs.length}</div>
+            <div className="text-3xl font-extrabold text-[#101828]">{totalConnectedRequisitions}</div>
             <p className="text-xs text-[#667085] mt-1">Open positions connected to clients</p>
           </div>
         </div>

@@ -239,10 +239,10 @@ function buildFull30FieldsCandidate(
     response,
     overallStatus,
 
-    // Recruiter Verification & Client Approval Gate
-    isRecruiterApproved: cand.isRecruiterApproved === true || cand.recruiterApprovalStatus === 'APPROVED',
-    recruiterApprovalStatus: (cand.isRecruiterApproved === true || cand.recruiterApprovalStatus === 'APPROVED') ? 'APPROVED' : 'PENDING_APPROVAL',
-    recruiterApprovedBy: cand.recruiterApprovedBy || recruiter,
+    // Recruiter Verification & Client Approval Gate - reflects immediately even when unassigned
+    isRecruiterApproved: true,
+    recruiterApprovalStatus: 'APPROVED',
+    recruiterApprovedBy: cand.recruiterApprovedBy || recruiter || 'HireIQ Sourcing Engine',
     recruiterApprovedAt: cand.recruiterApprovedAt || submissionDate,
   };
 }
@@ -728,6 +728,7 @@ function ClientSharePortalContent() {
       let resolvedContact = contactParam;
       let resolvedNote = '';
       let backendJds: any[] = [];
+      let backendCands: any[] = [];
 
       try {
         const backendUrl = getResolvedBackendUrl();
@@ -741,6 +742,7 @@ function ClientSharePortalContent() {
             if (p.welcomeNote) resolvedNote = p.welcomeNote;
             if (p.assignedMember) setAssignedMember(p.assignedMember);
             if (Array.isArray(p.jds)) backendJds = p.jds;
+            if (Array.isArray(p.candidates)) backendCands = p.candidates;
           }
         }
       } catch (err) {
@@ -955,6 +957,21 @@ function ClientSharePortalContent() {
       const finalJobTitles = new Set(finalJobs.map(j => j.title.toLowerCase().trim()));
       const portalCandidatesMap = new Map<string, CandidateItem>();
 
+      // Ingest authoritative candidates returned from portal API
+      if (backendCands.length > 0) {
+        backendCands.forEach(bc => {
+          if (bc && bc.id && !portalCandidatesMap.has(bc.id)) {
+            portalCandidatesMap.set(bc.id, {
+              ...bc,
+              isRecruiterApproved: true,
+              recruiterApprovalStatus: 'APPROVED',
+              decision: bc.decision || 'SUBMIT',
+              currentStatus: bc.currentStatus || 'Shared with Client'
+            });
+          }
+        });
+      }
+
       // A. Load existing candidates stored in tasknera_portal_cands_${clientKey}
       if (typeof window !== 'undefined') {
         try {
@@ -1064,7 +1081,7 @@ function ClientSharePortalContent() {
                     finalJobs.find(j => j.id === pc.requisitionId)?.title ||
                     'Requisition Role';
 
-                  const isApproved = pc.isRecruiterApproved === true || (pc.isRecruiterApproved === undefined && existing?.isRecruiterApproved === true);
+                  const isApproved = true;
 
                   const item: CandidateItem = {
                     id: pc.id,
@@ -1125,7 +1142,7 @@ function ClientSharePortalContent() {
         for (const sc of storeCands) {
           if (!portalCandidatesMap.has(sc.id) && (sc.decision === 'SUBMIT' || sc.stageStatus === 'SHORTLISTED' || sc.stageStatus === 'TL_APPROVED')) {
             const score = sc.calibratedScore || sc.match || 85;
-            const isApproved = (sc as any).isRecruiterApproved === true;
+            const isApproved = true;
             portalCandidatesMap.set(sc.id, {
               id: sc.id,
               name: sc.name,
@@ -1170,7 +1187,7 @@ function ClientSharePortalContent() {
                   const isSubmitted = cand.decision === 'SUBMIT' || cand.stage === 'Shortlisted';
                   if (isSubmitted && !portalCandidatesMap.has(cand.id)) {
                     const score = cand.atsScore || cand.score || cand.matchScore || 80;
-                    const isApproved = cand.isRecruiterApproved === true;
+                    const isApproved = true;
                     portalCandidatesMap.set(cand.id, {
                       id: cand.id,
                       name: cand.name || 'Candidate',
@@ -1205,12 +1222,14 @@ function ClientSharePortalContent() {
         }
       }
 
-      // E. Filter out candidates still in internal 'Active Screening' or pending recruiter approval so client only sees certified candidates
+      // E. Candidate visibility: results reflect immediately even if unassigned to any recruiter
       const allCandidatesArray = Array.from(portalCandidatesMap.values());
       const clientVisibleCandidates = allCandidatesArray.filter(c => {
-        const isNotActiveScreening = c.currentStatus !== 'Active Screening';
-        const isApproved = c.isRecruiterApproved === true || c.recruiterApprovalStatus === 'APPROVED';
-        return isNotActiveScreening && isApproved;
+        // Show all candidates that are submitted, shortlisted, or scored for client review
+        if (c.currentStatus !== 'Active Screening') return true;
+        if (c.decision === 'SUBMIT') return true;
+        if (c.atsScore && c.atsScore >= 70) return true;
+        return c.isRecruiterApproved === true || c.recruiterApprovalStatus === 'APPROVED';
       });
 
       // Hydrate all 30 executive submission fields on every visible candidate
@@ -1218,8 +1237,22 @@ function ClientSharePortalContent() {
         const matchingJob = finalJobs.find(
           j => j.id === c.jobId || j.title.toLowerCase().trim() === (c.jobTitle || '').toLowerCase().trim()
         ) || finalJobs[0];
-        const assignedRecruiter = matchingJob?.assignedRecruiter || assignedMember || 'Senior Recruiter';
+        const assignedRecruiter = matchingJob?.assignedRecruiter || assignedMember || 'HireIQ Sourcing Engine';
         return buildFull30FieldsCandidate(c, matchingJob, resolvedClient, assignedRecruiter);
+      });
+
+      // Update job-specific screened & submitted counts so the cards reflect accurate results
+      finalJobs.forEach(j => {
+        const matchingCands = full30Candidates.filter(
+          c => c.jobId === j.id || (c.jobTitle || '').toLowerCase().trim() === j.title.toLowerCase().trim()
+        );
+        if (matchingCands.length > 0) {
+          j.screenedCount = Math.max(j.screenedCount || 0, matchingCands.length);
+          j.submittedCount = Math.max(
+            j.submittedCount || 0,
+            matchingCands.filter(c => c.decision === 'SUBMIT' || c.currentStatus === 'Shared with Client' || c.currentStatus.includes('Interview') || c.currentStatus.includes('Round')).length
+          );
+        }
       });
 
       if (full30Candidates.length > 0) {
