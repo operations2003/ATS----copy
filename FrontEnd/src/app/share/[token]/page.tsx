@@ -10,6 +10,7 @@ import {
 } from '@/lib/jobAssignments';
 import ClientSubmissionDossierModal, { SubmissionDossierData } from '@/components/ClientSubmissionDossierModal';
 import ClientLifecycleModal, { ClientLifecycleData } from '@/components/ClientLifecycleModal';
+import { getResolvedBackendUrl } from '@/lib/backendUrl';
 
 const STATUS_OPTIONS = [
   'Shared with Client',
@@ -729,7 +730,7 @@ function ClientSharePortalContent() {
       let backendJds: any[] = [];
 
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const backendUrl = getResolvedBackendUrl();
         const res = await fetch(`${backendUrl}/client-portals/share/${token}`);
         if (res.ok) {
           const data = await res.json();
@@ -1450,7 +1451,7 @@ function ClientSharePortalContent() {
 
       // Sync uploaded JDs directly to backend API for two-way live reflection
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const backendUrl = getResolvedBackendUrl();
         await fetch(`${backendUrl}/client-portals/share/${token}/jds`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1458,6 +1459,45 @@ function ClientSharePortalContent() {
         });
       } catch (err) {
         console.warn('Failed to sync uploaded JDs to backend:', err);
+      }
+
+      // 2b. Sync into local client shares so the /clients page immediately displays updated count
+      if (typeof window !== 'undefined') {
+        try {
+          const sharesKey = 'tasknera_client_portal_shares_v1';
+          const existingShares = JSON.parse(
+            localStorage.getItem(sharesKey) || localStorage.getItem('tasknera_client_shares') || '[]'
+          );
+          if (Array.isArray(existingShares)) {
+            const updatedShares = existingShares.map((s: any) => {
+              const match =
+                s.token === token ||
+                s.id === token ||
+                (s.clientName && s.clientName.toLowerCase().trim() === clientName.toLowerCase().trim());
+              if (match) {
+                const curJds = Array.isArray(s.jds) ? s.jds : [];
+                const mergedJds = [
+                  ...newCreatedJobs,
+                  ...curJds.filter((cj: any) => !newTitlesSet.has(normTitleCheck(cj.title)))
+                ];
+                return { ...s, jds: mergedJds };
+              }
+              return s;
+            });
+            localStorage.setItem(sharesKey, JSON.stringify(updatedShares));
+            localStorage.setItem('tasknera_client_shares', JSON.stringify(updatedShares));
+          }
+        } catch {}
+
+        try {
+          window.dispatchEvent(new Event('tasknera_jobs_updated'));
+          window.dispatchEvent(new Event('storage'));
+          if (typeof BroadcastChannel !== 'undefined') {
+            const bc = new BroadcastChannel('tasknera_portal_channel');
+            bc.postMessage({ type: 'JD_UPLOADED', client: clientName, jds: newCreatedJobs });
+            bc.close();
+          }
+        } catch {}
       }
 
       // 3. Log transparency activity

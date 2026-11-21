@@ -9,6 +9,10 @@
 export function getBackendBaseUrl(): string {
   const envUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL;
   if (envUrl && envUrl.trim() !== '') {
+    // If in production, avoid returning localhost
+    if (process.env.NODE_ENV === 'production' && (envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
+      return 'https://ats-d4tv.onrender.com/api';
+    }
     return envUrl.trim().replace(/\/+$/, '');
   }
   if (process.env.NODE_ENV === 'development') {

@@ -12,6 +12,7 @@ import {
   setJobAssignment,
   isExcludedRecruiterName
 } from '@/lib/jobAssignments';
+import { getResolvedBackendUrl } from '@/lib/backendUrl';
 
 interface SharedClientLink {
   id: string;
@@ -181,7 +182,7 @@ export default function ClientsPage() {
 
       // 2. Fetch authoritative client portals from backend API
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const backendUrl = getResolvedBackendUrl();
         const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
         const res = await fetch(`${backendUrl}/client-portals`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -216,18 +217,64 @@ export default function ClientsPage() {
                 }).catch(() => {});
               }
             } else {
-              // Retain assigned member or extra JDs if local portal had them
+              // Combine JDs without dropping any uploaded by client or recruiter
               const existing = mergedMap.get(k)!;
+              const combinedJdsMap = new Map<string, any>();
+              (Array.isArray(existing.jds) ? existing.jds : []).forEach((j: any) => {
+                const titleKey = (j.title || j.name || j.id || '').toLowerCase().trim();
+                if (titleKey) combinedJdsMap.set(titleKey, j);
+              });
+              (Array.isArray(lp.jds) ? lp.jds : []).forEach((j: any) => {
+                const titleKey = (j.title || j.name || j.id || '').toLowerCase().trim();
+                if (titleKey && !combinedJdsMap.has(titleKey)) {
+                  combinedJdsMap.set(titleKey, j);
+                }
+              });
+
               const updated = {
                 ...existing,
                 assignedMember: existing.assignedMember || lp.assignedMember,
                 assignedMemberRole: existing.assignedMemberRole || lp.assignedMemberRole,
                 assignedAt: existing.assignedAt || lp.assignedAt,
-                jds: (existing.jds && existing.jds.length > 0) ? existing.jds : (lp.jds || [])
+                jds: Array.from(combinedJdsMap.values())
               };
               mergedMap.set(k, updated);
             }
           });
+
+          // Also check localStorage tasknera_client_jds_${client} to ensure client-uploaded JDs are merged in
+          if (typeof window !== 'undefined') {
+            mergedMap.forEach((portal, key) => {
+              try {
+                const cleanName = portal.clientName.replace(/\s+/g, '_');
+                const rawJds = localStorage.getItem(`tasknera_client_jds_${cleanName}`);
+                if (rawJds) {
+                  const parsed = JSON.parse(rawJds);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    const existingJdTitles = new Set(
+                      (portal.jds || []).map((j: any) => (j.title || j.name || '').toLowerCase().trim())
+                    );
+                    const toSync: any[] = [];
+                    parsed.forEach((pj: any) => {
+                      const norm = (pj.title || pj.name || '').toLowerCase().trim();
+                      if (norm && !existingJdTitles.has(norm)) {
+                        portal.jds = portal.jds || [];
+                        portal.jds.push(pj);
+                        toSync.push(pj);
+                      }
+                    });
+                    if (toSync.length > 0) {
+                      fetch(`${backendUrl}/client-portals/share/${portal.token || portal.id}/jds`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ jds: toSync })
+                      }).catch(() => {});
+                    }
+                  }
+                }
+              } catch {}
+            });
+          }
 
           const finalLinks = Array.from(mergedMap.values());
           if (finalLinks.length > 0) {
@@ -436,6 +483,20 @@ export default function ClientsPage() {
     window.addEventListener('storage', handleUpdate);
     const unsub = atsStore.subscribe(handleUpdate);
 
+    // BroadcastChannel for cross-tab immediate updates when client uploads JD in another tab
+    let bc: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        bc = new BroadcastChannel('tasknera_portal_channel');
+        bc.onmessage = (msg) => {
+          if (msg.data?.type === 'JD_UPLOADED') {
+            loadClientPortals();
+            refreshJobs();
+          }
+        };
+      } catch {}
+    }
+
     // Live bidirectional sync: poll backend every 5 seconds for new client JDs
     const liveSyncInterval = setInterval(() => {
       loadClientPortals();
@@ -447,6 +508,9 @@ export default function ClientsPage() {
       window.removeEventListener('tasknera_jobs_updated', handleUpdate);
       window.removeEventListener('storage', handleUpdate);
       unsub();
+      if (bc) {
+        bc.close();
+      }
     };
   }, [user, cachedRole]);
 
@@ -557,6 +621,38 @@ export default function ClientsPage() {
                   status: item.status || 'Active Screening',
                   mandatoryRequirementsCount: item.mandatoryRequirementsCount || 3
                 });
+              }
+            });
+          }
+        }
+      } catch {}
+
+      // 2b. Also inspect tasknera_created_jobs
+      try {
+        const rawCreated = localStorage.getItem('tasknera_created_jobs');
+        if (rawCreated) {
+          const createdList = JSON.parse(rawCreated);
+          if (Array.isArray(createdList)) {
+            createdList.forEach((cj: any) => {
+              const cjClient = String(cj.client || cj.company || '').toLowerCase().trim();
+              if (cjClient === cleanClient || (cleanClient && cjClient.includes(cleanClient)) || (cleanClient && cleanClient.includes(cjClient))) {
+                const id = String(cj.id);
+                if (!seenIds.has(id)) {
+                  seenIds.add(id);
+                  const assignment = getJobAssignment({ client: clientName, title: cj.position || cj.title, id });
+                  resultList.push({
+                    id,
+                    title: cj.position || cj.title || 'Job Requisition',
+                    assignedRecruiter: assignment?.assignedRecruiter || cj.assignedRecruiter,
+                    description: cj.description,
+                    location: cj.location || 'Remote / Hybrid',
+                    mode: cj.work_mode || cj.workMode || cj.mode || 'Hybrid',
+                    salary: cj.salary || 'Competitive',
+                    createdAt: cj.created_at || cj.createdAt || 'Recently',
+                    status: cj.status || 'Active Screening',
+                    mandatoryRequirementsCount: 3
+                  });
+                }
               }
             });
           }
