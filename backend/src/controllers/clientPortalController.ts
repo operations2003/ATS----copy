@@ -3,6 +3,24 @@ import fs from 'fs';
 import path from 'path';
 import { AuthRequest } from '../middleware/authMiddleware';
 
+export interface ClientJdRecord {
+  id: string;
+  title: string;
+  description?: string;
+  department?: string;
+  location?: string;
+  workMode?: string;
+  mode?: string;
+  salary?: string;
+  status?: string;
+  assignedRecruiter?: string;
+  createdAt?: string;
+  mandatoryRequirementsCount?: number;
+  totalRequirementsCount?: number;
+  uploadedBy?: 'CLIENT' | 'RECRUITER' | 'ADMIN';
+  fileName?: string;
+}
+
 export interface ClientPortalRecord {
   id: string;
   clientName: string;
@@ -20,6 +38,7 @@ export interface ClientPortalRecord {
   assignedAt?: string;
   organizationId?: string;
   createdBy?: string;
+  jds?: ClientJdRecord[];
 }
 
 const DATA_DIR = path.join(__dirname, '../../data');
@@ -152,8 +171,13 @@ export const saveClientPortal = async (req: AuthRequest, res: Response): Promise
     // Upsert
     const existingIdx = portalCache.findIndex(p => p.id === newRecord.id || p.clientName.toLowerCase().trim() === newRecord.clientName.toLowerCase().trim());
     if (existingIdx !== -1) {
-      portalCache[existingIdx] = { ...portalCache[existingIdx], ...newRecord };
+      portalCache[existingIdx] = {
+        ...portalCache[existingIdx],
+        ...newRecord,
+        jds: newRecord.jds && newRecord.jds.length > 0 ? newRecord.jds : (portalCache[existingIdx].jds || [])
+      };
     } else {
+      newRecord.jds = newRecord.jds || [];
       portalCache.unshift(newRecord);
     }
 
@@ -270,7 +294,8 @@ export const updateClientPortal = async (req: AuthRequest, res: Response): Promi
     portalCache[idx] = {
       ...portalCache[idx],
       ...updates,
-      id
+      id,
+      jds: updates.jds !== undefined ? updates.jds : (portalCache[idx].jds || [])
     };
 
     savePortals(portalCache);
@@ -279,5 +304,163 @@ export const updateClientPortal = async (req: AuthRequest, res: Response): Promi
   } catch (err: any) {
     console.error('[Update Client Portal Error]', err);
     res.status(500).json({ error: 'Failed to update client portal' });
+  }
+};
+
+// GET /api/client-portals/share/:token (Public - no auth required)
+export const getPublicClientPortal = async (req: any, res: Response): Promise<void> => {
+  try {
+    const rawToken = String(req.params.token || '').trim();
+    loadPortals();
+
+    const portal = portalCache.find(
+      p => p.token === rawToken ||
+           p.id === rawToken ||
+           (p.shareUrl && p.shareUrl.includes(rawToken)) ||
+           (p.token && rawToken && p.token.toLowerCase() === rawToken.toLowerCase()) ||
+           (p.id && rawToken && p.id.toLowerCase() === rawToken.toLowerCase())
+    );
+
+    if (!portal) {
+      res.status(404).json({ error: 'Client portal not found' });
+      return;
+    }
+
+    // Increment views
+    portal.views = (portal.views || 0) + 1;
+    savePortals(portalCache);
+
+    res.status(200).json({ success: true, clientPortal: portal });
+  } catch (err: any) {
+    console.error('[Get Public Client Portal Error]', err);
+    res.status(500).json({ error: 'Failed to fetch client portal' });
+  }
+};
+
+// POST /api/client-portals/share/:token/jds (Public - for client uploading JDs directly in client portal)
+export const addJdToClientPortalPublic = async (req: any, res: Response): Promise<void> => {
+  try {
+    const rawToken = String(req.params.token || '').trim();
+    const { jd, jds } = req.body;
+    loadPortals();
+
+    const portal = portalCache.find(
+      p => p.token === rawToken ||
+           p.id === rawToken ||
+           (p.shareUrl && p.shareUrl.includes(rawToken)) ||
+           (p.token && rawToken && p.token.toLowerCase() === rawToken.toLowerCase()) ||
+           (p.id && rawToken && p.id.toLowerCase() === rawToken.toLowerCase())
+    );
+
+    if (!portal) {
+      res.status(404).json({ error: 'Client portal not found' });
+      return;
+    }
+
+    if (!portal.jds) portal.jds = [];
+
+    const incomingJds: ClientJdRecord[] = Array.isArray(jds) ? jds : (jd ? [jd] : []);
+    for (const newJd of incomingJds) {
+      if (!newJd || !newJd.title) continue;
+      const existingIdx = portal.jds.findIndex(
+        j => (newJd.id && j.id === newJd.id) || j.title.toLowerCase().trim() === newJd.title.toLowerCase().trim()
+      );
+      if (existingIdx !== -1) {
+        portal.jds[existingIdx] = { ...portal.jds[existingIdx], ...newJd };
+      } else {
+        portal.jds.unshift({
+          id: newJd.id || `jd-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          title: newJd.title,
+          description: newJd.description || '',
+          location: newJd.location || 'Remote / Hybrid',
+          workMode: newJd.workMode || newJd.mode || 'Hybrid',
+          mode: newJd.workMode || newJd.mode || 'Hybrid',
+          salary: newJd.salary || 'Competitive Market Rate',
+          status: newJd.status || 'Agency Sourcing Candidates',
+          assignedRecruiter: newJd.assignedRecruiter || portal.assignedMember || 'Technical Recruiter',
+          createdAt: newJd.createdAt || new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
+          mandatoryRequirementsCount: newJd.mandatoryRequirementsCount || 3,
+          uploadedBy: 'CLIENT',
+          fileName: newJd.fileName
+        });
+      }
+    }
+
+    savePortals(portalCache);
+
+    res.status(200).json({ success: true, jds: portal.jds, clientPortal: portal });
+  } catch (err: any) {
+    console.error('[Add Client Portal JD Public Error]', err);
+    res.status(500).json({ error: 'Failed to upload JD' });
+  }
+};
+
+// POST /api/client-portals/:id/jds (Authenticated - recruiter or admin uploading JD for client)
+export const addJdToClientPortalAuth = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const rawId = String(req.params.id || '').trim();
+    const { jd, jds } = req.body;
+    loadPortals();
+
+    const portal = portalCache.find(p => p.id === rawId || p.clientName.toLowerCase().trim() === rawId.toLowerCase());
+    if (!portal) {
+      res.status(404).json({ error: 'Client portal not found' });
+      return;
+    }
+
+    if (!portal.jds) portal.jds = [];
+
+    const incomingJds: ClientJdRecord[] = Array.isArray(jds) ? jds : (jd ? [jd] : []);
+    for (const newJd of incomingJds) {
+      if (!newJd || !newJd.title) continue;
+      const existingIdx = portal.jds.findIndex(
+        j => (newJd.id && j.id === newJd.id) || j.title.toLowerCase().trim() === newJd.title.toLowerCase().trim()
+      );
+      if (existingIdx !== -1) {
+        portal.jds[existingIdx] = { ...portal.jds[existingIdx], ...newJd };
+      } else {
+        portal.jds.unshift({
+          id: newJd.id || `jd-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          title: newJd.title,
+          description: newJd.description || '',
+          location: newJd.location || 'Remote / Hybrid',
+          workMode: newJd.workMode || newJd.mode || 'Hybrid',
+          mode: newJd.workMode || newJd.mode || 'Hybrid',
+          salary: newJd.salary || 'Competitive Market Rate',
+          status: newJd.status || 'Active Screening',
+          assignedRecruiter: newJd.assignedRecruiter || portal.assignedMember || 'Technical Recruiter',
+          createdAt: newJd.createdAt || new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
+          mandatoryRequirementsCount: newJd.mandatoryRequirementsCount || 3,
+          uploadedBy: req.user?.role === 'SUPER_ADMIN' || req.user?.role === 'CLIENT_ADMIN' ? 'ADMIN' : 'RECRUITER',
+          fileName: newJd.fileName
+        });
+      }
+    }
+
+    savePortals(portalCache);
+
+    res.status(200).json({ success: true, jds: portal.jds, clientPortal: portal });
+  } catch (err: any) {
+    console.error('[Add Client Portal JD Auth Error]', err);
+    res.status(500).json({ error: 'Failed to upload JD' });
+  }
+};
+
+// GET /api/client-portals/:id/jds
+export const getClientPortalJds = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const rawId = String(req.params.id || '').trim();
+    loadPortals();
+
+    const portal = portalCache.find(p => p.id === rawId || p.clientName.toLowerCase().trim() === rawId.toLowerCase());
+    if (!portal) {
+      res.status(404).json({ error: 'Client portal not found' });
+      return;
+    }
+
+    res.status(200).json({ success: true, jds: portal.jds || [] });
+  } catch (err: any) {
+    console.error('[Get Client Portal JDs Error]', err);
+    res.status(500).json({ error: 'Failed to get JDs' });
   }
 };

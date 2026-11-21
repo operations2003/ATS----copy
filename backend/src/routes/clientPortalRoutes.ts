@@ -5,24 +5,26 @@ import {
   saveClientPortal,
   assignClientPortal,
   deleteClientPortal,
-  updateClientPortal
+  updateClientPortal,
+  getPublicClientPortal,
+  addJdToClientPortalPublic,
+  addJdToClientPortalAuth,
+  getClientPortalJds
 } from '../controllers/clientPortalController';
 
 const router = Router();
 
-// Get all client portals visible to the authenticated user
+// Public client portal endpoints (accessible by clients without login)
+router.get('/share/:token', getPublicClientPortal);
+router.post('/share/:token/jds', addJdToClientPortalPublic);
+
+// Authenticated client portal endpoints (used by recruiters and admins in ATS)
 router.get('/', protect, getClientPortals);
-
-// Save or sync a client portal link
 router.post('/', protect, saveClientPortal);
-
-// Assign a client portal to a recruiter/member
 router.post('/assign', protect, assignClientPortal);
-
-// Update/edit client portal details
+router.get('/:id/jds', protect, getClientPortalJds);
+router.post('/:id/jds', protect, addJdToClientPortalAuth);
 router.put('/:id', protect, updateClientPortal);
-
-// Delete client portal
 router.delete('/:id', protect, deleteClientPortal);
 
 export default router;

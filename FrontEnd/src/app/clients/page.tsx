@@ -28,6 +28,7 @@ interface SharedClientLink {
   assignedMember?: string;
   assignedMemberRole?: string;
   assignedAt?: string;
+  jds?: any[];
 }
 
 export interface TeamMemberOption {
@@ -132,6 +133,17 @@ export default function ClientsPage() {
   const [editAssignedMember, setEditAssignedMember] = useState('');
   const [editExpirationOption, setEditExpirationOption] = useState<string>('keep');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Quick Upload JD Modal State (Live two-way link with client portal)
+  const [quickJdModalOpen, setQuickJdModalOpen] = useState(false);
+  const [quickJdClient, setQuickJdClient] = useState<SharedClientLink | null>(null);
+  const [quickJdTitle, setQuickJdTitle] = useState('');
+  const [quickJdLocation, setQuickJdLocation] = useState('Remote / Hybrid');
+  const [quickJdMode, setQuickJdMode] = useState<'Remote' | 'Hybrid' | 'Onsite'>('Hybrid');
+  const [quickJdSalary, setQuickJdSalary] = useState('Competitive Market Rate');
+  const [quickJdDescription, setQuickJdDescription] = useState('');
+  const [quickJdRecruiter, setQuickJdRecruiter] = useState('');
+  const [isSubmittingQuickJd, setIsSubmittingQuickJd] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -380,7 +392,14 @@ export default function ClientsPage() {
     window.addEventListener('storage', handleUpdate);
     const unsub = atsStore.subscribe(handleUpdate);
 
+    // Live bidirectional sync: poll backend every 5 seconds for new client JDs
+    const liveSyncInterval = setInterval(() => {
+      loadClientPortals();
+      refreshJobs();
+    }, 5000);
+
     return () => {
+      clearInterval(liveSyncInterval);
       window.removeEventListener('tasknera_jobs_updated', handleUpdate);
       window.removeEventListener('storage', handleUpdate);
       unsub();
@@ -422,18 +441,9 @@ export default function ClientsPage() {
     return Array.from(map.values());
   }, [jobs, sharedLinks]);
 
-  // Counts JDs uploaded by this client (from local storage or jobs pool)
+  // Counts JDs uploaded by this client (from backend authoritative portal, local storage, or jobs pool)
   const getClientUploadedJdsCount = (clientName: string) => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(`tasknera_client_jds_${clientName.replace(/\s+/g, '_')}`);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) return parsed.length;
-        }
-      } catch {}
-    }
-    return jobs.filter(j => j.client?.toLowerCase().trim() === clientName.toLowerCase().trim()).length;
+    return getClientUploadedJds(clientName).length;
   };
 
   interface ClientJdItem {
@@ -449,12 +459,37 @@ export default function ClientsPage() {
     mandatoryRequirementsCount?: number;
   }
 
-  // Helper to retrieve detailed uploaded JDs for a client
+  // Helper to retrieve detailed uploaded JDs for a client (two-way synced with client portal)
   const getClientUploadedJds = (clientName: string): ClientJdItem[] => {
     const cleanClient = clientName.toLowerCase().trim();
     const resultList: ClientJdItem[] = [];
     const seenIds = new Set<string>();
 
+    // 1. First priority: authoritative backend client portal JDs
+    const portal = sharedLinks.find(
+      l => l.clientName.toLowerCase().trim() === cleanClient
+    );
+    if (portal && Array.isArray(portal.jds) && portal.jds.length > 0) {
+      portal.jds.forEach((item: any, idx: number) => {
+        const id = String(item.id || `jd-backend-${idx}`);
+        seenIds.add(id);
+        const assignment = getJobAssignment({ client: clientName, title: item.title || item.name, id });
+        resultList.push({
+          id,
+          title: item.title || item.name || 'Job Requisition',
+          assignedRecruiter: assignment?.assignedRecruiter || item.assignedRecruiter || portal.assignedMember,
+          description: item.description,
+          location: item.location || 'Remote / Hybrid',
+          mode: item.workMode || item.mode || 'Hybrid',
+          salary: item.salary || 'Competitive',
+          createdAt: item.createdAt || 'Recently',
+          status: item.status || 'Active Screening',
+          mandatoryRequirementsCount: item.mandatoryRequirementsCount || 3
+        });
+      });
+    }
+
+    // 2. Second priority: local storage tasknera_client_jds_${clientName}
     if (typeof window !== 'undefined') {
       try {
         const raw = localStorage.getItem(`tasknera_client_jds_${clientName.replace(/\s+/g, '_')}`);
@@ -463,20 +498,22 @@ export default function ClientsPage() {
           if (Array.isArray(parsed) && parsed.length > 0) {
             parsed.forEach((item: any, idx: number) => {
               const id = String(item.id || `jd-${idx}`);
-              seenIds.add(id);
-              const assignment = getJobAssignment({ client: clientName, title: item.title || item.name, id });
-              resultList.push({
-                id,
-                title: item.title || item.name || 'Job Requisition',
-                assignedRecruiter: assignment?.assignedRecruiter || item.assignedRecruiter,
-                description: item.description,
-                location: item.location || 'Remote',
-                mode: item.workMode || item.mode || 'Hybrid',
-                salary: item.salary || 'Competitive',
-                createdAt: item.createdAt || 'Recently',
-                status: item.status || 'Active Screening',
-                mandatoryRequirementsCount: item.mandatoryRequirementsCount || 3
-              });
+              if (!seenIds.has(id)) {
+                seenIds.add(id);
+                const assignment = getJobAssignment({ client: clientName, title: item.title || item.name, id });
+                resultList.push({
+                  id,
+                  title: item.title || item.name || 'Job Requisition',
+                  assignedRecruiter: assignment?.assignedRecruiter || item.assignedRecruiter,
+                  description: item.description,
+                  location: item.location || 'Remote',
+                  mode: item.workMode || item.mode || 'Hybrid',
+                  salary: item.salary || 'Competitive',
+                  createdAt: item.createdAt || 'Recently',
+                  status: item.status || 'Active Screening',
+                  mandatoryRequirementsCount: item.mandatoryRequirementsCount || 3
+                });
+              }
             });
           }
         }
@@ -1007,6 +1044,135 @@ export default function ClientsPage() {
     }
 
     showToast('Client JD upload link generated successfully!');
+  };
+
+  const handleOpenQuickJdModal = (link: SharedClientLink) => {
+    setQuickJdClient(link);
+    setQuickJdTitle('');
+    setQuickJdLocation('Remote / Hybrid');
+    setQuickJdMode('Hybrid');
+    setQuickJdSalary('Competitive Market Rate');
+    setQuickJdDescription('');
+    setQuickJdRecruiter(link.assignedMember || '');
+    setQuickJdModalOpen(true);
+  };
+
+  const handleSubmitQuickJd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickJdClient || !quickJdTitle.trim()) {
+      showToast('Position title is required');
+      return;
+    }
+
+    setIsSubmittingQuickJd(true);
+    const clientName = quickJdClient.clientName;
+    const effectiveRecruiter = quickJdRecruiter.trim() || quickJdClient.assignedMember || 'Technical Recruiter';
+    const newJobId = `jd-portal-${Date.now()}`;
+
+    const newJdItem = {
+      id: newJobId,
+      title: quickJdTitle.trim(),
+      client: clientName,
+      location: quickJdLocation.trim() || 'Remote / Hybrid',
+      workMode: quickJdMode,
+      mode: quickJdMode,
+      salary: quickJdSalary.trim() || 'Competitive Market Rate',
+      status: 'Active Screening',
+      assignedRecruiter: effectiveRecruiter,
+      createdAt: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
+      description: quickJdDescription.trim() || `Job Description for ${quickJdTitle.trim()}`,
+      mandatoryRequirementsCount: 3,
+      totalRequirementsCount: 6,
+      uploadedBy: 'RECRUITER'
+    };
+
+    // 1. Add to atsStore
+    try {
+      atsStore.addJob(
+        {
+          title: newJdItem.title,
+          client: clientName,
+          location: newJdItem.location,
+          mode: newJdItem.mode,
+          salary: newJdItem.salary,
+          candidates: 0,
+          topScore: 0,
+          status: 'Active',
+          assignedRecruiter: effectiveRecruiter,
+          pod: 'Client Portal Inflow',
+          mandatoryRequirementsCount: 3,
+          totalRequirementsCount: 6,
+          description: newJdItem.description
+        },
+        user?.name || currentEmail || 'Agency Team',
+        'AGENCY'
+      );
+    } catch {}
+
+    // 2. Add to localStorage tasknera_client_jds_${clientName}
+    try {
+      const cleanKey = `tasknera_client_jds_${clientName.replace(/\s+/g, '_')}`;
+      const existing = JSON.parse(localStorage.getItem(cleanKey) || '[]');
+      const updatedList = [newJdItem, ...(Array.isArray(existing) ? existing : [])];
+      localStorage.setItem(cleanKey, JSON.stringify(updatedList));
+      localStorage.setItem(`tasknera_client_jds_${clientName}`, JSON.stringify(updatedList));
+    } catch {}
+
+    // 3. Add to tasknera_created_jobs
+    try {
+      const createdList = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
+      const createdEntry = {
+        id: newJobId,
+        client: clientName,
+        company: clientName,
+        position: newJdItem.title,
+        title: newJdItem.title,
+        location: newJdItem.location,
+        work_mode: newJdItem.mode,
+        mode: newJdItem.mode,
+        salary: newJdItem.salary,
+        status: 'Active',
+        createdAt: new Date().toISOString(),
+        assignedRecruiter: effectiveRecruiter,
+        candidatesCount: 0,
+        candidates: 0,
+        topScore: 0,
+        description: newJdItem.description
+      };
+      localStorage.setItem('tasknera_created_jobs', JSON.stringify([createdEntry, ...(Array.isArray(createdList) ? createdList : [])]));
+    } catch {}
+
+    // 4. Send to backend API so it syncs immediately to the client's live portal
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+      await fetch(`${backendUrl}/client-portals/${quickJdClient.id}/jds`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ jd: newJdItem })
+      });
+    } catch (err) {
+      console.warn('Failed to upload JD to backend:', err);
+    }
+
+    // 5. Update sharedLinks locally
+    setSharedLinks(prev => prev.map(l => {
+      if (l.id === quickJdClient.id || l.clientName.toLowerCase().trim() === clientName.toLowerCase().trim()) {
+        const currentJds = Array.isArray(l.jds) ? l.jds : [];
+        return {
+          ...l,
+          jds: [newJdItem, ...currentJds]
+        };
+      }
+      return l;
+    }));
+
+    setIsSubmittingQuickJd(false);
+    setQuickJdModalOpen(false);
+    showToast(`✓ JD "${quickJdTitle}" uploaded and synced live with ${clientName}'s portal!`);
   };
 
   const handleOpenEditModal = (link: SharedClientLink) => {
@@ -2114,17 +2280,32 @@ export default function ClientsPage() {
                       <p className="text-xs text-[#667085] max-w-sm mx-auto mb-5">
                         {activeViewJdLink.clientName} has not uploaded any Job Description documents yet. They can submit JDs directly through their active portal link.
                       </p>
-                      <a
-                        href={activeViewJdLink.shareUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#3563E9] text-white text-xs font-bold hover:bg-[#2851D6] transition-colors shadow-xs"
-                      >
-                        <span>Open Client Portal</span>
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </a>
+                      <div className="flex items-center justify-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setViewJdModalOpen(false);
+                            handleOpenQuickJdModal(activeViewJdLink);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          <span>Upload JD for this Client</span>
+                        </button>
+                        <a
+                          href={activeViewJdLink.shareUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#EFF4FF] text-[#3563E9] text-xs font-bold hover:bg-[#D1E0FF] transition-colors border border-[#D1E0FF]"
+                        >
+                          <span>Open Client Portal</span>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      </div>
                     </div>
                   ) : (
                     <>
@@ -2288,7 +2469,7 @@ export default function ClientsPage() {
                       type="button"
                       onClick={() => {
                         setViewJdModalOpen(false);
-                        router.push(`/jobs/create?client=${encodeURIComponent(activeViewJdLink.clientName)}`);
+                        handleOpenQuickJdModal(activeViewJdLink);
                       }}
                       className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-xs cursor-pointer transition-colors inline-flex items-center gap-1.5"
                       title="Upload a new Job Description for this client requisition pool"
@@ -2348,6 +2529,180 @@ export default function ClientsPage() {
             </div>
           );
         })()}
+
+        {/* Quick Upload JD Modal (Direct two-way sync with client portal) */}
+        {quickJdModalOpen && quickJdClient && (
+          <div
+            className="fixed inset-0 z-[300] flex items-center justify-center overflow-y-auto bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-200"
+            onMouseDown={e => {
+              if (e.target === e.currentTarget && !isSubmittingQuickJd) setQuickJdModalOpen(false);
+            }}
+          >
+            <div className="my-auto w-full max-w-xl rounded-2xl bg-white p-6 sm:p-7 shadow-2xl border border-[#EAECF0]">
+              <div className="flex items-start justify-between border-b border-[#EAECF0] pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 shadow-xs border border-emerald-100">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-[#101828]">Upload Job Description</h2>
+                    <p className="text-xs text-[#667085]">
+                      Client: <span className="font-bold text-slate-800">{quickJdClient.clientName}</span> • Synchronized with live client portal
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isSubmittingQuickJd}
+                  onClick={() => setQuickJdModalOpen(false)}
+                  className="rounded-lg p-1.5 text-xl leading-none text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmitQuickJd} className="mt-5 space-y-4">
+                {/* Position Title */}
+                <div>
+                  <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                    Job Title / Position Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={quickJdTitle}
+                    onChange={e => setQuickJdTitle(e.target.value)}
+                    placeholder="e.g. Senior Full-Stack Engineer, Product Lead, Data Scientist"
+                    className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
+                  />
+                </div>
+
+                {/* Location & Mode */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                      Location / Region
+                    </label>
+                    <input
+                      type="text"
+                      value={quickJdLocation}
+                      onChange={e => setQuickJdLocation(e.target.value)}
+                      placeholder="e.g. Remote, San Francisco, CA, Hybrid"
+                      className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-medium text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                      Work Mode
+                    </label>
+                    <select
+                      value={quickJdMode}
+                      onChange={e => setQuickJdMode(e.target.value as any)}
+                      className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
+                    >
+                      <option value="Hybrid">Hybrid</option>
+                      <option value="Remote">Remote</option>
+                      <option value="Onsite">Onsite</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Salary & Recruiter */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                      Target Salary / Budget Range
+                    </label>
+                    <input
+                      type="text"
+                      value={quickJdSalary}
+                      onChange={e => setQuickJdSalary(e.target.value)}
+                      placeholder="e.g. $120,000 - $150,000 / annum"
+                      className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-medium text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                      Assigned Recruiter / Owner
+                    </label>
+                    <select
+                      value={quickJdRecruiter}
+                      onChange={e => setQuickJdRecruiter(e.target.value)}
+                      className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
+                    >
+                      <option value="">-- {quickJdClient.assignedMember || 'Technical Recruiter'} --</option>
+                      {teamMembers.map(m => (
+                        <option key={m.id} value={m.name}>
+                          {m.name} • {m.role}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Description & Criteria */}
+                <div>
+                  <label className="block text-xs font-bold text-[#101828] mb-1.5">
+                    Job Description &amp; Candidate Requirements <span className="text-[#667085] font-normal">(Optional)</span>
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={quickJdDescription}
+                    onChange={e => setQuickJdDescription(e.target.value)}
+                    placeholder="Paste role specifications, technical requirements, must-have skills, and knockout criteria here..."
+                    className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-medium text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20 resize-none font-sans"
+                  />
+                </div>
+
+                <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 text-xs text-blue-900 flex items-start gap-2">
+                  <svg className="w-4 h-4 text-[#3563E9] shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>
+                    This Job Description will be immediately linked to <span className="font-bold">{quickJdClient.clientName}</span>'s portal and registered in HireIQ deterministic ATS screening.
+                  </span>
+                </div>
+
+                <div className="mt-6 flex items-center justify-end gap-3 border-t border-[#EAECF0] pt-4">
+                  <button
+                    type="button"
+                    disabled={isSubmittingQuickJd}
+                    onClick={() => setQuickJdModalOpen(false)}
+                    className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-semibold text-[#182230] hover:bg-slate-200 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingQuickJd || !quickJdTitle.trim()}
+                    className="rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition-colors cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {isSubmittingQuickJd ? (
+                      <>
+                        <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                        <span>Uploading JD...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span>Upload &amp; Sync JD</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Edit Client Portal Modal */}
         {editModalOpen && editingLink && (

@@ -715,31 +715,54 @@ function ClientSharePortalContent() {
   // ─────────────────────────────────────────────────────────────────────────────
   // Initial Data Synchronization
   // ─────────────────────────────────────────────────────────────────────────────
-  const loadPortalData = useCallback(() => {
+  const loadPortalData = useCallback(async () => {
     try {
       setIsLoading(true);
 
-      // Resolve client from token in local storage if not in query param
+      // Resolve client from token in backend API first, or fallback to query param / local storage
       let resolvedClient = clientParam;
       let resolvedContact = contactParam;
       let resolvedNote = '';
-      if (typeof window !== 'undefined') {
+      let backendJds: any[] = [];
+
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const res = await fetch(`${backendUrl}/client-portals/share/${token}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.clientPortal) {
+            const p = data.clientPortal;
+            if (p.clientName) resolvedClient = p.clientName;
+            if (p.contactName && !resolvedContact) resolvedContact = p.contactName;
+            if (p.welcomeNote) resolvedNote = p.welcomeNote;
+            if (p.assignedMember) setAssignedMember(p.assignedMember);
+            if (Array.isArray(p.jds)) backendJds = p.jds;
+          }
+        }
+      } catch (err) {
+        console.warn('Backend client portal fetch:', err);
+      }
+
+      if (typeof window !== 'undefined' && (!resolvedClient || resolvedClient === 'Client Partner')) {
         try {
           const sharesRaw = localStorage.getItem('tasknera_client_portal_shares_v1') || localStorage.getItem('tasknera_client_shares');
           if (sharesRaw) {
             const parsed = JSON.parse(sharesRaw);
-            const found = Array.isArray(parsed) ? parsed.find(s => s.token === token) : null;
-            if (found?.clientName && !resolvedClient) {
+            const found = Array.isArray(parsed) ? parsed.find(s => s.token === token || s.id === token) : null;
+            if (found?.clientName && (!resolvedClient || resolvedClient === 'Client Partner')) {
               resolvedClient = found.clientName;
             }
             if (found?.contactName && !resolvedContact) {
               resolvedContact = found.contactName;
             }
-            if (found?.welcomeNote) {
+            if (found?.welcomeNote && !resolvedNote) {
               resolvedNote = found.welcomeNote;
             }
             if (found?.assignedMember) {
               setAssignedMember(found.assignedMember);
+            }
+            if (Array.isArray(found?.jds) && backendJds.length === 0) {
+              backendJds = found.jds;
             }
           }
         } catch {}
@@ -764,13 +787,41 @@ function ClientSharePortalContent() {
              resolvedClient.toLowerCase().includes(j.client?.toLowerCase())
       );
 
-      // Load client-uploaded JDs from local storage
+      // Load client-uploaded JDs from backend and local storage
       let uploadedJds: ClientPortalJob[] = [];
+      if (backendJds.length > 0) {
+        backendJds.forEach(bj => {
+          uploadedJds.push({
+            id: bj.id,
+            title: bj.title,
+            client: resolvedClient,
+            location: bj.location || 'Remote / Hybrid',
+            workMode: bj.workMode || bj.mode || 'Hybrid',
+            salary: bj.salary || 'Competitive Market Rate',
+            status: bj.status || 'Agency Sourcing Candidates',
+            sourcedCount: 0,
+            screenedCount: 0,
+            submittedCount: 0,
+            createdAt: bj.createdAt || 'Recently',
+            description: bj.description,
+            priority: 'High',
+            assignedRecruiter: bj.assignedRecruiter
+          });
+        });
+      }
+
       if (typeof window !== 'undefined') {
         try {
           const raw = localStorage.getItem(`tasknera_client_jds_${resolvedClient.replace(/\s+/g, '_')}`);
           if (raw) {
-            uploadedJds = JSON.parse(raw);
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((pj: any) => {
+                if (!uploadedJds.some(u => u.id === pj.id || u.title.toLowerCase().trim() === pj.title?.toLowerCase().trim())) {
+                  uploadedJds.push(pj);
+                }
+              });
+            }
           }
         } catch {}
       }
@@ -1213,6 +1264,11 @@ function ClientSharePortalContent() {
 
   useEffect(() => {
     loadPortalData();
+    // Live bidirectional sync: poll backend every 5 seconds for new JDs uploaded from ATS or client
+    const pollInterval = setInterval(() => {
+      loadPortalData();
+    }, 5000);
+    return () => clearInterval(pollInterval);
   }, [loadPortalData]);
 
   // Real-time live listener: automatically reload portal when recruiter moves candidates in pipeline
@@ -1239,7 +1295,7 @@ function ClientSharePortalContent() {
   // ─────────────────────────────────────────────────────────────────────────────
   // Action: Submit New JD PDF
   // ─────────────────────────────────────────────────────────────────────────────
-  const handleClientSubmitJd = (e: React.FormEvent) => {
+  const handleClientSubmitJd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (jdFiles.length === 0) {
       alert('Please select or drag in at least one Job Description (PDF) file.');
@@ -1372,6 +1428,18 @@ function ClientSharePortalContent() {
           }));
           localStorage.setItem('tasknera_created_jobs', JSON.stringify([...toAdd, ...createdList.filter((x: any) => !toAdd.some(a => a.id === x.id))]));
         } catch {}
+      }
+
+      // Sync uploaded JDs directly to backend API for two-way live reflection
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        await fetch(`${backendUrl}/client-portals/share/${token}/jds`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jds: newCreatedJobs })
+        });
+      } catch (err) {
+        console.warn('Failed to sync uploaded JDs to backend:', err);
       }
 
       // 3. Log transparency activity
