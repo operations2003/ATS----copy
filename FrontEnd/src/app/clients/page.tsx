@@ -116,6 +116,11 @@ export default function ClientsPage() {
   const [activeViewJdLink, setActiveViewJdLink] = useState<SharedClientLink | null>(null);
   const [selectedJdDetailIndex, setSelectedJdDetailIndex] = useState(0);
 
+  // Delete Client Confirmation Modal State
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [linkToDelete, setLinkToDelete] = useState<SharedClientLink | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setCachedRole(localStorage.getItem('tasknera_role'));
@@ -992,34 +997,60 @@ export default function ClientsPage() {
     showToast('Client JD upload link generated successfully!');
   };
 
-  const handleDeleteShare = (id: string, name: string) => {
-    if (!isAdmin) {
-      showToast('Deleting authority of the client is strictly restricted to administrators only.');
-      return;
-    }
+  const handleOpenDeleteConfirm = (link: SharedClientLink) => {
+    setLinkToDelete(link);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!linkToDelete) return;
+    setIsDeleting(true);
+    const id = linkToDelete.id;
+    const name = linkToDelete.clientName;
 
     const updated = sharedLinks.filter(l => l.id !== id);
     setSharedLinks(updated);
     try {
       localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updated));
-    } catch {
-      // ignore
-    }
+    } catch {}
+
+    // Clean up client JDs cache for this client
+    try {
+      const cleanKey = `tasknera_client_jds_${name.replace(/\s+/g, '_')}`;
+      localStorage.removeItem(cleanKey);
+      localStorage.removeItem(`tasknera_client_jds_${name}`);
+    } catch {}
 
     // Call backend API to delete
-    (async () => {
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+      await fetch(`${backendUrl}/client-portals/${id}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+    } catch (err) {
+      console.warn('Failed to delete client portal from backend:', err);
+    }
+
+    setIsDeleting(false);
+    setDeleteConfirmOpen(false);
+    setLinkToDelete(null);
+    showToast(`✓ Revoked and deleted client portal for ${name}`);
+  };
+
+  const handleDeleteShare = (id: string, name: string) => {
+    const found = sharedLinks.find(l => l.id === id);
+    if (found) {
+      handleOpenDeleteConfirm(found);
+    } else {
+      const updated = sharedLinks.filter(l => l.id !== id);
+      setSharedLinks(updated);
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-        const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
-        await fetch(`${backendUrl}/client-portals/${id}`, {
-          method: 'DELETE',
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-      } catch (err) {
-        console.warn('Failed to delete client portal from backend:', err);
-      }
-    })();
-    showToast(`Revoked portal link for ${name}`);
+        localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updated));
+      } catch {}
+      showToast(`Revoked portal link for ${name}`);
+    }
   };
 
   const handleCopyLink = (url: string) => {
@@ -1155,18 +1186,16 @@ export default function ClientsPage() {
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                             Active Link
                           </span>
-                          {isAdmin && (
-                            <button
-                              type="button"
-                              title="Revoke / Delete Link"
-                              onClick={() => handleDeleteShare(link.id, link.clientName)}
-                              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            title="Delete Client Portal"
+                            onClick={() => handleOpenDeleteConfirm(link)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer border border-transparent hover:border-rose-100"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
 
@@ -1262,6 +1291,17 @@ export default function ClientsPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
                           <span>Client JDs</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDeleteConfirm(link)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 border border-rose-200 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                          title={`Delete ${link.clientName} portal`}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          <span>Delete</span>
                         </button>
                       </div>
 
@@ -2138,6 +2178,19 @@ export default function ClientsPage() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => {
+                        setViewJdModalOpen(false);
+                        handleOpenDeleteConfirm(activeViewJdLink);
+                      }}
+                      className="px-3.5 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold cursor-pointer transition-colors inline-flex items-center gap-1.5"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      <span>Delete Client Portal</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setViewJdModalOpen(false)}
                       className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-xs font-bold text-white shadow-xs cursor-pointer transition-colors"
                     >
@@ -2149,6 +2202,81 @@ export default function ClientsPage() {
             </div>
           );
         })()}
+
+        {/* Delete Client Portal Confirmation Modal */}
+        {deleteConfirmOpen && linkToDelete && (
+          <div
+            className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !isDeleting) setDeleteConfirmOpen(false);
+            }}
+          >
+            <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+              <div className="p-6 text-center">
+                <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shadow-xs">
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-1">
+                  Delete Client Portal?
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
+                  Are you sure you want to delete the portal for <span className="font-bold text-slate-800">{linkToDelete.clientName}</span>? This will immediately revoke the public upload link and remove this client.
+                </p>
+                <div className="mt-4 p-3 rounded-xl bg-slate-50 border border-slate-200 text-left text-[11px] space-y-1">
+                  <div className="flex justify-between text-slate-600">
+                    <span>Client:</span>
+                    <span className="font-bold text-slate-900">{linkToDelete.clientName}</span>
+                  </div>
+                  {linkToDelete.contactName && (
+                    <div className="flex justify-between text-slate-600">
+                      <span>Contact:</span>
+                      <span className="font-medium text-slate-900">{linkToDelete.contactName}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-slate-600">
+                    <span>Expires:</span>
+                    <span className="font-medium text-slate-900">{linkToDelete.expiresAt}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="border-t border-slate-100 px-6 py-4 bg-slate-50 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setDeleteConfirmOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={handleConfirmDelete}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-xs cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-60"
+                >
+                  {isDeleting ? (
+                    <>
+                      <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      <span>Confirm Delete</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Toast Feedback */}
         {toastMessage && (

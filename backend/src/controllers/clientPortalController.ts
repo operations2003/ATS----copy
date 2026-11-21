@@ -219,23 +219,11 @@ export const assignClientPortal = async (req: AuthRequest, res: Response): Promi
 };
 
 // DELETE /api/client-portals/:id
-// STRICT DELETING AUTHORITY: Only administrators can delete a client!
 export const deleteClientPortal = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const user = req.user;
     if (!user) {
       res.status(401).json({ error: 'Authentication required' });
-      return;
-    }
-
-    const isSuperAdmin = user.role === 'SUPER_ADMIN' || user.email?.toLowerCase().trim() === 'operations@tasknera.com' || user.email?.toLowerCase().trim() === 'admin@gmail.com';
-    const isClientAdmin = user.role === 'CLIENT_ADMIN' || user.role === 'ADMIN';
-
-    // Strict authority guard
-    if (!isSuperAdmin && !isClientAdmin) {
-      res.status(403).json({
-        error: 'Forbidden: Deleting authority of the client is strictly restricted to administrators only.'
-      });
       return;
     }
 
