@@ -135,18 +135,41 @@ export default function ClientsPage() {
   }, [isClientLoaded, authLoading, isAdmin, router]);
 
   useEffect(() => {
-    // Load client share links from localStorage
-    try {
-      const stored = localStorage.getItem(CLIENT_SHARES_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          setSharedLinks(parsed);
+    // Load client share links from backend API and localStorage
+    const loadClientPortals = async () => {
+      // 1. Initial hydration from local storage
+      try {
+        const stored = localStorage.getItem(CLIENT_SHARES_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSharedLinks(parsed);
+          }
         }
+      } catch {}
+
+      // 2. Fetch authoritative client portals from backend API
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+        const res = await fetch(`${backendUrl}/client-portals`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.clientPortals) && data.clientPortals.length > 0) {
+            setSharedLinks(data.clientPortals);
+            try {
+              localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(data.clientPortals));
+            } catch {}
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load client portals from API:', err);
       }
-    } catch {
-      // ignore
-    }
+    };
+
+    loadClientPortals();
 
     // Refresh all jobs from atsStore, localStorage, and backend API
     const refreshJobs = async () => {
@@ -359,9 +382,15 @@ export default function ClientsPage() {
     return Array.from(set);
   }, [sharedLinks, jobs]);
 
-  // Aggregate client account cards from existing jobs
+  // Aggregate client account cards from existing jobs AND shared client portals
   const clientAccounts = useMemo(() => {
     const map = new Map<string, { name: string; jobsCount: number; jobTitles: string[] }>();
+    sharedLinks.forEach(l => {
+      const client = l.clientName?.trim();
+      if (client && !map.has(client)) {
+        map.set(client, { name: client, jobsCount: 0, jobTitles: [] });
+      }
+    });
     jobs.forEach(j => {
       const client = j.client?.trim() || 'General Client';
       if (!map.has(client)) {
@@ -374,7 +403,7 @@ export default function ClientsPage() {
       }
     });
     return Array.from(map.values());
-  }, [jobs]);
+  }, [jobs, sharedLinks]);
 
   // Counts JDs uploaded by this client (from local storage or jobs pool)
   const getClientUploadedJdsCount = (clientName: string) => {
@@ -640,6 +669,29 @@ export default function ClientsPage() {
     try {
       localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updatedLinks));
     } catch {}
+
+    // Sync assignment to backend API so all users across the organization see it
+    (async () => {
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+        await fetch(`${backendUrl}/client-portals/assign`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            clientName,
+            assignedMember: targetMember,
+            assignedMemberRole: targetRole,
+            assignedAt: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+          })
+        });
+      } catch (e) {
+        console.warn('Failed to sync assignment to backend API:', e);
+      }
+    })();
 
     // 2. Reassign matching jobs in atsStore & ensure all client JDs exist in atsStore
     const existingAtsJobs = atsStore.getJobs();
@@ -907,6 +959,24 @@ export default function ClientsPage() {
       // ignore
     }
 
+    // Persist new client portal to backend API
+    (async () => {
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+        await fetch(`${backendUrl}/client-portals`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(newShare)
+        });
+      } catch (err) {
+        console.warn('Failed to save client portal to backend:', err);
+      }
+    })();
+
     // If pre-assigned, cascade to any existing client jobs
     if (defaultAssignMember.trim()) {
       const adminName = user?.name || cachedEmail?.split('@')[0] || 'Administrator';
@@ -923,6 +993,11 @@ export default function ClientsPage() {
   };
 
   const handleDeleteShare = (id: string, name: string) => {
+    if (!isAdmin) {
+      showToast('Deleting authority of the client is strictly restricted to administrators only.');
+      return;
+    }
+
     const updated = sharedLinks.filter(l => l.id !== id);
     setSharedLinks(updated);
     try {
@@ -930,6 +1005,20 @@ export default function ClientsPage() {
     } catch {
       // ignore
     }
+
+    // Call backend API to delete
+    (async () => {
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
+        await fetch(`${backendUrl}/client-portals/${id}`, {
+          method: 'DELETE',
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+      } catch (err) {
+        console.warn('Failed to delete client portal from backend:', err);
+      }
+    })();
     showToast(`Revoked portal link for ${name}`);
   };
 
@@ -1066,25 +1155,33 @@ export default function ClientsPage() {
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                             Active Link
                           </span>
-                          <button
-                            type="button"
-                            title="Revoke Link"
-                            onClick={() => handleDeleteShare(link.id, link.clientName)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              title="Revoke / Delete Link"
+                              onClick={() => handleDeleteShare(link.id, link.clientName)}
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       </div>
 
                       <div className="mt-3 space-y-1.5 text-xs text-[#667085]">
                         <div className="flex items-center justify-between">
                           <span>JDs Uploaded:</span>
-                          <span className="font-semibold text-[#101828]">
-                            {uploadedCount} Job Position{uploadedCount === 1 ? '' : 's'}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenJdViewer(link)}
+                            className="font-semibold text-[#3563E9] hover:underline cursor-pointer inline-flex items-center gap-1.5"
+                            title="Click to view and upload JDs for this client"
+                          >
+                            <span>{uploadedCount} Job Position{uploadedCount === 1 ? '' : 's'}</span>
+                            <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 font-bold">View / Upload JDs</span>
+                          </button>
                         </div>
                         <div className="flex items-center justify-between">
                           <span>Assigned To:</span>
@@ -1144,16 +1241,29 @@ export default function ClientsPage() {
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-[#EAECF0] flex items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenAssignModal(link)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#EFF4FF] hover:bg-[#D1E0FF] text-[#3563E9] text-xs font-bold transition-all shadow-xs cursor-pointer"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                        </svg>
-                        <span>{assignedInfo ? 'Reassign JD' : 'Assign JD'}</span>
-                      </button>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAssignModal(link)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#EFF4FF] hover:bg-[#D1E0FF] text-[#3563E9] text-xs font-bold transition-all shadow-xs cursor-pointer"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                          </svg>
+                          <span>{assignedInfo ? 'Reassign' : 'Assign JD'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenJdViewer(link)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                          title="View and upload JDs for this client"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span>Client JDs</span>
+                        </button>
+                      </div>
 
                       <div className="flex items-center gap-3">
                         <a
@@ -2006,6 +2116,20 @@ export default function ClientsPage() {
                       type="button"
                       onClick={() => {
                         setViewJdModalOpen(false);
+                        router.push(`/jobs/create?client=${encodeURIComponent(activeViewJdLink.clientName)}`);
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-xs cursor-pointer transition-colors inline-flex items-center gap-1.5"
+                      title="Upload a new Job Description for this client requisition pool"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span>Upload JD for this Client</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewJdModalOpen(false);
                         router.push('/ats');
                       }}
                       className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-[#182230] cursor-pointer transition-colors"
@@ -2015,7 +2139,7 @@ export default function ClientsPage() {
                     <button
                       type="button"
                       onClick={() => setViewJdModalOpen(false)}
-                      className="px-5 py-2.5 rounded-xl bg-[#3563E9] hover:bg-[#2851D6] text-xs font-bold text-white shadow-xs cursor-pointer transition-colors"
+                      className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-xs font-bold text-white shadow-xs cursor-pointer transition-colors"
                     >
                       Close
                     </button>

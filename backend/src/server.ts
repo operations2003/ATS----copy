@@ -10,6 +10,7 @@ import publicRoutes from './routes/publicRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import clientShareRoutes from './routes/clientShareRoutes';
 import publicClientShareRoutes from './routes/publicClientShareRoutes';
+import clientPortalRoutes from './routes/clientPortalRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -74,6 +75,8 @@ app.use('/public/client-shares', publicClientShareRoutes);
 app.use('/api/jobs', clientShareRoutes);
 app.use('/jobs', clientShareRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/client-portals', clientPortalRoutes);
+app.use('/client-portals', clientPortalRoutes);
 
 // Evaluation Endpoints (Secured by database-level ownership)
 app.get('/api/evaluations', protect, getAllEvaluations);
