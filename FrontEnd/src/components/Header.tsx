@@ -362,16 +362,6 @@ const Header: React.FC = () => {
       ),
     },
     {
-      label: 'Subscription & Billing',
-      href: '/billing',
-      icon: (
-        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <rect x="2" y="5" width="20" height="14" rx="2" strokeWidth={2} />
-          <line x1="2" y1="10" x2="22" y2="10" strokeWidth={2} />
-        </svg>
-      ),
-    },
-    {
       label: 'Security & Audit Logs',
       href: '/audit',
       icon: (
@@ -716,28 +706,18 @@ const Header: React.FC = () => {
                           </div>
                           <p className="mt-0.5 text-[11px] leading-[1.45] text-slate-500">{notification.description}</p>
                           <p className="mt-1 text-[10px] font-medium text-slate-400">{notification.timeLabel}</p>
-                        {notification.kind === 'quota' && <Link href="/billing" onClick={() => setNotificationsOpen(false)} className="mt-1 inline-block text-[10px] font-bold text-amber-700 hover:text-amber-800">Review plan and usage →</Link>}
                         </div>
                       </div>
                     );
                   })}
                 </div>
 
-              <Link href={quotaNotifications.length > 0 ? '/billing' : '/interviews'} onClick={() => setNotificationsOpen(false)} className="flex items-center justify-center gap-1 border-t border-slate-100 px-4 py-3 text-xs font-bold text-[#5436C8] transition hover:bg-slate-50">
-                {quotaNotifications.length > 0 ? 'Manage subscription' : 'View interviews'} <span aria-hidden="true">›</span>
-                </Link>
+              <Link href="/interviews" onClick={() => setNotificationsOpen(false)} className="flex items-center justify-center gap-1 border-t border-slate-100 px-4 py-3 text-xs font-bold text-[#5436C8] transition hover:bg-slate-50">
+                View interviews <span aria-hidden="true">›</span>
+              </Link>
               </div>
             )}
           </div>
-          {user?.subscription?.isTrial && !user?.subscription?.isExpired && (
-            <div
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10.5px] font-bold uppercase tracking-wider"
-              title={`14-Day Free Trial: ${user.subscription.daysLeft} days left`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-              <span>Trial: {user.subscription.daysLeft}d left</span>
-            </div>
-          )}
         </div>
       </header>
 

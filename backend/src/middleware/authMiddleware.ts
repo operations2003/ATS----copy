@@ -97,31 +97,7 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
       createdAt: dbUser?.createdAt
     };
 
-    // Check organization subscription & 14-day free trial status if not super admin
     if (decoded.role !== 'SUPER_ADMIN' && !isSuperAdminEmail) {
-      const isExemptPath =
-        req.path === '/me' ||
-        req.path === '/change-password' ||
-        req.path === '/subscription-inquiry' ||
-        req.path.startsWith('/public');
-
-      if (!isExemptPath) {
-        try {
-          const sub = await calculateSubscriptionStatus(req.user);
-          if (sub.isExpired) {
-            res.status(403).json({
-              error: 'Your 14-day free trial has expired. Please choose a subscription model to continue using HireIQ.',
-              trialExpired: true,
-              subscriptionRequired: true,
-              subscription: sub
-            });
-            return;
-          }
-        } catch (subErr) {
-          console.warn('[AuthMiddleware] Subscription check warning:', subErr);
-        }
-      }
-
       const orgId = decoded.organizationId;
       if (orgId) {
         try {

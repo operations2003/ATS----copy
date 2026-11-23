@@ -1,7 +1,6 @@
 import React from 'react';
 import type { Metadata, Viewport } from 'next';
 import { AuthProvider } from '../context/AuthContext';
-import { SubscriptionGuard } from '../components/SubscriptionGuard';
 import '../styles/tailwind.css';
 
 export const viewport: Viewport = {
@@ -32,7 +31,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased" suppressHydrationWarning>
         <AuthProvider>
-          <SubscriptionGuard>{children}</SubscriptionGuard>
+          {children}
         </AuthProvider>
       </body>
     </html>
