@@ -79,6 +79,17 @@ const isDummyMember = (name?: string, email?: string): boolean => {
 
 const CLIENT_SHARES_STORAGE_KEY = 'tasknera_client_portal_shares_v1';
 
+const getClientAvatarGradient = (name: string): string => {
+  const n = (name || '').toLowerCase().trim();
+  if (n.startsWith('g')) return 'bg-gradient-to-br from-blue-600 to-indigo-700';
+  if (n.startsWith('r')) return 'bg-gradient-to-br from-violet-600 to-purple-700';
+  if (n.startsWith('a')) return 'bg-gradient-to-br from-emerald-600 to-teal-700';
+  if (n.startsWith('h')) return 'bg-gradient-to-br from-amber-500 to-orange-600';
+  if (n.startsWith('m') || n.startsWith('s')) return 'bg-gradient-to-br from-rose-500 to-pink-600';
+  if (n.startsWith('t') || n.startsWith('d')) return 'bg-gradient-to-br from-cyan-600 to-blue-700';
+  return 'bg-gradient-to-br from-slate-700 to-slate-900';
+};
+
 export default function ClientsPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
@@ -99,6 +110,7 @@ export default function ClientsPage() {
   const [sharedLinks, setSharedLinks] = useState<SharedClientLink[]>([]);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Assign JD to Team Member Modal State
@@ -1509,12 +1521,16 @@ export default function ClientsPage() {
     }
   };
 
-  const handleCopyLink = (url: string) => {
+  const handleCopyLink = (url: string, linkId?: string) => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(url);
       setCopiedLink(true);
+      if (linkId) setCopiedLinkId(linkId);
       showToast('✓ Link copied to clipboard!');
-      setTimeout(() => setCopiedLink(false), 2500);
+      setTimeout(() => {
+        setCopiedLink(false);
+        setCopiedLinkId(null);
+      }, 2500);
     }
   };
 
@@ -1624,165 +1640,214 @@ export default function ClientsPage() {
                 return (
                   <div
                     key={link.id}
-                    className="bg-white border border-[#EAECF0] hover:border-[#3563E9]/40 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+                    className="group bg-white border border-[#EAECF0] hover:border-[#3563E9]/40 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between relative overflow-hidden"
                   >
                     <div>
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <span className="inline-flex items-center text-base font-bold text-[#101828]">
-                            {link.clientName}
-                          </span>
-                          {link.contactName && (
-                            <p className="text-xs text-[#3563E9] font-semibold mt-0.5">
-                              Contact: {link.contactName}
+                      {/* Top Header: Client Identity & Quick Actions */}
+                      <div className="flex items-start justify-between gap-3 mb-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-white text-base shadow-xs shrink-0 ${getClientAvatarGradient(link.clientName)}`}>
+                            {(link.clientName || 'C').charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="text-base font-extrabold text-[#101828] truncate leading-tight">
+                              {link.clientName}
+                            </h3>
+                            <p className="text-xs text-[#667085] truncate mt-0.5">
+                              {link.contactName ? (
+                                <span>Contact: <strong className="font-semibold text-slate-700">{link.contactName}</strong></span>
+                              ) : (
+                                <span className="text-slate-400">Client Talent Portal</span>
+                              )}
                             </p>
-                          )}
+                          </div>
                         </div>
-                        <div className="flex items-center">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             Active Link
                           </span>
-                        </div>
-                      </div>
 
-                      <div className="mt-3 space-y-1.5 text-xs text-[#667085]">
-                        <div className="flex items-center justify-between">
-                          <span>JDs Uploaded:</span>
+                          {link.clientEmail && (
+                            <a
+                              href={`mailto:${link.clientEmail}?subject=${encodeURIComponent(`Hiring & JD Submission Portal: ${link.clientName}`)}&body=${encodeURIComponent(`Hello ${link.contactName || link.clientName},\n\nPlease use your secure link below to upload your Job Descriptions directly into our screening system:\n\n${link.shareUrl}\n\nBest regards,\nRecruitment Team`)}`}
+                              className="p-1.5 rounded-xl text-slate-400 hover:text-[#3563E9] hover:bg-slate-100 transition-colors"
+                              title={`Send email to ${link.clientEmail}`}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                            </a>
+                          )}
+
                           <button
                             type="button"
-                            onClick={() => handleOpenJdViewer(link)}
-                            className="font-semibold text-[#3563E9] hover:underline cursor-pointer inline-flex items-center gap-1.5"
-                            title="Click to view and upload JDs for this client"
+                            onClick={() => handleOpenEditModal(link)}
+                            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                            title={`Edit ${link.clientName} portal details`}
                           >
-                            <span>{uploadedCount} Job Position{uploadedCount === 1 ? '' : 's'}</span>
-                            <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 font-bold">View / Upload JDs</span>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDeleteConfirm(link)}
+                            className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            title={`Delete ${link.clientName} portal`}
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
                           </button>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span>Assigned To:</span>
-                          {assignedInfo ? (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenAssignModal(link)}
-                              className="font-bold text-[#101828] hover:text-[#3563E9] inline-flex items-center gap-1.5 cursor-pointer transition-colors group"
-                              title="Click to reassign member"
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                              <span className="truncate max-w-[145px]">{assignedInfo.name}</span>
-                              <svg className="w-3 h-3 text-slate-400 group-hover:text-[#3563E9] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                              </svg>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenAssignModal(link)}
-                              className="font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded-md border border-amber-200 text-[10px] cursor-pointer transition-colors inline-flex items-center gap-1"
-                              title="Click to assign team member"
-                            >
-                              <span>Unassigned</span>
-                              <span className="text-[10px] font-bold text-amber-600">+</span>
-                            </button>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>Expires:</span>
-                          <span className="font-medium text-[#101828]">{link.expiresAt}</span>
-                        </div>
-                        {link.clientEmail && (
-                          <div className="flex items-center justify-between">
-                            <span>Email:</span>
-                            <span className="font-medium text-[#101828] truncate max-w-[170px]">{link.clientEmail}</span>
-                          </div>
-                        )}
                       </div>
 
-                      <div className="mt-4 p-2.5 rounded-xl bg-slate-50 border border-[#EAECF0] flex items-center gap-2">
-                        <input
-                          type="text"
-                          readOnly
-                          value={link.shareUrl}
-                          title="Client portal link"
-                          className="w-full bg-transparent text-[11px] font-mono text-[#667085] outline-none select-all truncate"
-                        />
+                      {/* 2-Tile Showcase: JDs & Assigned Recruiter */}
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        {/* Tile 1: JDs Uploaded */}
+                        <div
+                          onClick={() => handleOpenJdViewer(link)}
+                          className="bg-[#F8F9FC] hover:bg-[#EFF4FF] border border-[#EAECF0] hover:border-[#D1E0FF] rounded-2xl p-3.5 transition-all cursor-pointer group/tile flex flex-col justify-between"
+                          title="Click to view & upload JDs"
+                        >
+                          <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-[#667085] group-hover/tile:text-[#3563E9]">
+                            <span>Requisitions</span>
+                            <span className="text-[10px] text-[#3563E9] font-bold group-hover/tile:underline">View →</span>
+                          </div>
+                          <div className="my-1.5 flex items-baseline gap-1.5">
+                            <span className="text-xl font-black text-[#101828]">
+                              {uploadedCount}
+                            </span>
+                            <span className="text-xs font-semibold text-[#667085]">
+                              {uploadedCount === 1 ? 'Job Position' : 'Job Positions'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-bold text-[#3563E9] flex items-center gap-1">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span>{uploadedCount > 0 ? 'Review JDs' : 'Upload First JD'}</span>
+                          </div>
+                        </div>
+
+                        {/* Tile 2: Assigned Recruiter */}
+                        <div
+                          onClick={() => handleOpenAssignModal(link)}
+                          className="bg-[#F8F9FC] hover:bg-slate-100 border border-[#EAECF0] rounded-2xl p-3.5 transition-all cursor-pointer group/rec flex flex-col justify-between"
+                          title="Click to change recruiter assignment"
+                        >
+                          <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-[#667085]">
+                            <span>Assigned To</span>
+                            <svg className="w-3.5 h-3.5 text-slate-400 group-hover/rec:text-[#3563E9] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </div>
+                          {assignedInfo ? (
+                            <div>
+                              <div className="my-1.5 flex items-center gap-1.5">
+                                <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold flex items-center justify-center shrink-0 border border-emerald-200">
+                                  {assignedInfo.name.charAt(0)}
+                                </div>
+                                <span className="text-xs font-bold text-[#101828] truncate max-w-[95px]">
+                                  {assignedInfo.name}
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-emerald-700 font-semibold truncate flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                <span>{assignedInfo.role || 'Technical Recruiter'}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="my-1.5 text-xs font-bold text-amber-700 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                                <span>Unassigned</span>
+                              </div>
+                              <div className="text-[11px] font-bold text-[#3563E9] hover:underline flex items-center gap-1">
+                                <span>+ Assign Lead</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Clean Share URL Bar with 1-Click Copy */}
+                      <div className="mb-4 p-2.5 rounded-2xl bg-[#F8F9FC] border border-[#EAECF0] flex items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2 min-w-0 pl-1">
+                          <div className="w-6 h-6 rounded-lg bg-white border border-[#EAECF0] flex items-center justify-center shrink-0 text-slate-500 shadow-2xs">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            </svg>
+                          </div>
+                          <span className="text-[11px] font-mono text-slate-600 truncate select-all" title={link.shareUrl}>
+                            {link.shareUrl.replace(/^https?:\/\//, '')}
+                          </span>
+                        </div>
+
                         <button
                           type="button"
-                          onClick={() => handleCopyLink(link.shareUrl)}
-                          className="shrink-0 text-xs font-bold text-[#667085] hover:text-[#101828] hover:underline cursor-pointer"
+                          onClick={() => handleCopyLink(link.shareUrl, link.id)}
+                          className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                            copiedLinkId === link.id
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-white hover:bg-slate-100 text-[#101828] border border-[#EAECF0]'
+                          }`}
+                          title="Copy client portal link"
                         >
-                          Copy
+                          {copiedLinkId === link.id ? (
+                            <>
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                              </svg>
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                              <span>Copy</span>
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-[#EAECF0] flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenAssignModal(link)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#EFF4FF] hover:bg-[#D1E0FF] text-[#3563E9] text-xs font-bold transition-all shadow-xs cursor-pointer"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                          </svg>
-                          <span>{assignedInfo ? 'Reassign' : 'Assign JD'}</span>
-                        </button>
+                    {/* Action Footer: Expiry + Clear Primary Actions */}
+                    <div className="pt-3 border-t border-[#EAECF0] flex items-center justify-between gap-3">
+                      <div className="text-[11px] text-[#667085] flex items-center gap-1">
+                        <span>Expires:</span>
+                        <span className="font-semibold text-slate-700">{link.expiresAt}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => handleOpenJdViewer(link)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all shadow-xs cursor-pointer"
-                          title="View and upload JDs for this client"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          <span>Client JDs</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditModal(link)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200 text-xs font-bold transition-all shadow-xs cursor-pointer"
-                          title={`Edit ${link.clientName} portal details`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                          title="Click to view JDs or upload a new requisition"
                         >
                           <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
-                          <span>Edit</span>
+                          <span>JDs ({uploadedCount})</span>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenDeleteConfirm(link)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 border border-rose-200 text-xs font-bold transition-all shadow-xs cursor-pointer"
-                          title={`Delete ${link.clientName} portal`}
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          <span>Delete</span>
-                        </button>
-                      </div>
 
-                      <div className="flex items-center gap-3">
                         <a
                           href={link.shareUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs font-bold text-[#667085] hover:text-[#3563E9] transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#101828] hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                          title="Preview the exact live portal client sees"
                         >
                           <span>Preview Portal</span>
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                           </svg>
                         </a>
-
-                        {link.clientEmail && (
-                          <a
-                            href={`mailto:${link.clientEmail}?subject=${encodeURIComponent(`Hiring & JD Submission Portal: ${link.clientName}`)}&body=${encodeURIComponent(`Hello ${link.contactName || link.clientName},\n\nPlease use your secure link below to upload your Job Descriptions directly into our screening system:\n\n${link.shareUrl}\n\nBest regards,\nRecruitment Team`)}`}
-                            className="text-xs font-semibold text-[#667085] hover:text-[#101828] cursor-pointer"
-                          >
-                            Send Email
-                          </a>
-                        )}
                       </div>
                     </div>
                   </div>
