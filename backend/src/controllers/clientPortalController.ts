@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import fs from 'fs';
 import path from 'path';
+import prisma from '../config/prisma';
 import { AuthRequest } from '../middleware/authMiddleware';
 
 export interface ClientJdRecord {
@@ -84,119 +85,106 @@ const savePortals = (portals: ClientPortalRecord[]): void => {
 // Initialize
 loadPortals();
 
-// Ensure standard client portals exist so all users and links resolve seamlessly
-const ensureSeedPortals = () => {
-  const seeds: ClientPortalRecord[] = [
-    {
-      id: 'cli-mwq8q-globiz',
-      clientName: 'Globiz',
-      contactName: 'Operations Lead',
-      clientEmail: 'hiring@globiz.com',
-      token: 'cli-mwq8q',
-      shareUrl: 'https://ats-copy.vercel.app/share/cli-mwq8q?client=Globiz',
-      expiresAt: 'Dec 5, 2026',
-      createdAt: 'Active',
-      views: 5,
-      organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
-      jds: [
-        {
-          id: 'jd-globiz-full-stack',
-          title: 'TaskNera Full Stack Developer',
-          description: 'Client uploaded Job Description PDF: TaskNera_Full_Stack_Developer_JD.pdf',
-          location: 'Remote / Hybrid',
-          workMode: 'Hybrid',
-          mode: 'Hybrid',
-          salary: 'Competitive Market Rate',
-          status: 'Agency Sourcing Candidates',
-          createdAt: 'Just now',
-          mandatoryRequirementsCount: 3,
-          uploadedBy: 'CLIENT',
-          fileName: 'TaskNera_Full_Stack_Developer_JD.pdf'
-        }
-      ]
-    },
-    {
-      id: 'cli-mwq8p-recruiter-v',
-      clientName: 'Recruiter V',
-      contactName: 'Talent Acquisition Team',
-      clientEmail: 'talent@recruiterv.com',
-      token: 'cli-mwq8p',
-      shareUrl: 'https://ats-copy.vercel.app/share/cli-mwq8p?client=Recruiter%20V',
-      expiresAt: 'Dec 5, 2026',
-      createdAt: 'Active',
-      views: 3,
-      organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
-      jds: []
-    },
-    {
-      id: 'cli-mwq8j-acs',
-      clientName: 'ACS',
-      contactName: 'Staffing Director',
-      clientEmail: 'careers@acs.com',
-      token: 'cli-mwq8j',
-      shareUrl: 'https://ats-copy.vercel.app/share/cli-mwq8j?client=ACS',
-      expiresAt: 'Dec 5, 2026',
-      createdAt: 'Active',
-      views: 4,
-      organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
-      jds: []
-    },
-    {
-      id: 'cli-mwq8k-hirenest',
-      clientName: 'HireNest',
-      contactName: 'Hiring Operations',
-      clientEmail: 'partner@hirenest.com',
-      token: 'cli-mwq8k',
-      shareUrl: 'https://ats-copy.vercel.app/share/cli-mwq8k?client=HireNest',
-      expiresAt: 'Dec 5, 2026',
-      createdAt: 'Active',
-      views: 2,
-      organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
-      jds: []
-    },
-    {
-      id: 'share-hexaware-default',
-      clientName: 'Hexaware',
-      contactName: 'Rohit Verma',
-      clientEmail: 'hiring@hexaware.com',
-      token: 'client_hexaware_portal_token',
-      shareUrl: 'https://ats-copy.vercel.app/share/client_hexaware_portal_token?client=Hexaware',
-      expiresAt: 'Never',
-      createdAt: 'Active',
-      views: 12,
-      organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
-      jds: []
-    }
-  ];
-
-  let added = false;
-  for (const s of seeds) {
-    const existing = portalCache.find(
-      p => p.clientName.toLowerCase().trim() === s.clientName.toLowerCase().trim() ||
-        p.token === s.token ||
-        p.id === s.id
-    );
-    if (!existing) {
-      portalCache.push(s);
-      added = true;
-    } else {
-      // Merge seed JDs if portal has 0 JDs so Globiz / standard portals always have authoritative JDs
-      if ((!existing.jds || existing.jds.length === 0) && s.jds && s.jds.length > 0) {
-        existing.jds = [...s.jds];
-        added = true;
+// Persist a portal record to PostgreSQL via AuditLog for durable cross-restart persistence
+const persistPortalToDb = async (portal: ClientPortalRecord): Promise<void> => {
+  try {
+    const existing = await prisma.auditLog.findFirst({
+      where: {
+        targetType: 'CLIENT_PORTAL',
+        targetId: portal.id
       }
+    });
+    if (existing) {
+      await prisma.auditLog.update({
+        where: { id: existing.id },
+        data: {
+          organizationId: portal.organizationId || 'org-tasknera',
+          action: 'CLIENT_PORTAL_UPDATED',
+          details: portal as any
+        }
+      });
+    } else {
+      await prisma.auditLog.create({
+        data: {
+          organizationId: portal.organizationId || 'org-tasknera',
+          action: 'CLIENT_PORTAL_SAVED',
+          targetType: 'CLIENT_PORTAL',
+          targetId: portal.id,
+          details: portal as any
+        }
+      });
     }
-  }
-  if (added) {
-    savePortals(portalCache);
+  } catch (err: any) {
+    console.warn('[ClientPortals] Failed to persist portal to PostgreSQL:', err?.message || err);
   }
 };
-ensureSeedPortals();
+
+// Delete a portal from PostgreSQL
+const deletePortalFromDb = async (id: string): Promise<void> => {
+  try {
+    await prisma.auditLog.deleteMany({
+      where: {
+        targetType: 'CLIENT_PORTAL',
+        targetId: id
+      }
+    });
+  } catch (err: any) {
+    console.warn('[ClientPortals] Failed to delete portal from PostgreSQL:', err?.message || err);
+  }
+};
+
+// Restore portals from PostgreSQL on server startup or fetch
+const restorePortalsFromDb = async (): Promise<void> => {
+  try {
+    const dbLogs = await prisma.auditLog.findMany({
+      where: { targetType: 'CLIENT_PORTAL' },
+      orderBy: { createdAt: 'desc' }
+    });
+    if (dbLogs && dbLogs.length > 0) {
+      const seen = new Set<string>();
+      const restored: ClientPortalRecord[] = [];
+      for (const log of dbLogs) {
+        if (log.targetId && !seen.has(log.targetId) && log.details) {
+          seen.add(log.targetId);
+          restored.push(log.details as any);
+        }
+      }
+      if (restored.length > 0) {
+        const mergedMap = new Map<string, ClientPortalRecord>();
+        portalCache.forEach(p => mergedMap.set(p.id, p));
+        restored.forEach(p => {
+          if (!mergedMap.has(p.id)) {
+            mergedMap.set(p.id, p);
+          } else {
+            const existing = mergedMap.get(p.id)!;
+            const existingJdIds = new Set((existing.jds || []).map(j => j.id));
+            (p.jds || []).forEach(j => {
+              if (!existingJdIds.has(j.id)) {
+                existing.jds = existing.jds || [];
+                existing.jds.push(j);
+              }
+            });
+            if (p.assignedMember && !existing.assignedMember) {
+              existing.assignedMember = p.assignedMember;
+              existing.assignedMemberRole = p.assignedMemberRole;
+              existing.assignedAt = p.assignedAt;
+            }
+          }
+        });
+        portalCache = Array.from(mergedMap.values());
+        savePortals(portalCache);
+      }
+    }
+  } catch (err: any) {
+    console.warn('[ClientPortals] Failed to restore from PostgreSQL:', err?.message || err);
+  }
+};
 
 // GET /api/client-portals
 export const getClientPortals = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     loadPortals();
+    await restorePortalsFromDb();
     const user = req.user;
     if (!user) {
       res.status(200).json({ success: true, clientPortals: portalCache });
@@ -268,6 +256,7 @@ export const saveClientPortal = async (req: AuthRequest, res: Response): Promise
     }
 
     savePortals(portalCache);
+    persistPortalToDb(existingIdx !== -1 ? portalCache[existingIdx] : newRecord).catch(() => {});
 
     res.status(201).json({ success: true, clientPortal: newRecord });
   } catch (err: any) {
@@ -321,6 +310,11 @@ export const assignClientPortal = async (req: AuthRequest, res: Response): Promi
 
     savePortals(portalCache);
 
+    const targetPortal = portalCache.find(p => p.clientName.toLowerCase().trim() === clientName.toLowerCase().trim());
+    if (targetPortal) {
+      persistPortalToDb(targetPortal).catch(() => {});
+    }
+
     res.status(200).json({ success: true, message: `Assigned ${clientName} to ${assignedMember}` });
   } catch (err: any) {
     console.error('[Assign Client Portal Error]', err);
@@ -337,11 +331,11 @@ export const deleteClientPortal = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const { id } = req.params;
+    const rawId = Array.isArray(req.params.id) ? req.params.id[0] : String(req.params.id || '');
     loadPortals();
 
     const initialLength = portalCache.length;
-    portalCache = portalCache.filter(p => p.id !== id);
+    portalCache = portalCache.filter(p => p.id !== rawId);
 
     if (portalCache.length === initialLength) {
       res.status(404).json({ error: 'Client portal not found' });
@@ -349,6 +343,7 @@ export const deleteClientPortal = async (req: AuthRequest, res: Response): Promi
     }
 
     savePortals(portalCache);
+    deletePortalFromDb(rawId).catch(() => {});
 
     res.status(200).json({ success: true, message: 'Client portal deleted successfully' });
   } catch (err: any) {
@@ -366,12 +361,12 @@ export const updateClientPortal = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const { id } = req.params;
+    const rawId = Array.isArray(req.params.id) ? req.params.id[0] : String(req.params.id || '');
     const updates = req.body;
 
     loadPortals();
 
-    const idx = portalCache.findIndex(p => p.id === id);
+    const idx = portalCache.findIndex(p => p.id === rawId);
     if (idx === -1) {
       res.status(404).json({ error: 'Client portal not found' });
       return;
@@ -380,11 +375,12 @@ export const updateClientPortal = async (req: AuthRequest, res: Response): Promi
     portalCache[idx] = {
       ...portalCache[idx],
       ...updates,
-      id,
+      id: rawId,
       jds: updates.jds !== undefined ? updates.jds : (portalCache[idx].jds || [])
     };
 
     savePortals(portalCache);
+    persistPortalToDb(portalCache[idx]).catch(() => {});
 
     res.status(200).json({ success: true, clientPortal: portalCache[idx] });
   } catch (err: any) {
@@ -541,6 +537,7 @@ export const addJdToClientPortalPublic = async (req: any, res: Response): Promis
     }
 
     savePortals(portalCache);
+    persistPortalToDb(portal).catch(() => {});
 
     res.status(200).json({ success: true, jds: portal.jds, clientPortal: portal });
   } catch (err: any) {
@@ -592,6 +589,7 @@ export const addJdToClientPortalAuth = async (req: AuthRequest, res: Response): 
     }
 
     savePortals(portalCache);
+    persistPortalToDb(portal).catch(() => {});
 
     res.status(200).json({ success: true, jds: portal.jds, clientPortal: portal });
   } catch (err: any) {

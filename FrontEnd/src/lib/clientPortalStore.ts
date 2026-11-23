@@ -217,3 +217,18 @@ export const findPortalMemory = (tokenOrName: string, clientQuery?: string): Cli
 
   return portal;
 };
+
+export const deletePortalMemory = (idOrToken: string): boolean => {
+  const store = getClientPortalsMemory();
+  const raw = String(idOrToken || '').toLowerCase().trim();
+  const idx = store.findIndex(
+    p => p.id.toLowerCase() === raw || p.token.toLowerCase() === raw || p.clientName.toLowerCase().trim() === raw
+  );
+  if (idx !== -1) {
+    store.splice(idx, 1);
+    return true;
+  }
+  return false;
+};
+
+

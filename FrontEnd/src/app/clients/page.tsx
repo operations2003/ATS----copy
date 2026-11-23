@@ -179,10 +179,10 @@ export default function ClientsPage() {
   useEffect(() => {
     // Load client share links from backend API and localStorage with union merge
     const loadClientPortals = async () => {
-      // 1. Initial hydration from local storage
+      // 1. Initial hydration from local storage (supporting both modern and legacy keys)
       let localPortals: SharedClientLink[] = [];
       try {
-        const stored = localStorage.getItem(CLIENT_SHARES_STORAGE_KEY);
+        const stored = localStorage.getItem(CLIENT_SHARES_STORAGE_KEY) || localStorage.getItem('tasknera_client_shares');
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -190,7 +190,7 @@ export default function ClientsPage() {
             setSharedLinks(parsed);
           }
         }
-      } catch {}
+      } catch { }
 
       // 2. Fetch authoritative client portals from backend API
       try {
@@ -226,7 +226,7 @@ export default function ClientsPage() {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                   body: JSON.stringify(lp)
-                }).catch(() => {});
+                }).catch(() => { });
               }
             } else {
               // Combine JDs without dropping any uploaded by client or recruiter
@@ -287,7 +287,7 @@ export default function ClientsPage() {
                     });
                   }
                 }
-              } catch {}
+              } catch { }
             });
           }
 
@@ -296,7 +296,8 @@ export default function ClientsPage() {
             setSharedLinks(finalLinks);
             try {
               localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(finalLinks));
-            } catch {}
+              localStorage.setItem('tasknera_client_shares', JSON.stringify(finalLinks));
+            } catch { }
           }
         }
       } catch (err) {
@@ -315,7 +316,7 @@ export default function ClientsPage() {
         atsStore.getJobs().forEach(j => {
           if (j.id) combined.set(String(j.id), j);
         });
-      } catch {}
+      } catch { }
 
       // 2. tasknera_created_jobs
       try {
@@ -345,7 +346,7 @@ export default function ClientsPage() {
             }
           });
         }
-      } catch {}
+      } catch { }
 
       // 3. Backend jobs
       try {
@@ -380,7 +381,7 @@ export default function ClientsPage() {
             } as JobItem);
           });
         }
-      } catch {}
+      } catch { }
 
       setJobs(Array.from(combined.values()));
     };
@@ -407,7 +408,7 @@ export default function ClientsPage() {
     // 2. Fetch live users belonging to the current organization from backend
     const fetchRealOrganizationUsers = async () => {
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const backendUrl = getResolvedBackendUrl();
         const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -432,7 +433,7 @@ export default function ClientsPage() {
               });
             }
           }
-        } catch (_) {}
+        } catch (_) { }
 
         // Fetch /users/ta-members (TA recruiters & members)
         try {
@@ -455,7 +456,7 @@ export default function ClientsPage() {
               });
             }
           }
-        } catch (_) {}
+        } catch (_) { }
 
         // 3. Ensure current authenticated user is included
         const currentName = user?.name || (typeof window !== 'undefined' ? localStorage.getItem('tasknera_name') : null);
@@ -491,7 +492,7 @@ export default function ClientsPage() {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) setSharedLinks(parsed);
         }
-      } catch {}
+      } catch { }
     };
 
     window.addEventListener('tasknera_jobs_updated', handleUpdate);
@@ -509,7 +510,7 @@ export default function ClientsPage() {
             refreshJobs();
           }
         };
-      } catch {}
+      } catch { }
     }
 
     // Live bidirectional sync: poll backend every 5 seconds for new client JDs
@@ -613,7 +614,7 @@ export default function ClientsPage() {
             });
           }
         }
-      } catch {}
+      } catch { }
 
       // 3. Local storage tasknera_created_jobs
       try {
@@ -629,7 +630,7 @@ export default function ClientsPage() {
             });
           }
         }
-      } catch {}
+      } catch { }
     }
 
     // 4. ATS store jobs
@@ -737,9 +738,9 @@ export default function ClientsPage() {
       const rawCreated = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
       const existingCreated = Array.isArray(rawCreated)
         ? rawCreated.filter((cj: any) => {
-            const p = String(cj.position || cj.title || '').toLowerCase().trim();
-            return p && p !== 'client requisition' && p !== 'requisition role';
-          })
+          const p = String(cj.position || cj.title || '').toLowerCase().trim();
+          return p && p !== 'client requisition' && p !== 'requisition role';
+        })
         : [];
       let modified = rawCreated.length !== existingCreated.length;
 
@@ -763,7 +764,7 @@ export default function ClientsPage() {
             const idx = existingCreated.findIndex((cj: any) =>
               (item.id && String(cj.id) === String(item.id)) ||
               (clientNameClean && (String(cj.client || '')).toLowerCase().trim() === clientNameClean &&
-               (String(cj.position || cj.title || '')).toLowerCase().trim() === itemTitle)
+                (String(cj.position || cj.title || '')).toLowerCase().trim() === itemTitle)
             );
 
             if (idx >= 0) {
@@ -889,12 +890,13 @@ export default function ClientsPage() {
     setSharedLinks(updatedLinks);
     try {
       localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updatedLinks));
-    } catch {}
+      localStorage.setItem('tasknera_client_shares', JSON.stringify(updatedLinks));
+    } catch { }
 
     // Sync assignment to backend API so all users across the organization see it
     (async () => {
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const backendUrl = getResolvedBackendUrl();
         const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
         await fetch(`${backendUrl}/client-portals/assign`, {
           method: 'POST',
@@ -916,7 +918,7 @@ export default function ClientsPage() {
 
     // 2. Reassign matching jobs in atsStore & ensure all client JDs exist in atsStore
     const existingAtsJobs = atsStore.getJobs();
-    
+
     // Sync each client JD into atsStore
     clientJds.forEach(item => {
       if (!item || !item.title) return;
@@ -924,9 +926,9 @@ export default function ClientsPage() {
       const clientNameNorm = String(clientName || '').toLowerCase().trim();
       if (selectedJobScope === 'ALL' || item.id === selectedJobScope) {
         const found = existingAtsJobs.find(
-          j => (item.id && String(j.id) === String(item.id)) || 
-               (clientNameNorm && String(j.client || '').toLowerCase().trim() === clientNameNorm &&
-                String(j.title || '').toLowerCase().trim() === itemTitleNorm)
+          j => (item.id && String(j.id) === String(item.id)) ||
+            (clientNameNorm && String(j.client || '').toLowerCase().trim() === clientNameNorm &&
+              String(j.title || '').toLowerCase().trim() === itemTitleNorm)
         );
         if (found) {
           atsStore.reassignJob(found.id, targetMember, adminName, targetRole);
@@ -954,7 +956,7 @@ export default function ClientsPage() {
               totalRequirementsCount: 6,
               description: item.description || `Requisition intake for ${clientName}`
             }, adminName, 'ADMIN');
-          } catch {}
+          } catch { }
         }
       }
     });
@@ -976,7 +978,7 @@ export default function ClientsPage() {
             localStorage.setItem(storageKey, JSON.stringify(updatedClientJds));
           }
         }
-      } catch {}
+      } catch { }
     }
 
     // 3b. Sync assigned job(s) directly into tasknera_created_jobs & tasknera_all_jobs so it appears in the member's Jobs & Requisitions list
@@ -985,9 +987,9 @@ export default function ClientsPage() {
         const rawCreatedJobs = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
         const existingCreated = Array.isArray(rawCreatedJobs)
           ? rawCreatedJobs.filter((cj: any) => {
-              const p = String(cj.position || cj.title || '').toLowerCase().trim();
-              return p && p !== 'client requisition' && p !== 'requisition role';
-            })
+            const p = String(cj.position || cj.title || '').toLowerCase().trim();
+            return p && p !== 'client requisition' && p !== 'requisition role';
+          })
           : [];
         const updatedWorker = {
           id: `rec-${targetMember.toLowerCase().replace(/\s+/g, '-')}`,
@@ -1011,7 +1013,7 @@ export default function ClientsPage() {
             const existingIdx = existingCreated.findIndex((cj: any) =>
               (item.id && String(cj.id) === String(item.id)) ||
               (clientNameNorm && String(cj.client || '').toLowerCase().trim() === clientNameNorm &&
-               String(cj.position || cj.title || '').toLowerCase().trim() === itemTitleNorm)
+                String(cj.position || cj.title || '').toLowerCase().trim() === itemTitleNorm)
             );
 
             if (existingIdx >= 0) {
@@ -1069,7 +1071,7 @@ export default function ClientsPage() {
             const allIdx = existingAll.findIndex((aj: any) =>
               (item.id && String(aj.id) === String(item.id)) ||
               (clientNameNorm && String(aj.client || '').toLowerCase().trim() === clientNameNorm &&
-               String(aj.position || aj.title || '').toLowerCase().trim() === itemTitleNorm)
+                String(aj.position || aj.title || '').toLowerCase().trim() === itemTitleNorm)
             );
             if (allIdx >= 0) {
               existingAll[allIdx] = {
@@ -1105,7 +1107,7 @@ export default function ClientsPage() {
           badge: 'Assigned'
         };
         localStorage.setItem(actStorageKey, JSON.stringify([newAct, ...(Array.isArray(parsedActs) ? parsedActs : [])]));
-      } catch {}
+      } catch { }
     }
 
     // 5. Ensure member is registered in atsStore
@@ -1147,7 +1149,7 @@ export default function ClientsPage() {
 
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const token = `cli-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-    
+
     // Construct direct URL with client name and contact parameters
     const queryParams = new URLSearchParams();
     queryParams.set('client', targetCompany);
@@ -1155,7 +1157,7 @@ export default function ClientsPage() {
       queryParams.set('contact', contactPersonName.trim());
     }
     const fullUrl = `${origin}/share/${token}?${queryParams.toString()}`;
-    
+
     let expiryLabel = 'Never';
     if (expirationDays > 0) {
       const expiryDate = new Date();
@@ -1188,6 +1190,7 @@ export default function ClientsPage() {
 
     try {
       localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updated));
+      localStorage.setItem('tasknera_client_shares', JSON.stringify(updated));
     } catch {
       // ignore
     }
@@ -1195,7 +1198,7 @@ export default function ClientsPage() {
     // Persist new client portal to backend API
     (async () => {
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const backendUrl = getResolvedBackendUrl();
         const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
         await fetch(`${backendUrl}/client-portals`, {
           method: 'POST',
@@ -1286,7 +1289,7 @@ export default function ClientsPage() {
         user?.name || currentEmail || 'Agency Team',
         'AGENCY'
       );
-    } catch {}
+    } catch { }
 
     // 2. Add to localStorage tasknera_client_jds_${clientName}
     try {
@@ -1295,7 +1298,7 @@ export default function ClientsPage() {
       const updatedList = [newJdItem, ...(Array.isArray(existing) ? existing : [])];
       localStorage.setItem(cleanKey, JSON.stringify(updatedList));
       localStorage.setItem(`tasknera_client_jds_${clientName}`, JSON.stringify(updatedList));
-    } catch {}
+    } catch { }
 
     // 3. Add to tasknera_created_jobs
     try {
@@ -1319,11 +1322,11 @@ export default function ClientsPage() {
         description: newJdItem.description
       };
       localStorage.setItem('tasknera_created_jobs', JSON.stringify([createdEntry, ...(Array.isArray(createdList) ? createdList : [])]));
-    } catch {}
+    } catch { }
 
     // 4. Send to backend API so it syncs immediately to the client's live portal
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const backendUrl = getResolvedBackendUrl();
       const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
       await fetch(`${backendUrl}/client-portals/${quickJdClient.id}/jds`, {
         method: 'POST',
@@ -1337,8 +1340,8 @@ export default function ClientsPage() {
       console.warn('Failed to upload JD to backend:', err);
     }
 
-    // 5. Update sharedLinks locally
-    setSharedLinks(prev => prev.map(l => {
+    // 5. Update sharedLinks locally and persist to storage
+    const updatedWithJd = sharedLinks.map(l => {
       if (l.id === quickJdClient.id || l.clientName.toLowerCase().trim() === clientName.toLowerCase().trim()) {
         const currentJds = Array.isArray(l.jds) ? l.jds : [];
         return {
@@ -1347,7 +1350,12 @@ export default function ClientsPage() {
         };
       }
       return l;
-    }));
+    });
+    setSharedLinks(updatedWithJd);
+    try {
+      localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updatedWithJd));
+      localStorage.setItem('tasknera_client_shares', JSON.stringify(updatedWithJd));
+    } catch {}
 
     setIsSubmittingQuickJd(false);
     setQuickJdModalOpen(false);
@@ -1433,7 +1441,8 @@ export default function ClientsPage() {
     // Save to local storage
     try {
       localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updatedLinksList));
-    } catch {}
+      localStorage.setItem('tasknera_client_shares', JSON.stringify(updatedLinksList));
+    } catch { }
 
     // If client name changed, migrate client JDs cache
     if (oldClientName.toLowerCase().trim() !== newClientName.toLowerCase().trim()) {
@@ -1448,12 +1457,12 @@ export default function ClientsPage() {
           localStorage.setItem(newCleanKey, existingJds);
           localStorage.setItem(newKey, existingJds);
         }
-      } catch {}
+      } catch { }
     }
 
     // Call backend API PUT /api/client-portals/:id
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const backendUrl = getResolvedBackendUrl();
       const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
       await fetch(`${backendUrl}/client-portals/${editingLink.id}`, {
         method: 'PUT',
@@ -1488,18 +1497,19 @@ export default function ClientsPage() {
     setSharedLinks(updated);
     try {
       localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updated));
-    } catch {}
+      localStorage.setItem('tasknera_client_shares', JSON.stringify(updated));
+    } catch { }
 
     // Clean up client JDs cache for this client
     try {
       const cleanKey = `tasknera_client_jds_${name.replace(/\s+/g, '_')}`;
       localStorage.removeItem(cleanKey);
       localStorage.removeItem(`tasknera_client_jds_${name}`);
-    } catch {}
+    } catch { }
 
     // Call backend API to delete
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const backendUrl = getResolvedBackendUrl();
       const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
       await fetch(`${backendUrl}/client-portals/${id}`, {
         method: 'DELETE',
@@ -1524,7 +1534,7 @@ export default function ClientsPage() {
       setSharedLinks(updated);
       try {
         localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updated));
-      } catch {}
+      } catch { }
       showToast(`Revoked portal link for ${name}`);
     }
   };
@@ -1779,11 +1789,10 @@ export default function ClientsPage() {
                         <button
                           type="button"
                           onClick={() => handleCopyLink(link.shareUrl, link.id)}
-                          className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-                            copiedLinkId === link.id
+                          className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${copiedLinkId === link.id
                               ? 'bg-emerald-600 text-white'
                               : 'bg-white hover:bg-slate-100 text-[#101828] border border-[#EAECF0]'
-                          }`}
+                            }`}
                           title="Copy client portal link"
                         >
                           {copiedLinkId === link.id ? (
@@ -2092,11 +2101,10 @@ export default function ClientsPage() {
                       <button
                         type="button"
                         onClick={() => handleCopyLink(generatedLink)}
-                        className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                          copiedLink
+                        className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${copiedLink
                             ? 'bg-emerald-600 text-white'
                             : 'bg-[#3563E9] hover:bg-[#2851D6] text-white'
-                        }`}
+                          }`}
                       >
                         {copiedLink ? '✓ Copied' : 'Copy Link'}
                       </button>
@@ -2355,11 +2363,10 @@ export default function ClientsPage() {
                           Requisition Assignment Scope
                         </label>
                         <div className="grid grid-cols-1 gap-2">
-                          <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
-                            selectedJobScope === 'ALL'
+                          <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${selectedJobScope === 'ALL'
                               ? 'bg-[#EFF4FF] border-[#3563E9] text-[#101828]'
                               : 'bg-white border-[#EAECF0] text-[#667085] hover:bg-slate-50'
-                          }`}>
+                            }`}>
                             <input
                               type="radio"
                               name="jobScope"
@@ -2373,11 +2380,10 @@ export default function ClientsPage() {
                           {clientJds.map(job => (
                             <label
                               key={job.id}
-                              className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
-                                selectedJobScope === job.id
+                              className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${selectedJobScope === job.id
                                   ? 'bg-[#EFF4FF] border-[#3563E9] text-[#101828]'
                                   : 'bg-white border-[#EAECF0] text-[#667085] hover:bg-slate-50'
-                              }`}
+                                }`}
                             >
                               <input
                                 type="radio"
@@ -2535,11 +2541,10 @@ export default function ClientsPage() {
                                 key={jd.id || idx}
                                 type="button"
                                 onClick={() => setSelectedJdDetailIndex(idx)}
-                                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
-                                  selectedJdDetailIndex === idx
+                                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${selectedJdDetailIndex === idx
                                     ? 'bg-[#3563E9] text-white shadow-sm'
                                     : 'bg-slate-100 text-[#475467] hover:bg-slate-200 hover:text-[#101828]'
-                                }`}
+                                  }`}
                               >
                                 <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
                                 <span className="truncate max-w-[180px]">{jd.title}</span>

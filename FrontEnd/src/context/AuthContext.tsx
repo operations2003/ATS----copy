@@ -513,6 +513,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }: AuthProv
             key !== 'tasknera_org_jd_permissions' &&
             key !== 'tasknera_cached_orgs' &&
             key !== 'tasknera_client_portal_shares_v1' &&
+            key !== 'tasknera_client_shares' &&
             key !== 'tasknera_job_assignments_v1' &&
             !key.startsWith('tasknera_client_jds_') &&
             !key.startsWith('tasknera_created_jobs') &&
