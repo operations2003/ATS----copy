@@ -1761,7 +1761,7 @@ export default function ClientsPage() {
                           type="button"
                           onClick={() => handleOpenJdViewer(link)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-all shadow-2xs cursor-pointer"
-                          title="Click to view JDs or upload a new requisition"
+                          title="View uploaded JDs"
                         >
                           <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1769,7 +1769,17 @@ export default function ClientsPage() {
                           <span>JDs ({uploadedCount})</span>
                         </button>
 
-
+                        <button
+                          type="button"
+                          onClick={() => handleOpenQuickJdModal(link)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#101828] hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                          title="Upload a JD for this client"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          <span>Upload JD</span>
+                        </button>
                       </div>
                     </div>
                   </div>
