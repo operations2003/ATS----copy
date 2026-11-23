@@ -147,7 +147,7 @@ export default function ClientsPage() {
   const [editExpirationOption, setEditExpirationOption] = useState<string>('keep');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  // Quick Upload JD Modal State (Live two-way link with client portal)
+  // Quick Upload JD Modal State
   const [quickJdModalOpen, setQuickJdModalOpen] = useState(false);
   const [quickJdClient, setQuickJdClient] = useState<SharedClientLink | null>(null);
   const [quickJdTitle, setQuickJdTitle] = useState('');
@@ -157,6 +157,7 @@ export default function ClientsPage() {
   const [quickJdDescription, setQuickJdDescription] = useState('');
   const [quickJdRecruiter, setQuickJdRecruiter] = useState('');
   const [isSubmittingQuickJd, setIsSubmittingQuickJd] = useState(false);
+  const [quickJdFile, setQuickJdFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -1209,36 +1210,38 @@ export default function ClientsPage() {
     setQuickJdSalary('Competitive Market Rate');
     setQuickJdDescription('');
     setQuickJdRecruiter(link.assignedMember || '');
+    setQuickJdFile(null);
     setQuickJdModalOpen(true);
   };
 
   const handleSubmitQuickJd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!quickJdClient || !quickJdTitle.trim()) {
-      showToast('Position title is required');
+      showToast('Select a PDF file first');
       return;
     }
 
     setIsSubmittingQuickJd(true);
     const clientName = quickJdClient.clientName;
-    const effectiveRecruiter = quickJdRecruiter.trim() || quickJdClient.assignedMember || 'Technical Recruiter';
+    const effectiveRecruiter = quickJdClient.assignedMember || 'Technical Recruiter';
     const newJobId = `jd-portal-${Date.now()}`;
 
     const newJdItem = {
       id: newJobId,
       title: quickJdTitle.trim(),
       client: clientName,
-      location: quickJdLocation.trim() || 'Remote / Hybrid',
-      workMode: quickJdMode,
-      mode: quickJdMode,
-      salary: quickJdSalary.trim() || 'Competitive Market Rate',
+      location: 'Remote / Hybrid',
+      workMode: 'Hybrid' as const,
+      mode: 'Hybrid' as const,
+      salary: 'Competitive Market Rate',
       status: 'Active Screening',
       assignedRecruiter: effectiveRecruiter,
       createdAt: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
-      description: quickJdDescription.trim() || `Job Description for ${quickJdTitle.trim()}`,
+      description: `Client uploaded Job Description PDF: ${quickJdTitle.trim()}.pdf`,
       mandatoryRequirementsCount: 3,
       totalRequirementsCount: 6,
-      uploadedBy: 'RECRUITER'
+      uploadedBy: 'RECRUITER',
+      fileName: quickJdTitle.trim() + '.pdf'
     };
 
     // 1. Add to atsStore
@@ -1332,7 +1335,8 @@ export default function ClientsPage() {
 
     setIsSubmittingQuickJd(false);
     setQuickJdModalOpen(false);
-    showToast(`✓ JD "${quickJdTitle}" uploaded and synced live with ${clientName}'s portal!`);
+    setQuickJdFile(null);
+    showToast(`✓ JD "${quickJdTitle}" uploaded for ${clientName}!`);
   };
 
   const handleOpenEditModal = (link: SharedClientLink) => {
@@ -2625,7 +2629,7 @@ export default function ClientsPage() {
           );
         })()}
 
-        {/* Quick Upload JD Modal (Direct two-way sync with client portal) */}
+        {/* Upload JD PDF Modal */}
         {quickJdModalOpen && quickJdClient && (
           <div
             className="fixed inset-0 z-[300] flex items-center justify-center overflow-y-auto bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-200"
@@ -2633,19 +2637,17 @@ export default function ClientsPage() {
               if (e.target === e.currentTarget && !isSubmittingQuickJd) setQuickJdModalOpen(false);
             }}
           >
-            <div className="my-auto w-full max-w-xl rounded-2xl bg-white p-6 sm:p-7 shadow-2xl border border-[#EAECF0]">
-              <div className="flex items-start justify-between border-b border-[#EAECF0] pb-4">
+            <div className="my-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-[#EAECF0]">
+              <div className="flex items-start justify-between pb-4 border-b border-[#EAECF0]">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 shadow-xs border border-emerald-100">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-[#101828]">Upload Job Description</h2>
-                    <p className="text-xs text-[#667085]">
-                      Client: <span className="font-bold text-slate-800">{quickJdClient.clientName}</span> • Synchronized with live client portal
-                    </p>
+                    <h2 className="text-base font-bold text-[#101828]">Upload JD PDF</h2>
+                    <p className="text-xs text-[#667085]">Client: <span className="font-bold text-slate-800">{quickJdClient.clientName}</span></p>
                   </div>
                 </div>
                 <button
@@ -2659,110 +2661,40 @@ export default function ClientsPage() {
               </div>
 
               <form onSubmit={handleSubmitQuickJd} className="mt-5 space-y-4">
-                {/* Position Title */}
-                <div>
-                  <label className="block text-xs font-bold text-[#101828] mb-1.5">
-                    Job Title / Position Name <span className="text-rose-500">*</span>
-                  </label>
+                {/* PDF Drop Zone */}
+                <label
+                  className={`flex flex-col items-center justify-center w-full h-40 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${quickJdTitle ? 'border-emerald-400 bg-emerald-50' : 'border-[#D0D5DD] bg-[#F9FAFB] hover:bg-[#F2F4F7]'}`}
+                >
                   <input
-                    type="text"
-                    required
-                    value={quickJdTitle}
-                    onChange={e => setQuickJdTitle(e.target.value)}
-                    placeholder="e.g. Senior Full-Stack Engineer, Product Lead, Data Scientist"
-                    className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
+                    type="file"
+                    accept=".pdf"
+                    className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0] || null;
+                      setQuickJdFile(file);
+                      setQuickJdTitle(file ? file.name.replace(/\.pdf$/i, '') : '');
+                    }}
                   />
-                </div>
+                  {quickJdTitle ? (
+                    <>
+                      <svg className="w-8 h-8 text-emerald-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span className="text-xs font-bold text-emerald-700 text-center px-4 truncate max-w-full">{quickJdTitle}.pdf</span>
+                      <span className="text-[11px] text-emerald-500 mt-1">Click to change file</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-8 h-8 text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <span className="text-xs font-semibold text-slate-600">Click to upload JD PDF</span>
+                      <span className="text-[11px] text-slate-400 mt-1">PDF files only</span>
+                    </>
+                  )}
+                </label>
 
-                {/* Location & Mode */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-[#101828] mb-1.5">
-                      Location / Region
-                    </label>
-                    <input
-                      type="text"
-                      value={quickJdLocation}
-                      onChange={e => setQuickJdLocation(e.target.value)}
-                      placeholder="e.g. Remote, San Francisco, CA, Hybrid"
-                      className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-medium text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[#101828] mb-1.5">
-                      Work Mode
-                    </label>
-                    <select
-                      value={quickJdMode}
-                      onChange={e => setQuickJdMode(e.target.value as any)}
-                      className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
-                    >
-                      <option value="Hybrid">Hybrid</option>
-                      <option value="Remote">Remote</option>
-                      <option value="Onsite">Onsite</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Salary & Recruiter */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-[#101828] mb-1.5">
-                      Target Salary / Budget Range
-                    </label>
-                    <input
-                      type="text"
-                      value={quickJdSalary}
-                      onChange={e => setQuickJdSalary(e.target.value)}
-                      placeholder="e.g. $120,000 - $150,000 / annum"
-                      className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-medium text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[#101828] mb-1.5">
-                      Assigned Recruiter / Owner
-                    </label>
-                    <select
-                      value={quickJdRecruiter}
-                      onChange={e => setQuickJdRecruiter(e.target.value)}
-                      className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20"
-                    >
-                      <option value="">-- {quickJdClient.assignedMember || 'Technical Recruiter'} --</option>
-                      {teamMembers.map(m => (
-                        <option key={m.id} value={m.name}>
-                          {m.name} • {m.role}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Description & Criteria */}
-                <div>
-                  <label className="block text-xs font-bold text-[#101828] mb-1.5">
-                    Job Description &amp; Candidate Requirements <span className="text-[#667085] font-normal">(Optional)</span>
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={quickJdDescription}
-                    onChange={e => setQuickJdDescription(e.target.value)}
-                    placeholder="Paste role specifications, technical requirements, must-have skills, and knockout criteria here..."
-                    className="w-full rounded-xl border border-[#EAECF0] bg-white px-3.5 py-2.5 text-xs font-medium text-[#182230] outline-none focus:border-[#3563E9] focus:ring-2 focus:ring-[#3563E9]/20 resize-none font-sans"
-                  />
-                </div>
-
-                <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 text-xs text-blue-900 flex items-start gap-2">
-                  <svg className="w-4 h-4 text-[#3563E9] shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>
-                    This Job Description will be immediately linked to <span className="font-bold">{quickJdClient.clientName}</span>'s portal and registered in HireIQ deterministic ATS screening.
-                  </span>
-                </div>
-
-                <div className="mt-6 flex items-center justify-end gap-3 border-t border-[#EAECF0] pt-4">
+                <div className="flex items-center justify-end gap-3 pt-2">
                   <button
                     type="button"
                     disabled={isSubmittingQuickJd}
@@ -2782,14 +2714,14 @@ export default function ClientsPage() {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                         </svg>
-                        <span>Uploading JD...</span>
+                        <span>Uploading...</span>
                       </>
                     ) : (
                       <>
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
-                        <span>Upload &amp; Sync JD</span>
+                        <span>Upload JD</span>
                       </>
                     )}
                   </button>
