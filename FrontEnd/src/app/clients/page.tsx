@@ -2432,7 +2432,7 @@ export default function ClientsPage() {
                       </div>
                       <h4 className="text-sm font-bold text-[#101828] mb-1">No JDs Uploaded Yet</h4>
                       <p className="text-xs text-[#667085] max-w-sm mx-auto mb-5">
-                        {activeViewJdLink.clientName} has not uploaded any Job Description documents yet. They can submit JDs directly through their active portal link.
+                        No Job Description documents have been uploaded for {activeViewJdLink.clientName} yet. Upload a JD PDF to get started.
                       </p>
                       <div className="flex items-center justify-center gap-3">
                         <button
@@ -2448,17 +2448,6 @@ export default function ClientsPage() {
                           </svg>
                           <span>Upload JD for this Client</span>
                         </button>
-                        <a
-                          href={activeViewJdLink.shareUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#EFF4FF] text-[#3563E9] text-xs font-bold hover:bg-[#D1E0FF] transition-colors border border-[#D1E0FF]"
-                        >
-                          <span>Open Client Portal</span>
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </a>
                       </div>
                     </div>
                   ) : (
@@ -2607,18 +2596,7 @@ export default function ClientsPage() {
                 </div>
 
                 {/* Modal Footer - Clean & Minimal */}
-                <div className="border-t border-[#EAECF0] px-6 py-3.5 flex items-center justify-between bg-slate-50/70">
-                  <a
-                    href={activeViewJdLink.shareUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[#3563E9] hover:underline cursor-pointer"
-                  >
-                    <span>Open Live Portal</span>
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </a>
+                <div className="border-t border-[#EAECF0] px-6 py-3.5 flex items-center justify-end bg-slate-50/70">
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
