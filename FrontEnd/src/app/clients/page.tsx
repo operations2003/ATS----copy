@@ -1595,18 +1595,20 @@ export default function ClientsPage() {
               Create secure links for clients to upload their Job Descriptions (JDs), monitor agency screening progress, and review shortlisted candidates.
             </p>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <button
-              type="button"
-              onClick={() => handleOpenShareModal()}
-              className="flex items-center gap-2 px-5 py-3 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold rounded-xl transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              <span>Create Client JD Upload Link</span>
-            </button>
-          </div>
+          {sharedLinks.length > 0 && (
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleOpenShareModal()}
+                className="flex items-center gap-2 px-5 py-3 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold rounded-xl transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <span>Create Client JD Upload Link</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Active Client Portals Section */}

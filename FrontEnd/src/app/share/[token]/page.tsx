@@ -2519,13 +2519,15 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                 <h3 className="text-base font-bold text-[#101828]">Active Requisitions Assigned to HireIQ</h3>
                 <p className="text-xs text-[#667085]">Live status of roles we are actively sourcing and screening for {clientName}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsJdModalOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
-              >
-                <span>+ Upload Another JD</span>
-              </button>
+              {jobs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsJdModalOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
+                >
+                  <span>+ Upload Another JD</span>
+                </button>
+              )}
             </div>
 
             {jobs.length === 0 ? (
@@ -2547,7 +2549,7 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                   </svg>
-                  <span>Upload Job Description (JD)</span>
+                  <span>Upload Your First Job Description (JD)</span>
                 </button>
               </div>
             ) : (
