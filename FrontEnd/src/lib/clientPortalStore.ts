@@ -61,8 +61,8 @@ export const saveOrUpdatePortalMemory = (portal: Partial<ClientPortalItem> & { c
   const rawToken = (portal.token || portal.id || portal.clientName || '').toLowerCase().trim();
   const idx = store.findIndex(
     p => p.token.toLowerCase() === rawToken ||
-         p.id.toLowerCase() === rawToken ||
-         p.clientName.toLowerCase().trim() === (portal.clientName || '').toLowerCase().trim()
+      p.id.toLowerCase() === rawToken ||
+      p.clientName.toLowerCase().trim() === (portal.clientName || '').toLowerCase().trim()
   );
   if (idx !== -1) {
     const existing = store[idx];
