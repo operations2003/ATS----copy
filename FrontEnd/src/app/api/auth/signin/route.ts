@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getBackendBaseUrl } from '@/lib/backendUrl';
 
 export async function POST(req: Request) {
   try {
@@ -9,7 +10,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Please provide email and password' }, { status: 400 });
     }
 
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const backendUrl = getBackendBaseUrl();
 
     try {
       const backendRes = await fetch(`${backendUrl}/auth/signin`, {

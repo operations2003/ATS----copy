@@ -616,33 +616,6 @@ export default function ClientsPage() {
         }
       } catch { }
 
-      // 3. Local storage tasknera_created_jobs
-      try {
-        const rawCreated = localStorage.getItem('tasknera_created_jobs');
-        if (rawCreated) {
-          const createdList = JSON.parse(rawCreated);
-          if (Array.isArray(createdList)) {
-            createdList.forEach((cj: any, idx: number) => {
-              const cjClient = String(cj.client || cj.company || '').toLowerCase().trim();
-              if (cjClient === cleanClient || (cleanClient && cjClient.includes(cleanClient)) || (cleanClient && cleanClient.includes(cjClient))) {
-                addJd(cj, `jd-created-${idx}`, portal?.assignedMember);
-              }
-            });
-          }
-        }
-      } catch { }
-    }
-
-    // 4. ATS store jobs
-    if (Array.isArray(jobs)) {
-      jobs
-        .filter(j => {
-          const jClient = String(j.client || '').toLowerCase().trim();
-          return jClient === cleanClient || (cleanClient && jClient.includes(cleanClient)) || (cleanClient && cleanClient.includes(jClient));
-        })
-        .forEach((j, idx) => {
-          addJd(j, `jd-ats-${idx}`, portal?.assignedMember);
-        });
     }
 
     return resultList;

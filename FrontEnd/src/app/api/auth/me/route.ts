@@ -11,7 +11,8 @@ export async function GET(req: Request) {
 
     // Try backend first
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const { getBackendBaseUrl } = await import('@/lib/backendUrl');
+      const backendUrl = getBackendBaseUrl();
       const backendRes = await fetch(`${backendUrl}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -25,8 +26,8 @@ export async function GET(req: Request) {
     }
 
     // Decode fallback token safely
-    let email = 'Sakshi Koparde';
-    let displayName = 'Sakshi Koparde';
+    let email = '';
+    let displayName = 'Unknown User';
     if (token.startsWith('jwt_local_session_')) {
       const parts = token.split('_');
       // parts = ['jwt', 'local', 'session', timestamp, base64Email]
@@ -43,11 +44,14 @@ export async function GET(req: Request) {
       }
     }
 
+    if (!email.includes('@')) {
+      return NextResponse.json({ error: 'Not authorized' }, { status: 401 });
+    }
     return NextResponse.json({
       user: {
         id: 'usr_current',
         name: displayName,
-        email: email.includes('@') ? email : 'sakshi.koparde@tasknera.com',
+        email: email,
         role: 'MEMBER',
         createdAt: new Date().toISOString(),
       },

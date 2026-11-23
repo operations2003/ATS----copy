@@ -256,7 +256,7 @@ export const saveClientPortal = async (req: AuthRequest, res: Response): Promise
     }
 
     savePortals(portalCache);
-    persistPortalToDb(existingIdx !== -1 ? portalCache[existingIdx] : newRecord).catch(() => {});
+    persistPortalToDb(existingIdx !== -1 ? portalCache[existingIdx] : newRecord).catch(() => { });
 
     res.status(201).json({ success: true, clientPortal: newRecord });
   } catch (err: any) {
@@ -312,7 +312,7 @@ export const assignClientPortal = async (req: AuthRequest, res: Response): Promi
 
     const targetPortal = portalCache.find(p => p.clientName.toLowerCase().trim() === clientName.toLowerCase().trim());
     if (targetPortal) {
-      persistPortalToDb(targetPortal).catch(() => {});
+      persistPortalToDb(targetPortal).catch(() => { });
     }
 
     res.status(200).json({ success: true, message: `Assigned ${clientName} to ${assignedMember}` });
@@ -343,7 +343,7 @@ export const deleteClientPortal = async (req: AuthRequest, res: Response): Promi
     }
 
     savePortals(portalCache);
-    deletePortalFromDb(rawId).catch(() => {});
+    deletePortalFromDb(rawId).catch(() => { });
 
     res.status(200).json({ success: true, message: 'Client portal deleted successfully' });
   } catch (err: any) {
@@ -380,7 +380,7 @@ export const updateClientPortal = async (req: AuthRequest, res: Response): Promi
     };
 
     savePortals(portalCache);
-    persistPortalToDb(portalCache[idx]).catch(() => {});
+    persistPortalToDb(portalCache[idx]).catch(() => { });
 
     res.status(200).json({ success: true, clientPortal: portalCache[idx] });
   } catch (err: any) {
@@ -416,6 +416,7 @@ export const getPublicClientPortal = async (req: any, res: Response): Promise<vo
     // Increment views
     portal.views = (portal.views || 0) + 1;
     savePortals(portalCache);
+
 
     // Dynamic candidate reflection: ensure candidates are returned even if unassigned to any recruiter
     let portalCandidates = Array.isArray(portal.candidates) ? portal.candidates : [];
@@ -537,7 +538,7 @@ export const addJdToClientPortalPublic = async (req: any, res: Response): Promis
     }
 
     savePortals(portalCache);
-    persistPortalToDb(portal).catch(() => {});
+    persistPortalToDb(portal).catch(() => { });
 
     res.status(200).json({ success: true, jds: portal.jds, clientPortal: portal });
   } catch (err: any) {
@@ -589,7 +590,7 @@ export const addJdToClientPortalAuth = async (req: AuthRequest, res: Response): 
     }
 
     savePortals(portalCache);
-    persistPortalToDb(portal).catch(() => {});
+    persistPortalToDb(portal).catch(() => { });
 
     res.status(200).json({ success: true, jds: portal.jds, clientPortal: portal });
   } catch (err: any) {
