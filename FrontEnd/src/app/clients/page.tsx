@@ -1747,44 +1747,6 @@ export default function ClientsPage() {
                       </div>
 
                       {/* Clean Share URL Bar with 1-Click Copy */}
-                      <div className="mb-4 p-2.5 rounded-2xl bg-[#F8F9FC] border border-[#EAECF0] flex items-center justify-between gap-2.5">
-                        <div className="flex items-center gap-2 min-w-0 pl-1">
-                          <div className="w-6 h-6 rounded-lg bg-white border border-[#EAECF0] flex items-center justify-center shrink-0 text-slate-500 shadow-2xs">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                            </svg>
-                          </div>
-                          <span className="text-[11px] font-mono text-slate-600 truncate select-all" title={link.shareUrl}>
-                            {link.shareUrl.replace(/^https?:\/\//, '')}
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleCopyLink(link.shareUrl, link.id)}
-                          className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${copiedLinkId === link.id
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-white hover:bg-slate-100 text-[#101828] border border-[#EAECF0]'
-                            }`}
-                          title="Copy client portal link"
-                        >
-                          {copiedLinkId === link.id ? (
-                            <>
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                              </svg>
-                              <span>Copied!</span>
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                              </svg>
-                              <span>Copy</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
                     </div>
 
                     {/* Action Footer: Expiry + Clear Primary Actions */}
