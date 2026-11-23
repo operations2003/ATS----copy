@@ -688,9 +688,7 @@ export default function ClientsPage() {
     setViewJdModalOpen(true);
   };
 
-  // Helper to determine who is assigned to this client portal:
-  // Strictly respects the explicit assignment on the client portal.
-  // Never falls back to unrelated previous records or auto-assigns recruiters by default.
+  // Helper to determine who is assigned to this client:
   const getAssignedMemberForClient = (link: SharedClientLink): { name: string; role?: string } | null => {
     if (!link) return null;
     const directAssigned = (link.assignedMember || '').trim();
@@ -699,94 +697,6 @@ export default function ClientsPage() {
     }
     return null;
   };
-
-  // Automatically reconcile existing client assignments into tasknera_created_jobs
-  useEffect(() => {
-    if (!isClientLoaded) return;
-    try {
-      const stored = localStorage.getItem(CLIENT_SHARES_STORAGE_KEY);
-      if (!stored) return;
-      const parsed: SharedClientLink[] = JSON.parse(stored);
-      if (!Array.isArray(parsed)) return;
-
-      const rawCreated = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
-      const existingCreated = Array.isArray(rawCreated)
-        ? rawCreated.filter((cj: any) => {
-          const p = String(cj.position || cj.title || '').toLowerCase().trim();
-          return p && p !== 'client requisition' && p !== 'requisition role';
-        })
-        : [];
-      let modified = rawCreated.length !== existingCreated.length;
-
-      parsed.forEach(link => {
-        const assigned = link.assignedMember;
-        if (assigned && assigned !== 'Unassigned') {
-          const clientJds = getClientUploadedJds(link.clientName);
-          const targetRole = link.assignedMemberRole || 'Technical Recruiter';
-          const worker = {
-            id: `rec-${assigned.toLowerCase().replace(/\s+/g, '-')}`,
-            name: assigned,
-            role: targetRole,
-            action: 'Assigned Lead',
-            isCreator: false
-          };
-
-          clientJds.forEach(item => {
-            if (!item || !item.title) return;
-            const itemTitle = String(item.title).toLowerCase().trim();
-            const clientNameClean = String(link.clientName || '').toLowerCase().trim();
-            const idx = existingCreated.findIndex((cj: any) =>
-              (item.id && String(cj.id) === String(item.id)) ||
-              (clientNameClean && (String(cj.client || '')).toLowerCase().trim() === clientNameClean &&
-                (String(cj.position || cj.title || '')).toLowerCase().trim() === itemTitle)
-            );
-
-            if (idx >= 0) {
-              if (existingCreated[idx].assignedRecruiter !== assigned) {
-                existingCreated[idx].assignedRecruiter = assigned;
-                existingCreated[idx].assignedTo = assigned;
-                existingCreated[idx].workedBy = [
-                  worker,
-                  ...(Array.isArray(existingCreated[idx].workedBy) ? existingCreated[idx].workedBy.filter((w: any) => w.name?.toLowerCase() !== assigned.toLowerCase()) : [])
-                ];
-                modified = true;
-              }
-            } else {
-              existingCreated.unshift({
-                id: item.id || `job-client-${Date.now()}`,
-                client: link.clientName,
-                company: link.clientName,
-                position: item.title,
-                title: item.title,
-                location: item.location || 'Remote / Hybrid',
-                work_mode: item.mode || 'Hybrid',
-                workMode: item.mode || 'Hybrid',
-                mode: item.mode || 'Hybrid',
-                salary: item.salary || 'Competitive Market Rate',
-                status: 'Active',
-                created_at: new Date().toISOString(),
-                createdAt: new Date().toISOString(),
-                assignedRecruiter: assigned,
-                assignedTo: assigned,
-                workedBy: [worker],
-                candidatesCount: 0,
-                candidates: 0,
-                topScore: 0,
-                description: item.description || `Requisition intake for ${link.clientName}`
-              });
-              modified = true;
-            }
-          });
-        }
-      });
-
-      if (modified) {
-        localStorage.setItem('tasknera_created_jobs', JSON.stringify(existingCreated));
-      }
-    } catch (e) {
-      console.warn('Reconcile existing client assignments error:', e);
-    }
-  }, [isClientLoaded]);
 
   const handleOpenAssignModal = (link: SharedClientLink) => {
     setActiveAssignLink(link);
@@ -1160,7 +1070,8 @@ export default function ClientsPage() {
 
     const updated = [newShare, ...sharedLinks];
     setSharedLinks(updated);
-    setGeneratedLink(fullUrl);
+    setShareModalOpen(false);
+    showToast(`✓ Client "${targetCompany}" added successfully!`);
 
     try {
       localStorage.setItem(CLIENT_SHARES_STORAGE_KEY, JSON.stringify(updated));
@@ -1575,11 +1486,11 @@ export default function ClientsPage() {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#EFF4FF] border border-[#D1E0FF] rounded-full text-xs font-bold text-[#3563E9] mb-2">
               <span className="w-2 h-2 rounded-full bg-[#3563E9]" />
-              Client Transparency &amp; Portals
+              Clients &amp; Requisitions
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#101828] tracking-tight">Client Portals &amp; Shared Links</h1>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#101828] tracking-tight">Clients &amp; Requisitions</h1>
             <p className="text-sm text-[#667085] mt-1">
-              Create secure links for clients to upload their Job Descriptions (JDs), monitor agency screening progress, and review shortlisted candidates.
+              Manage client organizations, assign recruiting leads, and upload Job Description (JD) PDFs.
             </p>
           </div>
           {sharedLinks.length > 0 && (
@@ -1592,18 +1503,18 @@ export default function ClientsPage() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                <span>Create Client JD Upload Link</span>
+                <span>+ Add Client</span>
               </button>
             </div>
           )}
         </div>
 
-        {/* Active Client Portals Section */}
+        {/* Active Clients Section */}
         <div className="mb-10">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-bold text-[#101828]">Active Shared Client Portals</h2>
-              <p className="text-xs text-[#667085]">Live links shared with client hiring managers for real-time JD submission and candidate review</p>
+              <h2 className="text-lg font-bold text-[#101828]">Clients</h2>
+              <p className="text-xs text-[#667085]">All active client accounts and their assigned requisitions</p>
             </div>
           </div>
 
@@ -1633,7 +1544,7 @@ export default function ClientsPage() {
                               {link.contactName ? (
                                 <span>Contact: <strong className="font-semibold text-slate-700">{link.contactName}</strong></span>
                               ) : (
-                                <span className="text-slate-400">Client Talent Portal</span>
+                                <span className="text-slate-400">Client Account</span>
                               )}
                             </p>
                           </div>
@@ -1641,8 +1552,8 @@ export default function ClientsPage() {
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            Active Link
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            Active
                           </span>
 
                           {link.clientEmail && (
@@ -1753,11 +1664,11 @@ export default function ClientsPage() {
                       {/* Clean Share URL Bar with 1-Click Copy */}
                     </div>
 
-                    {/* Action Footer: Expiry + Clear Primary Actions */}
+                    {/* Action Footer: Status + Clear Primary Actions */}
                     <div className="pt-3 border-t border-[#EAECF0] flex items-center justify-between gap-3">
-                      <div className="text-[11px] text-[#667085] flex items-center gap-1">
-                        <span>Expires:</span>
-                        <span className="font-semibold text-slate-700">{link.expiresAt}</span>
+                      <div className="text-[11px] text-[#667085] flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span className="font-semibold text-slate-600">Active Account</span>
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -1795,12 +1706,12 @@ export default function ClientsPage() {
             <div className="bg-white border border-[#EAECF0] rounded-2xl p-10 sm:p-12 text-center shadow-xs">
               <div className="w-14 h-14 rounded-2xl bg-[#EFF4FF] border border-[#D1E0FF] text-[#3563E9] flex items-center justify-center mx-auto mb-4 shadow-xs">
                 <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
               </div>
-              <h3 className="text-lg font-bold text-[#101828] mb-1.5">No Client Portals Created Yet</h3>
+              <h3 className="text-lg font-bold text-[#101828] mb-1.5">No Clients Added Yet</h3>
               <p className="text-xs text-[#667085] max-w-md mx-auto mb-5">
-                Generate a live client link to share with your clients. Clients can directly upload their JDs into HireIQ and track candidate screening with full transparency.
+                Add clients to organize job requisitions, assign dedicated recruiters, and upload JD PDFs.
               </p>
               <button
                 type="button"
@@ -1810,7 +1721,7 @@ export default function ClientsPage() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                Create First Client JD Upload Link
+                + Add First Client
               </button>
             </div>
           )}
@@ -1835,9 +1746,9 @@ export default function ClientsPage() {
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-[#101828]">Create Client JD Upload Link</h2>
+                    <h2 className="text-xl font-bold text-[#101828]">Add New Client</h2>
                     <p className="text-xs text-[#667085]">
-                      Enter client details to generate a link for them to upload JDs and track candidate screening
+                      Enter client details to create an account and manage requisitions
                     </p>
                   </div>
                 </div>
@@ -2005,9 +1916,9 @@ export default function ClientsPage() {
                       className="inline-flex items-center gap-2 rounded-xl bg-[#3563E9] px-6 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#2851D6] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                       </svg>
-                      Generate Client JD Upload Link
+                      Add Client
                     </button>
                   </div>
                 </div>

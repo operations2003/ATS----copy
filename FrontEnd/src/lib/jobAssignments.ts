@@ -83,14 +83,6 @@ export function getJobAssignment(job: {
           return registry[compositeKey];
         }
       }
-
-      // 1c. By client wildcard: client:::*
-      if (client) {
-        const wildcardKey = `${client}:::*`;
-        if (registry[wildcardKey] && !isExcludedRecruiterName(registry[wildcardKey].assignedRecruiter)) {
-          return registry[wildcardKey];
-        }
-      }
     }
   } catch {}
 
@@ -98,25 +90,6 @@ export function getJobAssignment(job: {
   if (!jobId && !title) {
     return null;
   }
-
-  // 2. Check Client Portal Shares (tasknera_client_portal_shares_v1)
-  try {
-    const sharesRaw = localStorage.getItem(CLIENT_SHARES_STORAGE_KEY) || localStorage.getItem(LEGACY_CLIENT_SHARES_KEY);
-    if (sharesRaw) {
-      const shares = JSON.parse(sharesRaw);
-      if (Array.isArray(shares)) {
-        const matchingShare = shares.find((s: any) => clean(s.clientName) === client);
-        if (matchingShare && matchingShare.assignedMember && !isExcludedRecruiterName(matchingShare.assignedMember)) {
-          return {
-            assignedRecruiter: matchingShare.assignedMember,
-            role: matchingShare.assignedMemberRole || 'Technical Recruiter',
-            assignedAt: matchingShare.assignedAt || 'Portal Assignment',
-            assignedBy: 'Client Portal Share'
-          };
-        }
-      }
-    }
-  } catch {}
 
   // 3. Check client uploaded JDs (tasknera_client_jds_${client})
   if (client) {
@@ -269,9 +242,6 @@ export function setJobAssignment(params: {
     }
     if (cleanClient && cleanTitle) {
       registry[`${cleanClient}:::${cleanTitle}`] = record;
-    }
-    if (cleanClient) {
-      registry[`${cleanClient}:::*`] = record;
     }
 
     localStorage.setItem(JOB_ASSIGNMENTS_STORAGE_KEY, JSON.stringify(registry));
