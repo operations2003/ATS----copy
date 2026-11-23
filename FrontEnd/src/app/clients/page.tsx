@@ -1601,27 +1601,6 @@ export default function ClientsPage() {
           </div>
         </div>
 
-        {/* Enterprise KPI Overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
-          <div className="bg-white border border-[#EAECF0] rounded-2xl p-5 shadow-xs">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#667085] block mb-2">Active Client Portals</span>
-            <div className="text-3xl font-extrabold text-[#101828]">{sharedLinks.length}</div>
-            <p className="text-xs text-[#667085] mt-1">Dedicated links created for clients</p>
-          </div>
-
-          <div className="bg-white border border-[#EAECF0] rounded-2xl p-5 shadow-xs">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#667085] block mb-2">Client Accounts</span>
-            <div className="text-3xl font-extrabold text-[#101828]">{clientAccounts.length}</div>
-            <p className="text-xs text-[#667085] mt-1">Active hiring accounts in HireIQ</p>
-          </div>
-
-          <div className="bg-white border border-[#EAECF0] rounded-2xl p-5 shadow-xs">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#667085] block mb-2">Connected Requisitions</span>
-            <div className="text-3xl font-extrabold text-[#101828]">{totalConnectedRequisitions}</div>
-            <p className="text-xs text-[#667085] mt-1">Open positions connected to clients</p>
-          </div>
-        </div>
-
         {/* Active Client Portals Section */}
         <div className="mb-10">
           <div className="flex items-center justify-between mb-4">
