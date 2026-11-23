@@ -49,9 +49,6 @@ const SEED_PORTALS: ClientPortalItem[] = [
     expiresAt: 'Dec 5, 2026',
     createdAt: 'Active',
     views: 5,
-    assignedMember: 'Rashmi Kotekar',
-    assignedMemberRole: 'Technical Recruiter',
-    assignedAt: 'Nov 21, 2026',
     organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
     jds: [
       {
@@ -63,7 +60,6 @@ const SEED_PORTALS: ClientPortalItem[] = [
         mode: 'Hybrid',
         salary: 'Competitive Market Rate',
         status: 'Agency Sourcing Candidates',
-        assignedRecruiter: 'Rashmi Kotekar',
         createdAt: 'Just now',
         mandatoryRequirementsCount: 3,
         uploadedBy: 'CLIENT',
@@ -81,9 +77,6 @@ const SEED_PORTALS: ClientPortalItem[] = [
     expiresAt: 'Dec 5, 2026',
     createdAt: 'Active',
     views: 3,
-    assignedMember: 'Swati Batabyal',
-    assignedMemberRole: 'Technical Recruiter',
-    assignedAt: 'Nov 21, 2026',
     organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
     jds: []
   },
@@ -97,9 +90,6 @@ const SEED_PORTALS: ClientPortalItem[] = [
     expiresAt: 'Dec 5, 2026',
     createdAt: 'Active',
     views: 4,
-    assignedMember: 'Didar Shah',
-    assignedMemberRole: 'Technical Recruiter',
-    assignedAt: 'Nov 21, 2026',
     organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
     jds: []
   },
@@ -113,9 +103,6 @@ const SEED_PORTALS: ClientPortalItem[] = [
     expiresAt: 'Dec 5, 2026',
     createdAt: 'Active',
     views: 2,
-    assignedMember: 'Prabhjot Gora',
-    assignedMemberRole: 'Technical Recruiter',
-    assignedAt: 'Nov 21, 2026',
     organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
     jds: []
   },
@@ -129,9 +116,6 @@ const SEED_PORTALS: ClientPortalItem[] = [
     expiresAt: 'Never',
     createdAt: 'Active',
     views: 12,
-    assignedMember: 'Rashmi Kotekar',
-    assignedMemberRole: 'Technical Recruiter',
-    assignedAt: 'Nov 20, 2026',
     organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
     jds: []
   }
@@ -160,10 +144,6 @@ export const getClientPortalsMemory = (): ClientPortalItem[] => {
       } else {
         if ((!existing.jds || existing.jds.length === 0) && sp.jds && sp.jds.length > 0) {
           existing.jds = [...sp.jds];
-        }
-        if (!existing.assignedMember && sp.assignedMember) {
-          existing.assignedMember = sp.assignedMember;
-          existing.assignedMemberRole = sp.assignedMemberRole;
         }
       }
     });

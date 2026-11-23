@@ -563,6 +563,8 @@ export default function ClientsPage() {
     const addJd = (item: any, fallbackId: string, fallbackRecruiter?: string) => {
       if (!item) return;
       const title = item.title || item.name || item.position || 'Job Requisition';
+      const cleanT = String(title || '').toLowerCase().trim();
+      if (!cleanT || cleanT === 'client requisition' || cleanT === 'requisition role') return;
       const id = String(item.id || fallbackId);
       const normKey = normalizeJobKey(title, id);
       if (!normKey) return;
@@ -570,13 +572,15 @@ export default function ClientsPage() {
       seenTitles.add(normKey);
       if (item.id) seenIds.add(String(item.id));
 
-      const assignment = getJobAssignment({ client: clientName, title, id });
-      const effectiveRecruiter = assignment?.assignedRecruiter || item.assignedRecruiter || fallbackRecruiter;
+      const portalRecruiter = portal?.assignedMember?.trim();
+      const directRecruiter = (portalRecruiter && !isExcludedRecruiterName(portalRecruiter))
+        ? portalRecruiter
+        : (!isExcludedRecruiterName(item.assignedRecruiter) ? item.assignedRecruiter : undefined);
 
       resultList.push({
         id,
         title,
-        assignedRecruiter: !isExcludedRecruiterName(effectiveRecruiter) ? effectiveRecruiter : undefined,
+        assignedRecruiter: directRecruiter,
         description: item.description,
         location: item.location || 'Remote / Hybrid',
         mode: item.workMode || item.mode || 'Hybrid',
@@ -709,19 +713,14 @@ export default function ClientsPage() {
     setViewJdModalOpen(true);
   };
 
-  // Helper to determine who is assigned to this client's JDs
+  // Helper to determine who is assigned to this client portal:
+  // Strictly respects the explicit assignment on the client portal.
+  // Never falls back to unrelated previous records or auto-assigns recruiters by default.
   const getAssignedMemberForClient = (link: SharedClientLink): { name: string; role?: string } | null => {
-    const assignment = getJobAssignment({ client: link.clientName });
-    if (assignment?.assignedRecruiter && !isExcludedRecruiterName(assignment.assignedRecruiter)) {
-      return { name: assignment.assignedRecruiter, role: assignment.role };
-    }
-    if (link.assignedMember && !isExcludedRecruiterName(link.assignedMember)) {
-      return { name: link.assignedMember, role: link.assignedMemberRole };
-    }
-    const clientJobs = getClientUploadedJds(link.clientName);
-    const withRecruiter = clientJobs.find(j => j.assignedRecruiter && !isExcludedRecruiterName(j.assignedRecruiter));
-    if (withRecruiter?.assignedRecruiter) {
-      return { name: withRecruiter.assignedRecruiter };
+    if (!link) return null;
+    const directAssigned = (link.assignedMember || '').trim();
+    if (directAssigned && !isExcludedRecruiterName(directAssigned)) {
+      return { name: directAssigned, role: link.assignedMemberRole || 'Technical Recruiter' };
     }
     return null;
   };
@@ -735,8 +734,14 @@ export default function ClientsPage() {
       const parsed: SharedClientLink[] = JSON.parse(stored);
       if (!Array.isArray(parsed)) return;
 
-      const existingCreated = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
-      let modified = false;
+      const rawCreated = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
+      const existingCreated = Array.isArray(rawCreated)
+        ? rawCreated.filter((cj: any) => {
+            const p = String(cj.position || cj.title || '').toLowerCase().trim();
+            return p && p !== 'client requisition' && p !== 'requisition role';
+          })
+        : [];
+      let modified = rawCreated.length !== existingCreated.length;
 
       parsed.forEach(link => {
         const assigned = link.assignedMember;
@@ -977,7 +982,13 @@ export default function ClientsPage() {
     // 3b. Sync assigned job(s) directly into tasknera_created_jobs & tasknera_all_jobs so it appears in the member's Jobs & Requisitions list
     if (typeof window !== 'undefined') {
       try {
-        const existingCreated = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
+        const rawCreatedJobs = JSON.parse(localStorage.getItem('tasknera_created_jobs') || '[]');
+        const existingCreated = Array.isArray(rawCreatedJobs)
+          ? rawCreatedJobs.filter((cj: any) => {
+              const p = String(cj.position || cj.title || '').toLowerCase().trim();
+              return p && p !== 'client requisition' && p !== 'requisition role';
+            })
+          : [];
         const updatedWorker = {
           id: `rec-${targetMember.toLowerCase().replace(/\s+/g, '-')}`,
           name: targetMember,
@@ -986,14 +997,11 @@ export default function ClientsPage() {
           isCreator: false
         };
 
-        const targetJds = clientJds.length > 0 ? clientJds : [{
-          id: `job-client-${Date.now()}`,
-          title: 'Client Requisition',
-          location: 'Remote / Hybrid',
-          mode: 'Hybrid',
-          salary: 'Competitive Market Rate',
-          description: `Intake requisition for ${clientName}`
-        }];
+        // Only sync actual client JDs. Never insert generic 'Client Requisition' placeholders
+        const targetJds = clientJds.filter(j => {
+          const t = String(j.title || '').toLowerCase().trim();
+          return t && t !== 'client requisition' && t !== 'requisition role';
+        });
 
         targetJds.forEach(item => {
           if (!item || !item.title) return;

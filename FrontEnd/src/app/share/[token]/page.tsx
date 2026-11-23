@@ -431,7 +431,7 @@ function ClientSharePortalContent() {
           if (rawInterviews) {
             try { interviewStore = JSON.parse(rawInterviews); } catch {}
           }
-          const candidateKey = candidateId.toLowerCase();
+          const candidateKey = String(candidateId || '').toLowerCase();
           const nameKey = cleanCName;
 
           const interviewEntry = {
@@ -846,13 +846,28 @@ function ClientSharePortalContent() {
           if (rawCreated) {
             const list = JSON.parse(rawCreated);
             if (Array.isArray(list)) {
-              for (const cj of list) {
+              // Cleanse any ghost 'Client Requisition' records from storage
+              const cleansedList = list.filter((cj: any) => {
+                const p = String(cj.position || cj.title || '').toLowerCase().trim();
+                return p && p !== 'client requisition' && p !== 'requisition role';
+              });
+              if (cleansedList.length !== list.length) {
+                try {
+                  localStorage.setItem('tasknera_created_jobs', JSON.stringify(cleansedList));
+                } catch {}
+              }
+
+              for (const cj of cleansedList) {
                 const cjClient = String(cj.client || cj.company || '').toLowerCase().trim();
                 const resClient = resolvedClient.toLowerCase().trim();
+                const cjTitle = String(cj.position || cj.title || '').trim();
+                const cjTitleNorm = cjTitle.toLowerCase();
+                if (cjTitleNorm === 'client requisition' || cjTitleNorm === 'requisition role') continue;
+
                 if (cjClient === resClient || cjClient.includes(resClient) || resClient.includes(cjClient)) {
                   createdJobsForClient.push({
                     id: cj.id,
-                    title: cj.position || cj.title || 'Requisition Role',
+                    title: cjTitle || 'Job Requisition',
                     client: cj.client || cj.company || resolvedClient,
                     location: cj.location || 'Remote / Hybrid',
                     workMode: cj.work_mode || cj.workMode || cj.mode || 'Hybrid',
@@ -862,7 +877,7 @@ function ClientSharePortalContent() {
                     screenedCount: 0,
                     submittedCount: 0,
                     createdAt: cj.created_at || cj.createdAt || 'Recently',
-                    description: cj.description || `Job Requisition for ${cj.position || cj.title}`,
+                    description: cj.description || `Job Requisition for ${cjTitle}`,
                     priority: 'High',
                     assignedRecruiter: cj.assignedRecruiter || cj.assignedTo,
                   });
@@ -902,7 +917,10 @@ function ClientSharePortalContent() {
 
       const registerJob = (j: ClientPortalJob) => {
         if (!j || !j.title) return;
+        const normTitle = String(j.title).toLowerCase().trim();
+        if (normTitle === 'client requisition' || normTitle === 'requisition role') return;
         const normKey = normalizeJobTitle(j.title);
+        if (!normKey) return;
         const existingKey = titleToKeyMap.get(normKey);
 
         if (existingKey && combinedJobsMap.has(existingKey)) {
@@ -1383,9 +1401,9 @@ function ClientSharePortalContent() {
           priority: 'High',
         };
 
-        const effectiveRecruiter = assignedMember || 'Agency Delivery Team';
+        const effectiveRecruiter = (assignedMember && !isExcludedRecruiterName(assignedMember)) ? assignedMember.trim() : undefined;
 
-        if (effectiveRecruiter && !isExcludedRecruiterName(effectiveRecruiter)) {
+        if (effectiveRecruiter) {
           setJobAssignment({
             jobId: newJob.id,
             client: clientName,
@@ -1408,7 +1426,7 @@ function ClientSharePortalContent() {
               candidates: 0,
               topScore: 0,
               status: 'Active',
-              assignedRecruiter: effectiveRecruiter,
+              assignedRecruiter: effectiveRecruiter || 'Unassigned',
               pod: 'Client Portal Inflow',
               mandatoryRequirementsCount: 3,
               totalRequirementsCount: 6,
@@ -1429,7 +1447,7 @@ function ClientSharePortalContent() {
         newActivities.push({
           id: `act-${Date.now()}-${idx}`,
           title: `New JD PDF Uploaded: ${newJob.title}`,
-          detail: `Client uploaded "${item.name}". Requisition registered and assigned to ${effectiveRecruiter} for deterministic sourcing.`,
+          detail: `Client uploaded "${item.name}". Requisition registered ${effectiveRecruiter ? 'and assigned to ' + effectiveRecruiter : 'under client requisition intake'}.`,
           actor: contactName || `${clientName} Hiring Team`,
           actorRole: 'CLIENT',
           timestamp: 'Just now',
@@ -1441,7 +1459,12 @@ function ClientSharePortalContent() {
       const normTitleCheck = (t: string) =>
         (t || '').toLowerCase().replace(/\b(jd|job|description|spec|specs|final|v\d+)\b/gi, '').replace(/[^a-z0-9]/g, '').trim();
       const newTitlesSet = new Set(newCreatedJobs.map(nj => normTitleCheck(nj.title)));
-      const existingWithoutDuplicates = jobs.filter(j => !newTitlesSet.has(normTitleCheck(j.title)));
+      // Filter out duplicates AND any ghost dummy 'Client Requisition' records
+      const existingWithoutDuplicates = jobs.filter(j => {
+        const tNorm = String(j.title || '').toLowerCase().trim();
+        if (tNorm === 'client requisition' || tNorm === 'requisition role') return false;
+        return !newTitlesSet.has(normTitleCheck(j.title));
+      });
       const updatedJobs = [...newCreatedJobs, ...existingWithoutDuplicates];
       setJobs(updatedJobs);
       if (typeof window !== 'undefined') {
@@ -3060,14 +3083,65 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
   );
 }
 
+class PortalErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.warn('Client Portal caught exception:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-[#F7F8FC] flex items-center justify-center p-6 text-slate-800">
+          <div className="max-w-md w-full bg-white border border-[#EAECF0] rounded-3xl p-8 text-center space-y-4 shadow-lg">
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#3563E9] flex items-center justify-center mx-auto border border-blue-200">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </div>
+            <h3 className="text-base font-bold text-[#101828]">Portal Feed Refreshing</h3>
+            <p className="text-xs text-[#667085] leading-relaxed">
+              Live updates were synced with the agency ATS. Click below to view the latest active requisitions and candidate submissions.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                window.location.reload();
+              }}
+              className="px-5 py-2.5 bg-[#3563E9] hover:bg-[#2851D6] text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer inline-flex items-center gap-2"
+            >
+              <span>Refresh Portal</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function ClientSharePortalPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-[#F7F8FC] flex items-center justify-center p-6 text-slate-600">
-        <div className="w-8 h-8 border-3 border-[#3563E9] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[#3563E9] border-t-transparent rounded-full animate-spin" />
       </div>
     }>
-      <ClientSharePortalContent />
+      <PortalErrorBoundary>
+        <ClientSharePortalContent />
+      </PortalErrorBoundary>
     </Suspense>
   );
 }

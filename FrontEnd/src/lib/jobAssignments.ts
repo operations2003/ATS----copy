@@ -94,13 +94,18 @@ export function getJobAssignment(job: {
     }
   } catch {}
 
+  // If only client was provided (no specific jobId or title), only return an assignment if explicitly recorded in registry
+  if (!jobId && !title) {
+    return null;
+  }
+
   // 2. Check Client Portal Shares (tasknera_client_portal_shares_v1)
   try {
     const sharesRaw = localStorage.getItem(CLIENT_SHARES_STORAGE_KEY) || localStorage.getItem(LEGACY_CLIENT_SHARES_KEY);
     if (sharesRaw) {
       const shares = JSON.parse(sharesRaw);
       if (Array.isArray(shares)) {
-        const matchingShare = shares.find((s: any) => clean(s.clientName) === client || (client && clean(s.clientName).includes(client)));
+        const matchingShare = shares.find((s: any) => clean(s.clientName) === client);
         if (matchingShare && matchingShare.assignedMember && !isExcludedRecruiterName(matchingShare.assignedMember)) {
           return {
             assignedRecruiter: matchingShare.assignedMember,
@@ -210,25 +215,6 @@ export function getJobAssignment(job: {
       role: 'Technical Recruiter',
       assignedAt: 'Job Profile'
     };
-  }
-
-  // 8. Fallback for standard seeded client portals (prevents unassigned fluctuation across browser sessions)
-  if (client) {
-    if (client.includes('globiz')) {
-      return { assignedRecruiter: 'Rashmi Kotekar', role: 'Technical Recruiter', assignedAt: 'Nov 21, 2026', assignedBy: 'Standard Portal Lead' };
-    }
-    if (client.includes('recruiter v') || client === 'recruiterv') {
-      return { assignedRecruiter: 'Swati Batabyal', role: 'Technical Recruiter', assignedAt: 'Nov 21, 2026', assignedBy: 'Standard Portal Lead' };
-    }
-    if (client.includes('acs')) {
-      return { assignedRecruiter: 'Didar Shah', role: 'Technical Recruiter', assignedAt: 'Nov 21, 2026', assignedBy: 'Standard Portal Lead' };
-    }
-    if (client.includes('hirenest') || client.includes('hire nest')) {
-      return { assignedRecruiter: 'Prabhjot Gora', role: 'Technical Recruiter', assignedAt: 'Nov 21, 2026', assignedBy: 'Standard Portal Lead' };
-    }
-    if (client.includes('hexaware')) {
-      return { assignedRecruiter: 'Rashmi Kotekar', role: 'Technical Recruiter', assignedAt: 'Nov 20, 2026', assignedBy: 'Standard Portal Lead' };
-    }
   }
 
   return null;
@@ -361,7 +347,13 @@ export function setJobAssignment(params: {
     const list = rawCreated ? JSON.parse(rawCreated) : [];
     if (Array.isArray(list)) {
       let matched = false;
-      const updatedList = list.map((item: any) => {
+      // Filter out any ghost/dummy 'Client Requisition' placeholders
+      const cleansedList = list.filter((item: any) => {
+        const p = clean(item.position || item.title);
+        return p && p !== 'client requisition' && p !== 'requisition role';
+      });
+
+      const updatedList = cleansedList.map((item: any) => {
         const matchById = jobId && String(item.id) === jobId;
         const matchByTitleClient = clean(item.client || item.company) === cleanClient && (!cleanTitle || clean(item.position || item.title) === cleanTitle);
         if (matchById || matchByTitleClient) {
@@ -380,14 +372,16 @@ export function setJobAssignment(params: {
         return item;
       });
 
-      if (!matched && (jobId || (cleanClient && cleanTitle))) {
+      // ONLY create a new job if an explicit, valid title exists and is not a generic placeholder
+      const hasRealTitle = cleanTitle && cleanTitle !== 'client requisition' && cleanTitle !== 'requisition role';
+      if (!matched && jobId && hasRealTitle) {
         // Prepend new created job record
         updatedList.unshift({
-          id: jobId || `job-client-${Date.now()}`,
+          id: jobId,
           client: client.trim(),
           company: client.trim(),
-          position: title || 'Client Requisition',
-          title: title || 'Client Requisition',
+          position: title!.trim(),
+          title: title!.trim(),
           location: 'Remote / Hybrid',
           work_mode: 'Hybrid',
           workMode: 'Hybrid',
@@ -402,7 +396,7 @@ export function setJobAssignment(params: {
           candidatesCount: 0,
           candidates: 0,
           topScore: 0,
-          description: `Intake requisition for ${client.trim()}`
+          description: `Job description for ${client.trim()}`
         });
       }
 

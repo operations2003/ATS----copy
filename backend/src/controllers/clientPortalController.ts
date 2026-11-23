@@ -97,9 +97,6 @@ const ensureSeedPortals = () => {
       expiresAt: 'Dec 5, 2026',
       createdAt: 'Active',
       views: 5,
-      assignedMember: 'Rashmi Kotekar',
-      assignedMemberRole: 'Technical Recruiter',
-      assignedAt: 'Nov 21, 2026',
       organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
       jds: [
         {
@@ -111,7 +108,6 @@ const ensureSeedPortals = () => {
           mode: 'Hybrid',
           salary: 'Competitive Market Rate',
           status: 'Agency Sourcing Candidates',
-          assignedRecruiter: 'Rashmi Kotekar',
           createdAt: 'Just now',
           mandatoryRequirementsCount: 3,
           uploadedBy: 'CLIENT',
@@ -129,9 +125,6 @@ const ensureSeedPortals = () => {
       expiresAt: 'Dec 5, 2026',
       createdAt: 'Active',
       views: 3,
-      assignedMember: 'Swati Batabyal',
-      assignedMemberRole: 'Technical Recruiter',
-      assignedAt: 'Nov 21, 2026',
       organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
       jds: []
     },
@@ -145,9 +138,6 @@ const ensureSeedPortals = () => {
       expiresAt: 'Dec 5, 2026',
       createdAt: 'Active',
       views: 4,
-      assignedMember: 'Didar Shah',
-      assignedMemberRole: 'Technical Recruiter',
-      assignedAt: 'Nov 21, 2026',
       organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
       jds: []
     },
@@ -161,9 +151,6 @@ const ensureSeedPortals = () => {
       expiresAt: 'Dec 5, 2026',
       createdAt: 'Active',
       views: 2,
-      assignedMember: 'Prabhjot Gora',
-      assignedMemberRole: 'Technical Recruiter',
-      assignedAt: 'Nov 21, 2026',
       organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
       jds: []
     },
@@ -177,9 +164,6 @@ const ensureSeedPortals = () => {
       expiresAt: 'Never',
       createdAt: 'Active',
       views: 12,
-      assignedMember: 'Rashmi Kotekar',
-      assignedMemberRole: 'Technical Recruiter',
-      assignedAt: 'Nov 20, 2026',
       organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
       jds: []
     }
@@ -199,11 +183,6 @@ const ensureSeedPortals = () => {
       // Merge seed JDs if portal has 0 JDs so Globiz / standard portals always have authoritative JDs
       if ((!existing.jds || existing.jds.length === 0) && s.jds && s.jds.length > 0) {
         existing.jds = [...s.jds];
-        added = true;
-      }
-      if (!existing.assignedMember && s.assignedMember) {
-        existing.assignedMember = s.assignedMember;
-        existing.assignedMemberRole = s.assignedMemberRole;
         added = true;
       }
     }
