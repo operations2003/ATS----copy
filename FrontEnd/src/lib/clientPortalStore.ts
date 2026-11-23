@@ -218,10 +218,10 @@ export const addJdsToPortalMemory = (tokenOrName: string, incomingJds: any[]): C
   const raw = String(tokenOrName || '').toLowerCase().trim();
   const portal = store.find(
     p => p.token.toLowerCase() === raw ||
-         p.id.toLowerCase() === raw ||
-         p.clientName.toLowerCase().trim() === raw ||
-         (raw.startsWith('cli-') && p.token.toLowerCase().includes(raw)) ||
-         (raw && p.shareUrl && p.shareUrl.toLowerCase().includes(raw))
+      p.id.toLowerCase() === raw ||
+      p.clientName.toLowerCase().trim() === raw ||
+      (raw.startsWith('cli-') && p.token.toLowerCase().includes(raw)) ||
+      (raw && p.shareUrl && p.shareUrl.toLowerCase().includes(raw))
   );
   if (!portal) return null;
   if (!portal.jds) portal.jds = [];
@@ -261,11 +261,11 @@ export const findPortalMemory = (tokenOrName: string, clientQuery?: string): Cli
 
   const portal = store.find(
     p => p.token.toLowerCase() === raw ||
-         p.id.toLowerCase() === raw ||
-         p.clientName.toLowerCase().trim() === raw ||
-         (query && p.clientName.toLowerCase().trim() === query) ||
-         (raw.startsWith('cli-') && p.token.toLowerCase().includes(raw)) ||
-         (raw && p.shareUrl && p.shareUrl.toLowerCase().includes(raw))
+      p.id.toLowerCase() === raw ||
+      p.clientName.toLowerCase().trim() === raw ||
+      (query && p.clientName.toLowerCase().trim() === query) ||
+      (raw.startsWith('cli-') && p.token.toLowerCase().includes(raw)) ||
+      (raw && p.shareUrl && p.shareUrl.toLowerCase().includes(raw))
   );
 
   if (!portal) return null;
