@@ -38,88 +38,7 @@ export interface ClientPortalItem {
   candidates?: any[];
 }
 
-const SEED_PORTALS: ClientPortalItem[] = [
-  {
-    id: 'cli-mwq8q-globiz',
-    clientName: 'Globiz',
-    contactName: 'Operations Lead',
-    clientEmail: 'hiring@globiz.com',
-    token: 'cli-mwq8q',
-    shareUrl: 'https://ats-copy.vercel.app/share/cli-mwq8q?client=Globiz',
-    expiresAt: 'Dec 5, 2026',
-    createdAt: 'Active',
-    views: 5,
-    organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
-    jds: [
-      {
-        id: 'jd-globiz-full-stack',
-        title: 'TaskNera Full Stack Developer',
-        description: 'Client uploaded Job Description PDF: TaskNera_Full_Stack_Developer_JD.pdf',
-        location: 'Remote / Hybrid',
-        workMode: 'Hybrid',
-        mode: 'Hybrid',
-        salary: 'Competitive Market Rate',
-        status: 'Agency Sourcing Candidates',
-        createdAt: 'Just now',
-        mandatoryRequirementsCount: 3,
-        uploadedBy: 'CLIENT',
-        fileName: 'TaskNera_Full_Stack_Developer_JD.pdf'
-      }
-    ]
-  },
-  {
-    id: 'cli-mwq8p-recruiter-v',
-    clientName: 'Recruiter V',
-    contactName: 'Talent Acquisition Team',
-    clientEmail: 'talent@recruiterv.com',
-    token: 'cli-mwq8p',
-    shareUrl: 'https://ats-copy.vercel.app/share/cli-mwq8p?client=Recruiter%20V',
-    expiresAt: 'Dec 5, 2026',
-    createdAt: 'Active',
-    views: 3,
-    organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
-    jds: []
-  },
-  {
-    id: 'cli-mwq8j-acs',
-    clientName: 'ACS',
-    contactName: 'Staffing Director',
-    clientEmail: 'careers@acs.com',
-    token: 'cli-mwq8j',
-    shareUrl: 'https://ats-copy.vercel.app/share/cli-mwq8j?client=ACS',
-    expiresAt: 'Dec 5, 2026',
-    createdAt: 'Active',
-    views: 4,
-    organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
-    jds: []
-  },
-  {
-    id: 'cli-mwq8k-hirenest',
-    clientName: 'HireNest',
-    contactName: 'Hiring Operations',
-    clientEmail: 'partner@hirenest.com',
-    token: 'cli-mwq8k',
-    shareUrl: 'https://ats-copy.vercel.app/share/cli-mwq8k?client=HireNest',
-    expiresAt: 'Dec 5, 2026',
-    createdAt: 'Active',
-    views: 2,
-    organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
-    jds: []
-  },
-  {
-    id: 'share-hexaware-default',
-    clientName: 'Hexaware',
-    contactName: 'Rohit Verma',
-    clientEmail: 'hiring@hexaware.com',
-    token: 'client_hexaware_portal_token',
-    shareUrl: 'https://ats-copy.vercel.app/share/client_hexaware_portal_token?client=Hexaware',
-    expiresAt: 'Never',
-    createdAt: 'Active',
-    views: 12,
-    organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
-    jds: []
-  }
-];
+const SEED_PORTALS: ClientPortalItem[] = [];
 
 // Persistent global store across Next.js serverless functions
 declare global {
@@ -127,26 +46,12 @@ declare global {
 }
 
 if (!globalThis.__clientPortalStore) {
-  globalThis.__clientPortalStore = [...SEED_PORTALS];
+  globalThis.__clientPortalStore = [];
 }
 
 export const getClientPortalsMemory = (): ClientPortalItem[] => {
-  if (!globalThis.__clientPortalStore || globalThis.__clientPortalStore.length === 0) {
-    globalThis.__clientPortalStore = [...SEED_PORTALS];
-  } else {
-    // Ensure all seed portals exist and retain their seed JDs if empty
-    SEED_PORTALS.forEach(sp => {
-      const existing = globalThis.__clientPortalStore!.find(
-        p => p.token === sp.token || p.clientName.toLowerCase().trim() === sp.clientName.toLowerCase().trim()
-      );
-      if (!existing) {
-        globalThis.__clientPortalStore!.push(sp);
-      } else {
-        if ((!existing.jds || existing.jds.length === 0) && sp.jds && sp.jds.length > 0) {
-          existing.jds = [...sp.jds];
-        }
-      }
-    });
+  if (!globalThis.__clientPortalStore) {
+    globalThis.__clientPortalStore = [];
   }
   return globalThis.__clientPortalStore;
 };
