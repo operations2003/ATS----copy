@@ -212,6 +212,25 @@ export function getJobAssignment(job: {
     };
   }
 
+  // 8. Fallback for standard seeded client portals (prevents unassigned fluctuation across browser sessions)
+  if (client) {
+    if (client.includes('globiz')) {
+      return { assignedRecruiter: 'Rashmi Kotekar', role: 'Technical Recruiter', assignedAt: 'Nov 21, 2026', assignedBy: 'Standard Portal Lead' };
+    }
+    if (client.includes('recruiter v') || client === 'recruiterv') {
+      return { assignedRecruiter: 'Swati Batabyal', role: 'Technical Recruiter', assignedAt: 'Nov 21, 2026', assignedBy: 'Standard Portal Lead' };
+    }
+    if (client.includes('acs')) {
+      return { assignedRecruiter: 'Didar Shah', role: 'Technical Recruiter', assignedAt: 'Nov 21, 2026', assignedBy: 'Standard Portal Lead' };
+    }
+    if (client.includes('hirenest') || client.includes('hire nest')) {
+      return { assignedRecruiter: 'Prabhjot Gora', role: 'Technical Recruiter', assignedAt: 'Nov 21, 2026', assignedBy: 'Standard Portal Lead' };
+    }
+    if (client.includes('hexaware')) {
+      return { assignedRecruiter: 'Rashmi Kotekar', role: 'Technical Recruiter', assignedAt: 'Nov 20, 2026', assignedBy: 'Standard Portal Lead' };
+    }
+  }
+
   return null;
 }
 

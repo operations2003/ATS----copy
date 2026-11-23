@@ -244,32 +244,35 @@ export default function ClientsPage() {
 
           // Also check localStorage tasknera_client_jds_${client} to ensure client-uploaded JDs are merged in
           if (typeof window !== 'undefined') {
-            mergedMap.forEach((portal, key) => {
+            mergedMap.forEach((portal) => {
               try {
-                const cleanName = portal.clientName.replace(/\s+/g, '_');
+                const cleanName = (portal.clientName || '').replace(/\s+/g, '_');
+                if (!cleanName) return;
                 const rawJds = localStorage.getItem(`tasknera_client_jds_${cleanName}`);
                 if (rawJds) {
                   const parsed = JSON.parse(rawJds);
                   if (Array.isArray(parsed) && parsed.length > 0) {
-                    const existingJdTitles = new Set(
-                      (portal.jds || []).map((j: any) => (j.title || j.name || '').toLowerCase().trim())
+                    const existingNormTitles = new Set(
+                      (portal.jds || []).map((j: any) =>
+                        String(j.title || j.name || '')
+                          .toLowerCase()
+                          .replace(/\b(jd|job|description|spec|specs|final|v\d+)\b/gi, '')
+                          .replace(/[^a-z0-9]/g, '')
+                          .trim()
+                      ).filter(Boolean)
                     );
-                    const toSync: any[] = [];
                     parsed.forEach((pj: any) => {
-                      const norm = (pj.title || pj.name || '').toLowerCase().trim();
-                      if (norm && !existingJdTitles.has(norm)) {
+                      const norm = String(pj.title || pj.name || '')
+                        .toLowerCase()
+                        .replace(/\b(jd|job|description|spec|specs|final|v\d+)\b/gi, '')
+                        .replace(/[^a-z0-9]/g, '')
+                        .trim();
+                      if (norm && !existingNormTitles.has(norm)) {
                         portal.jds = portal.jds || [];
                         portal.jds.push(pj);
-                        toSync.push(pj);
+                        existingNormTitles.add(norm);
                       }
                     });
-                    if (toSync.length > 0) {
-                      fetch(`${backendUrl}/client-portals/share/${portal.token || portal.id}/jds`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ jds: toSync })
-                      }).catch(() => {});
-                    }
                   }
                 }
               } catch {}
@@ -334,7 +337,7 @@ export default function ClientsPage() {
 
       // 3. Backend jobs
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const backendUrl = getResolvedBackendUrl();
         const token = typeof window !== 'undefined' ? localStorage.getItem('tasknera_token') : null;
         const res = await fetch(`${backendUrl}/jobs`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -530,89 +533,82 @@ export default function ClientsPage() {
   // Helper to retrieve detailed uploaded JDs for a client (two-way synced with client portal)
   const getClientUploadedJds = (clientName: string): ClientJdItem[] => {
     const cleanClient = (clientName || '').toLowerCase().trim();
+    if (!cleanClient) return [];
     const resultList: ClientJdItem[] = [];
+    const seenTitles = new Set<string>();
     const seenIds = new Set<string>();
 
-    // 1. First priority: authoritative backend client portal JDs
+    const normalizeJobKey = (title?: string, id?: string): string => {
+      const cleanT = String(title || '')
+        .toLowerCase()
+        .replace(/\b(jd|job|description|spec|specs|final|v\d+)\b/gi, '')
+        .replace(/[^a-z0-9]/g, '')
+        .trim();
+      if (cleanT.length > 2) return cleanT;
+      return String(id || '').toLowerCase().trim();
+    };
+
+    const addJd = (item: any, fallbackId: string, fallbackRecruiter?: string) => {
+      if (!item) return;
+      const title = item.title || item.name || item.position || 'Job Requisition';
+      const id = String(item.id || fallbackId);
+      const normKey = normalizeJobKey(title, id);
+      if (!normKey) return;
+      if (seenTitles.has(normKey) || (item.id && seenIds.has(String(item.id)))) return;
+      seenTitles.add(normKey);
+      if (item.id) seenIds.add(String(item.id));
+
+      const assignment = getJobAssignment({ client: clientName, title, id });
+      const effectiveRecruiter = assignment?.assignedRecruiter || item.assignedRecruiter || fallbackRecruiter;
+
+      resultList.push({
+        id,
+        title,
+        assignedRecruiter: !isExcludedRecruiterName(effectiveRecruiter) ? effectiveRecruiter : undefined,
+        description: item.description,
+        location: item.location || 'Remote / Hybrid',
+        mode: item.workMode || item.mode || 'Hybrid',
+        salary: item.salary || 'Competitive Market Rate',
+        createdAt: item.createdAt || item.created_at || 'Recently',
+        status: item.status || 'Active Screening',
+        mandatoryRequirementsCount: item.mandatoryRequirementsCount || 3
+      });
+    };
+
+    // 1. Authoritative portal JDs from sharedLinks
     const portal = sharedLinks.find(
       l => l.clientName && l.clientName.toLowerCase().trim() === cleanClient
     );
-    if (portal && Array.isArray(portal.jds) && portal.jds.length > 0) {
+    if (portal && Array.isArray(portal.jds)) {
       portal.jds.forEach((item: any, idx: number) => {
-        const id = String(item.id || `jd-backend-${idx}`);
-        seenIds.add(id);
-        const assignment = getJobAssignment({ client: clientName, title: item.title || item.name, id });
-        resultList.push({
-          id,
-          title: item.title || item.name || 'Job Requisition',
-          assignedRecruiter: assignment?.assignedRecruiter || item.assignedRecruiter || portal.assignedMember,
-          description: item.description,
-          location: item.location || 'Remote / Hybrid',
-          mode: item.workMode || item.mode || 'Hybrid',
-          salary: item.salary || 'Competitive',
-          createdAt: item.createdAt || 'Recently',
-          status: item.status || 'Active Screening',
-          mandatoryRequirementsCount: item.mandatoryRequirementsCount || 3
-        });
+        addJd(item, `jd-backend-${idx}`, portal.assignedMember);
       });
     }
 
-    // 2. Second priority: local storage tasknera_client_jds_${clientName}
+    // 2. Local storage tasknera_client_jds_${cleanName}
     if (typeof window !== 'undefined') {
       try {
-        const raw = localStorage.getItem(`tasknera_client_jds_${(clientName || '').replace(/\s+/g, '_')}`);
+        const raw = localStorage.getItem(`tasknera_client_jds_${cleanClient.replace(/\s+/g, '_')}`);
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             parsed.forEach((item: any, idx: number) => {
-              const id = String(item.id || `jd-${idx}`);
-              if (!seenIds.has(id)) {
-                seenIds.add(id);
-                const assignment = getJobAssignment({ client: clientName, title: item.title || item.name, id });
-                resultList.push({
-                  id,
-                  title: item.title || item.name || 'Job Requisition',
-                  assignedRecruiter: assignment?.assignedRecruiter || item.assignedRecruiter,
-                  description: item.description,
-                  location: item.location || 'Remote',
-                  mode: item.workMode || item.mode || 'Hybrid',
-                  salary: item.salary || 'Competitive',
-                  createdAt: item.createdAt || 'Recently',
-                  status: item.status || 'Active Screening',
-                  mandatoryRequirementsCount: item.mandatoryRequirementsCount || 3
-                });
-              }
+              addJd(item, `jd-local-${idx}`, portal?.assignedMember);
             });
           }
         }
       } catch {}
 
-      // 2b. Also inspect tasknera_created_jobs
+      // 3. Local storage tasknera_created_jobs
       try {
         const rawCreated = localStorage.getItem('tasknera_created_jobs');
         if (rawCreated) {
           const createdList = JSON.parse(rawCreated);
           if (Array.isArray(createdList)) {
-            createdList.forEach((cj: any) => {
+            createdList.forEach((cj: any, idx: number) => {
               const cjClient = String(cj.client || cj.company || '').toLowerCase().trim();
               if (cjClient === cleanClient || (cleanClient && cjClient.includes(cleanClient)) || (cleanClient && cleanClient.includes(cjClient))) {
-                const id = String(cj.id);
-                if (!seenIds.has(id)) {
-                  seenIds.add(id);
-                  const assignment = getJobAssignment({ client: clientName, title: cj.position || cj.title, id });
-                  resultList.push({
-                    id,
-                    title: cj.position || cj.title || 'Job Requisition',
-                    assignedRecruiter: assignment?.assignedRecruiter || cj.assignedRecruiter,
-                    description: cj.description,
-                    location: cj.location || 'Remote / Hybrid',
-                    mode: cj.work_mode || cj.workMode || cj.mode || 'Hybrid',
-                    salary: cj.salary || 'Competitive',
-                    createdAt: cj.created_at || cj.createdAt || 'Recently',
-                    status: cj.status || 'Active Screening',
-                    mandatoryRequirementsCount: 3
-                  });
-                }
+                addJd(cj, `jd-created-${idx}`, portal?.assignedMember);
               }
             });
           }
@@ -620,26 +616,17 @@ export default function ClientsPage() {
       } catch {}
     }
 
-    jobs
-      .filter(j => (j.client?.toLowerCase().trim() === cleanClient || (cleanClient && j.client?.toLowerCase().includes(cleanClient))))
-      .forEach(j => {
-        if (!seenIds.has(String(j.id))) {
-          seenIds.add(String(j.id));
-          const assignment = getJobAssignment(j);
-          resultList.push({
-            id: String(j.id),
-            title: j.title,
-            assignedRecruiter: assignment?.assignedRecruiter || j.assignedRecruiter,
-            description: j.description,
-            location: j.location,
-            mode: j.mode,
-            salary: j.salary,
-            createdAt: 'In ATS',
-            status: j.status,
-            mandatoryRequirementsCount: j.mandatoryRequirementsCount
-          });
-        }
-      });
+    // 4. ATS store jobs
+    if (Array.isArray(jobs)) {
+      jobs
+        .filter(j => {
+          const jClient = String(j.client || '').toLowerCase().trim();
+          return jClient === cleanClient || (cleanClient && jClient.includes(cleanClient)) || (cleanClient && cleanClient.includes(jClient));
+        })
+        .forEach((j, idx) => {
+          addJd(j, `jd-ats-${idx}`, portal?.assignedMember);
+        });
+    }
 
     return resultList;
   };
@@ -753,10 +740,13 @@ export default function ClientsPage() {
           };
 
           clientJds.forEach(item => {
+            if (!item || !item.title) return;
+            const itemTitle = String(item.title).toLowerCase().trim();
+            const clientNameClean = String(link.clientName || '').toLowerCase().trim();
             const idx = existingCreated.findIndex((cj: any) =>
-              String(cj.id) === String(item.id) ||
-              ((cj.client || '').toLowerCase().trim() === link.clientName.toLowerCase().trim() &&
-               (cj.position || cj.title || '').toLowerCase().trim() === item.title.toLowerCase().trim())
+              (item.id && String(cj.id) === String(item.id)) ||
+              (clientNameClean && (String(cj.client || '')).toLowerCase().trim() === clientNameClean &&
+               (String(cj.position || cj.title || '')).toLowerCase().trim() === itemTitle)
             );
 
             if (idx >= 0) {
@@ -912,11 +902,14 @@ export default function ClientsPage() {
     
     // Sync each client JD into atsStore
     clientJds.forEach(item => {
+      if (!item || !item.title) return;
+      const itemTitleNorm = String(item.title).toLowerCase().trim();
+      const clientNameNorm = String(clientName || '').toLowerCase().trim();
       if (selectedJobScope === 'ALL' || item.id === selectedJobScope) {
         const found = existingAtsJobs.find(
-          j => String(j.id) === String(item.id) || 
-               (j.client?.toLowerCase().trim() === clientName.toLowerCase().trim() &&
-                j.title?.toLowerCase().trim() === item.title.toLowerCase().trim())
+          j => (item.id && String(j.id) === String(item.id)) || 
+               (clientNameNorm && String(j.client || '').toLowerCase().trim() === clientNameNorm &&
+                String(j.title || '').toLowerCase().trim() === itemTitleNorm)
         );
         if (found) {
           atsStore.reassignJob(found.id, targetMember, adminName, targetRole);
@@ -991,11 +984,14 @@ export default function ClientsPage() {
         }];
 
         targetJds.forEach(item => {
+          if (!item || !item.title) return;
+          const itemTitleNorm = String(item.title).toLowerCase().trim();
+          const clientNameNorm = String(clientName || '').toLowerCase().trim();
           if (selectedJobScope === 'ALL' || item.id === selectedJobScope) {
             const existingIdx = existingCreated.findIndex((cj: any) =>
-              String(cj.id) === String(item.id) ||
-              ((cj.client || '').toLowerCase().trim() === clientName.toLowerCase().trim() &&
-               (cj.position || cj.title || '').toLowerCase().trim() === item.title.toLowerCase().trim())
+              (item.id && String(cj.id) === String(item.id)) ||
+              (clientNameNorm && String(cj.client || '').toLowerCase().trim() === clientNameNorm &&
+               String(cj.position || cj.title || '').toLowerCase().trim() === itemTitleNorm)
             );
 
             if (existingIdx >= 0) {
@@ -1046,11 +1042,14 @@ export default function ClientsPage() {
         // Also update tasknera_all_jobs
         const existingAll = JSON.parse(localStorage.getItem('tasknera_all_jobs') || '[]');
         targetJds.forEach(item => {
+          if (!item || !item.title) return;
+          const itemTitleNorm = String(item.title).toLowerCase().trim();
+          const clientNameNorm = String(clientName || '').toLowerCase().trim();
           if (selectedJobScope === 'ALL' || item.id === selectedJobScope) {
             const allIdx = existingAll.findIndex((aj: any) =>
-              String(aj.id) === String(item.id) ||
-              ((aj.client || '').toLowerCase().trim() === clientName.toLowerCase().trim() &&
-               (aj.position || aj.title || '').toLowerCase().trim() === item.title.toLowerCase().trim())
+              (item.id && String(aj.id) === String(item.id)) ||
+              (clientNameNorm && String(aj.client || '').toLowerCase().trim() === clientNameNorm &&
+               String(aj.position || aj.title || '').toLowerCase().trim() === itemTitleNorm)
             );
             if (allIdx >= 0) {
               existingAll[allIdx] = {
@@ -2396,7 +2395,8 @@ export default function ClientsPage() {
         {/* Modal: View Uploaded JDs for Client */}
         {viewJdModalOpen && activeViewJdLink && (() => {
           const clientJds = getClientUploadedJds(activeViewJdLink.clientName);
-          const currentJd = clientJds[selectedJdDetailIndex] || clientJds[0];
+          const safeIndex = selectedJdDetailIndex >= clientJds.length ? 0 : selectedJdDetailIndex;
+          const currentJd = clientJds[safeIndex] || clientJds[0];
           const clientAssigned = getAssignedMemberForClient(activeViewJdLink);
 
           return (

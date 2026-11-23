@@ -93,7 +93,7 @@ const ensureSeedPortals = () => {
       contactName: 'Operations Lead',
       clientEmail: 'hiring@globiz.com',
       token: 'cli-mwq8q',
-      shareUrl: 'http://localhost:3000/share/cli-mwq8q?client=Globiz',
+      shareUrl: 'https://ats-copy.vercel.app/share/cli-mwq8q?client=Globiz',
       expiresAt: 'Dec 5, 2026',
       createdAt: 'Active',
       views: 5,
@@ -101,7 +101,23 @@ const ensureSeedPortals = () => {
       assignedMemberRole: 'Technical Recruiter',
       assignedAt: 'Nov 21, 2026',
       organizationId: '2935c7d6-af40-4215-bc36-87aa454aca1c',
-      jds: []
+      jds: [
+        {
+          id: 'jd-globiz-full-stack',
+          title: 'TaskNera Full Stack Developer',
+          description: 'Client uploaded Job Description PDF: TaskNera_Full_Stack_Developer_JD.pdf',
+          location: 'Remote / Hybrid',
+          workMode: 'Hybrid',
+          mode: 'Hybrid',
+          salary: 'Competitive Market Rate',
+          status: 'Agency Sourcing Candidates',
+          assignedRecruiter: 'Rashmi Kotekar',
+          createdAt: 'Just now',
+          mandatoryRequirementsCount: 3,
+          uploadedBy: 'CLIENT',
+          fileName: 'TaskNera_Full_Stack_Developer_JD.pdf'
+        }
+      ]
     },
     {
       id: 'cli-mwq8p-recruiter-v',
@@ -109,7 +125,7 @@ const ensureSeedPortals = () => {
       contactName: 'Talent Acquisition Team',
       clientEmail: 'talent@recruiterv.com',
       token: 'cli-mwq8p',
-      shareUrl: 'http://localhost:3000/share/cli-mwq8p?client=Recruiter%20V',
+      shareUrl: 'https://ats-copy.vercel.app/share/cli-mwq8p?client=Recruiter%20V',
       expiresAt: 'Dec 5, 2026',
       createdAt: 'Active',
       views: 3,
@@ -125,7 +141,7 @@ const ensureSeedPortals = () => {
       contactName: 'Staffing Director',
       clientEmail: 'careers@acs.com',
       token: 'cli-mwq8j',
-      shareUrl: 'http://localhost:3000/share/cli-mwq8j?client=ACS',
+      shareUrl: 'https://ats-copy.vercel.app/share/cli-mwq8j?client=ACS',
       expiresAt: 'Dec 5, 2026',
       createdAt: 'Active',
       views: 4,
@@ -141,7 +157,7 @@ const ensureSeedPortals = () => {
       contactName: 'Hiring Operations',
       clientEmail: 'partner@hirenest.com',
       token: 'cli-mwq8k',
-      shareUrl: 'http://localhost:3000/share/cli-mwq8k?client=HireNest',
+      shareUrl: 'https://ats-copy.vercel.app/share/cli-mwq8k?client=HireNest',
       expiresAt: 'Dec 5, 2026',
       createdAt: 'Active',
       views: 2,
@@ -157,7 +173,7 @@ const ensureSeedPortals = () => {
       contactName: 'Rohit Verma',
       clientEmail: 'hiring@hexaware.com',
       token: 'client_hexaware_portal_token',
-      shareUrl: 'http://localhost:3000/share/client_hexaware_portal_token?client=Hexaware',
+      shareUrl: 'https://ats-copy.vercel.app/share/client_hexaware_portal_token?client=Hexaware',
       expiresAt: 'Never',
       createdAt: 'Active',
       views: 12,
@@ -171,14 +187,25 @@ const ensureSeedPortals = () => {
 
   let added = false;
   for (const s of seeds) {
-    const exists = portalCache.some(
+    const existing = portalCache.find(
       p => p.clientName.toLowerCase().trim() === s.clientName.toLowerCase().trim() ||
            p.token === s.token ||
            p.id === s.id
     );
-    if (!exists) {
+    if (!existing) {
       portalCache.push(s);
       added = true;
+    } else {
+      // Merge seed JDs if portal has 0 JDs so Globiz / standard portals always have authoritative JDs
+      if ((!existing.jds || existing.jds.length === 0) && s.jds && s.jds.length > 0) {
+        existing.jds = [...s.jds];
+        added = true;
+      }
+      if (!existing.assignedMember && s.assignedMember) {
+        existing.assignedMember = s.assignedMember;
+        existing.assignedMemberRole = s.assignedMemberRole;
+        added = true;
+      }
     }
   }
   if (added) {

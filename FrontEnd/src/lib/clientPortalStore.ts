@@ -149,24 +149,45 @@ if (!globalThis.__clientPortalStore) {
 export const getClientPortalsMemory = (): ClientPortalItem[] => {
   if (!globalThis.__clientPortalStore || globalThis.__clientPortalStore.length === 0) {
     globalThis.__clientPortalStore = [...SEED_PORTALS];
+  } else {
+    // Ensure all seed portals exist and retain their seed JDs if empty
+    SEED_PORTALS.forEach(sp => {
+      const existing = globalThis.__clientPortalStore!.find(
+        p => p.token === sp.token || p.clientName.toLowerCase().trim() === sp.clientName.toLowerCase().trim()
+      );
+      if (!existing) {
+        globalThis.__clientPortalStore!.push(sp);
+      } else {
+        if ((!existing.jds || existing.jds.length === 0) && sp.jds && sp.jds.length > 0) {
+          existing.jds = [...sp.jds];
+        }
+        if (!existing.assignedMember && sp.assignedMember) {
+          existing.assignedMember = sp.assignedMember;
+          existing.assignedMemberRole = sp.assignedMemberRole;
+        }
+      }
+    });
   }
   return globalThis.__clientPortalStore;
 };
 
 export const saveOrUpdatePortalMemory = (portal: Partial<ClientPortalItem> & { clientName: string }): ClientPortalItem => {
   const store = getClientPortalsMemory();
-  const rawToken = (portal.token || portal.id || portal.clientName).toLowerCase().trim();
+  const rawToken = (portal.token || portal.id || portal.clientName || '').toLowerCase().trim();
   const idx = store.findIndex(
     p => p.token.toLowerCase() === rawToken ||
          p.id.toLowerCase() === rawToken ||
-         p.clientName.toLowerCase().trim() === portal.clientName.toLowerCase().trim()
+         p.clientName.toLowerCase().trim() === (portal.clientName || '').toLowerCase().trim()
   );
   if (idx !== -1) {
     const existing = store[idx];
+    const incomingJds = Array.isArray(portal.jds) && portal.jds.length > 0 ? portal.jds : existing.jds;
     const updated = {
       ...existing,
       ...portal,
-      jds: portal.jds && portal.jds.length > 0 ? portal.jds : existing.jds
+      assignedMember: portal.assignedMember || existing.assignedMember,
+      assignedMemberRole: portal.assignedMemberRole || existing.assignedMemberRole,
+      jds: incomingJds
     };
     store[idx] = updated;
     return updated;

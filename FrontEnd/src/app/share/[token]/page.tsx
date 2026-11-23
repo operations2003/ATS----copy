@@ -827,7 +827,9 @@ function ClientSharePortalContent() {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) {
               parsed.forEach((pj: any) => {
-                if (!uploadedJds.some(u => u.id === pj.id || u.title.toLowerCase().trim() === pj.title?.toLowerCase().trim())) {
+                if (!pj) return;
+                const pjTitle = String(pj.title || pj.name || '').toLowerCase().trim();
+                if (!uploadedJds.some(u => (u.id && pj.id && u.id === pj.id) || (pjTitle && String(u.title || '').toLowerCase().trim() === pjTitle))) {
                   uploadedJds.push(pj);
                 }
               });
@@ -953,8 +955,8 @@ function ClientSharePortalContent() {
         setJobs([]);
       }
 
-      const finalJobIds = new Set(finalJobs.map(j => j.id));
-      const finalJobTitles = new Set(finalJobs.map(j => j.title.toLowerCase().trim()));
+      const finalJobIds = new Set(finalJobs.map(j => j.id).filter(Boolean));
+      const finalJobTitles = new Set(finalJobs.map(j => String(j.title || '').toLowerCase().trim()).filter(Boolean));
       const portalCandidatesMap = new Map<string, CandidateItem>();
 
       // Ingest authoritative candidates returned from portal API
@@ -1234,8 +1236,9 @@ function ClientSharePortalContent() {
 
       // Hydrate all 30 executive submission fields on every visible candidate
       const full30Candidates = clientVisibleCandidates.map(c => {
+        const cJobTitleNorm = String(c.jobTitle || '').toLowerCase().trim();
         const matchingJob = finalJobs.find(
-          j => j.id === c.jobId || j.title.toLowerCase().trim() === (c.jobTitle || '').toLowerCase().trim()
+          j => (c.jobId && j.id === c.jobId) || (cJobTitleNorm && String(j.title || '').toLowerCase().trim() === cJobTitleNorm)
         ) || finalJobs[0];
         const assignedRecruiter = matchingJob?.assignedRecruiter || assignedMember || 'HireIQ Sourcing Engine';
         return buildFull30FieldsCandidate(c, matchingJob, resolvedClient, assignedRecruiter);
@@ -1243,8 +1246,9 @@ function ClientSharePortalContent() {
 
       // Update job-specific screened & submitted counts so the cards reflect accurate results
       finalJobs.forEach(j => {
+        const jTitleNorm = String(j.title || '').toLowerCase().trim();
         const matchingCands = full30Candidates.filter(
-          c => c.jobId === j.id || (c.jobTitle || '').toLowerCase().trim() === j.title.toLowerCase().trim()
+          c => (c.jobId && c.jobId === j.id) || (jTitleNorm && String(c.jobTitle || '').toLowerCase().trim() === jTitleNorm)
         );
         if (matchingCands.length > 0) {
           j.screenedCount = Math.max(j.screenedCount || 0, matchingCands.length);
@@ -1919,9 +1923,9 @@ Generated for: ${clientName} Hiring Account via HireIQ Client Transparency Porta
       // Text search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const inName = cand.name.toLowerCase().includes(q);
-        const inTitle = cand.currentTitle.toLowerCase().includes(q);
-        const inSkills = cand.skills.some(s => s.toLowerCase().includes(q));
+        const inName = String(cand.name || cand.candidateName || '').toLowerCase().includes(q);
+        const inTitle = String(cand.currentTitle || cand.jdName || cand.jobTitle || '').toLowerCase().includes(q);
+        const inSkills = Array.isArray(cand.skills) && cand.skills.some(s => String(s || '').toLowerCase().includes(q));
         if (!inName && !inTitle && !inSkills) return false;
       }
 
